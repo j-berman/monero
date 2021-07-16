@@ -8072,9 +8072,15 @@ std::pair<std::set<uint64_t>, size_t> outs_unique(const std::vector<std::vector<
 void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool rct)
 {
   std::vector<uint64_t> rct_offsets;
-  for (size_t attempts = 3; attempts > 0; --attempts)
+  uint64_t rct_start_height;
+  std::map<uint64_t, uint64_t> counts_by_height_diff;
+  size_t num_attempts = 100000; // 100k
+  for (size_t attempts = num_attempts; attempts > 0; --attempts)
   {
-    get_outs(outs, selected_transfers, fake_outputs_count, rct_offsets);
+    if (attempts % 100 == 0)
+      printf("Attempts remaining... %lu\n", attempts);
+
+    get_outs(outs, selected_transfers, fake_outputs_count, rct_offsets, rct_start_height);
 
     if (!rct)
       return;
@@ -8082,8 +8088,35 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     const auto unique = outs_unique(outs);
     if (tx_sanity_check(unique.first, unique.second, rct_offsets.empty() ? 0 : rct_offsets.back()))
     {
-      return;
+      // iterate over outs and determine output's block height using rct_offsets
+      for (const auto &it : outs)
+      {
+        for (const auto &out : it)
+        {
+          const uint64_t global_index = std::get<0>(out);
+
+          // determine output height from rct_offsets, then increment counter at that height
+          uint64_t h = rct_start_height;
+          for (const uint64_t &rct_offset: rct_offsets)
+          {
+            if (global_index <= rct_offset)
+            {
+              uint64_t current_height = rct_offsets.size() + rct_start_height - 1;
+              uint64_t diff_from_current_height = current_height - h;
+              ++counts_by_height_diff[diff_from_current_height];
+              break;
+            }
+            else
+              ++h;
+          }
+        }
+      }
+
+      // never return successfully so that client continues attempting
+      // return;
     }
+    else
+      ++attempts; // only count txs that pass tx_sanity_check as an attempt 
 
     std::vector<crypto::key_image> key_images;
     key_images.reserve(selected_transfers.size());
@@ -8093,10 +8126,25 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     unset_ring(key_images);
   }
 
-  THROW_WALLET_EXCEPTION(error::wallet_internal_error, tr("Transaction sanity check failed"));
+  for (const auto& c: counts_by_height_diff)
+  {
+    uint64_t count = c.second;
+
+    // the block containing the real output will be counted at least num_attempts times. Remove the factor
+    // of the real output
+    // Warning: if attempting to spend 2 outputs at same block height, this won't function correctly
+    if (count >= num_attempts)
+      counts_by_height_diff[c.first] -= num_attempts;
+
+    // no need to includ block in analysis if the factor of real output has negated it entirely
+    if (counts_by_height_diff[c.first] > 0)
+      LOG_PRINT_L1("Diff from current height: " << c.first << ", Frequency: " << counts_by_height_diff[c.first]);
+  }
+
+  THROW_WALLET_EXCEPTION(error::wallet_internal_error, tr("Sanity check complete. See output in logs."));
 }
 
-void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets)
+void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, uint64_t &rct_start_height)
 {
   LOG_PRINT_L2("fake_outputs_count: " << fake_outputs_count);
   outs.clear();
@@ -8117,7 +8165,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     bool is_after_segregation_fork = height >= segregation_fork_height;
 
     // if we have at least one rct out, get the distribution, or fall back to the previous system
-    uint64_t rct_start_height;
+    // uint64_t rct_start_height;
     bool has_rct = false;
     uint64_t max_rct_index = 0;
     for (size_t idx: selected_transfers)
@@ -8145,6 +8193,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         req_t.amounts.push_back(m_transfers[idx].is_rct() ? 0 : m_transfers[idx].amount());
     if (!req_t.amounts.empty())
     {
+      THROW_WALLET_EXCEPTION(error::wallet_internal_error, "only testing gamma - not histogram");
       std::sort(req_t.amounts.begin(), req_t.amounts.end());
       auto end = std::unique(req_t.amounts.begin(), req_t.amounts.end());
       req_t.amounts.resize(std::distance(req_t.amounts.begin(), end));
@@ -8165,6 +8214,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> segregation_limit;
     if (is_after_segregation_fork && (m_segregate_pre_fork_outputs || m_key_reuse_mitigation2))
     {
+      THROW_WALLET_EXCEPTION(error::wallet_internal_error, "only testing gamma - not segregated distribution");
       cryptonote::COMMAND_RPC_GET_OUTPUT_DISTRIBUTION::request req_t = AUTO_VAL_INIT(req_t);
       cryptonote::COMMAND_RPC_GET_OUTPUT_DISTRIBUTION::response resp_t = AUTO_VAL_INIT(resp_t);
       for(size_t idx: selected_transfers)
@@ -8350,6 +8400,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
             if (out < num_outs)
             {
               MINFO("Using it");
+              THROW_WALLET_EXCEPTION(error::wallet_internal_error, "only analyzing gamma selection - no known rings");
               req.outputs.push_back({amount, out});
               ++num_found;
               seen_indices.emplace(out);
@@ -8371,6 +8422,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
 
       if (num_outs <= requested_outputs_count)
       {
+        THROW_WALLET_EXCEPTION(error::wallet_internal_error, "only analyzing gamma selection - make sure there is no shortfall client is leaning on");
+
         for (uint64_t i = 0; i < num_outs; i++)
           req.outputs.push_back({amount, i});
         // duplicate to make up shortfall: this will be caught after the RPC call,
@@ -8493,6 +8546,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
           }
           seen_indices.emplace(i);
 
+          THROW_WALLET_EXCEPTION_IF(std::strcmp(type, "gamma") != 0, error::wallet_internal_error, "picking type other than gamma messes with sanity check analysis");
+
           picks[type].insert(i);
           req.outputs.push_back({amount, i});
           ++num_found;
@@ -8508,6 +8563,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         // we'll error out later
         while (num_found < requested_outputs_count)
         {
+          THROW_WALLET_EXCEPTION(error::wallet_internal_error, "only analyzing gamma selection - error out immediately if requesting 0 index");
           req.outputs.push_back({amount, 0});
           ++num_found;
         }
