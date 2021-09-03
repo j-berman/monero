@@ -248,6 +248,9 @@ namespace config
   const unsigned char HASH_KEY_MM_SLOT = 'm';
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS_SEED[] = "multisig_tx_privkeys_seed";
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS[] = "multisig_tx_privkeys";
+  const char HASH_KEY_TRIPTYCH_H[] = "triptych H";
+  const char HASH_KEY_TRIPTYCH_U[] = "triptych U";
+  const char HASH_KEY_TRIPTYCH_TRANSCRIPT[] = "triptych transcript";
 
   // Multisig
   const uint32_t MULTISIG_MAX_SIGNERS{16};
