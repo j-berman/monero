@@ -270,9 +270,17 @@ namespace nodetool
 
       peerlist_entry pe{};
       pe.adr = addr;
-      zone.second.m_peerlist.remove_from_peer_white(pe);
-      zone.second.m_peerlist.remove_from_peer_gray(pe);
-      zone.second.m_peerlist.remove_from_peer_anchor(addr);
+      if (addr.port() == 0)
+      {
+        zone.second.m_peerlist.evict_host_from_peerlist(true, pe);
+        zone.second.m_peerlist.evict_host_from_peerlist(false, pe);
+      }
+      else
+      {
+        zone.second.m_peerlist.remove_from_peer_white(pe);
+        zone.second.m_peerlist.remove_from_peer_gray(pe);
+        zone.second.m_peerlist.remove_from_peer_anchor(addr);
+     }
 
       for (const auto &c: conns)
         zone.second.m_net_server.get_config_object().close(c);
@@ -331,6 +339,13 @@ namespace nodetool
       });
       for (const auto &c: conns)
         zone.second.m_net_server.get_config_object().close(c);
+
+      for (int i = 0; i < 2; ++i)
+        zone.second.m_peerlist.filter(i == 0, [&subnet](const peerlist_entry &pe){
+          if (pe.adr.get_type_id() != epee::net_utils::ipv4_network_address::get_type_id())
+            return false;
+          return subnet.matches(pe.adr.as<const epee::net_utils::ipv4_network_address>());
+        });
 
       conns.clear();
     }
@@ -726,6 +741,12 @@ namespace nodetool
     {
       return get_ip_seed_nodes();
     }
+    if (!m_enable_dns_seed_nodes)
+    {
+      // TODO: a domain can be set through socks, so that the remote side does the lookup for the DNS seed nodes.
+      m_fallback_seed_nodes_added.test_and_set();
+      return get_ip_seed_nodes();
+    }
 
     std::set<std::string> full_addrs;
 
@@ -865,10 +886,21 @@ namespace nodetool
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
-  bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm)
+  bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm, const std::string& proxy, bool proxy_dns_leaks_allowed)
   {
     bool res = handle_command_line(vm);
     CHECK_AND_ASSERT_MES(res, false, "Failed to handle command line");
+    if (proxy.size())
+    {
+      const auto endpoint = net::get_tcp_endpoint(proxy);
+      CHECK_AND_ASSERT_MES(endpoint, false, "Failed to parse proxy: " << proxy << " - " << endpoint.error());
+      network_zone& public_zone = m_network_zones[epee::net_utils::zone::public_];
+      public_zone.m_connect = &socks_connect;
+      public_zone.m_proxy_address = *endpoint;
+      public_zone.m_can_pingback = false;
+      m_enable_dns_seed_nodes &= proxy_dns_leaks_allowed;
+      m_enable_dns_blocklist &= proxy_dns_leaks_allowed;
+    }
 
     if (m_nettype == cryptonote::TESTNET)
     {

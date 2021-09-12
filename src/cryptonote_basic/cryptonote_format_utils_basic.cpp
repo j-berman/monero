@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020, The Monero Project
+// Copyright (c) 2014-2021, The Monero Project
 //
 // All rights reserved.
 //
@@ -25,37 +25,25 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include <boost/optional/optional.hpp>
-#include <boost/program_options/options_description.hpp>
-#include <boost/program_options/positional_options.hpp>
-#include <boost/program_options/variables_map.hpp>
+//
+// Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "common/command_line.h"
+#include "cryptonote_format_utils.h"
 
-namespace wallet_args
+namespace cryptonote
 {
-  command_line::arg_descriptor<std::string> arg_generate_from_json();
-  command_line::arg_descriptor<std::string> arg_wallet_file();
-  command_line::arg_descriptor<std::string> arg_rpc_client_secret_key();
-  command_line::arg_descriptor<std::string> arg_password_file();
+  void get_transaction_prefix_hash(const transaction_prefix& tx, crypto::hash& h)
+  {
+    std::ostringstream s;
+    binary_archive<true> a(s);
+    ::serialization::serialize(a, const_cast<transaction_prefix&>(tx));
+    crypto::cn_fast_hash(s.str().data(), s.str().size(), h);
+  }
 
-  const char* tr(const char* str);
-
-  /*! Processes command line arguments (`argc` and `argv`) using `desc_params`
-  and `positional_options`, while adding parameters for log files and
-  concurrency. Log file and concurrency arguments are handled, along with basic
-  global init for the wallet process.
-
-  \return
-    pair.first: The list of parsed options, iff there are no errors.
-    pair.second: Should the execution terminate succesfully without actually launching the application
-  */
-  std::pair<boost::optional<boost::program_options::variables_map>, bool> main(
-    int argc, char** argv,
-    const char* const usage,
-    const char* const notice,
-    boost::program_options::options_description desc_params,
-    const boost::program_options::positional_options_description& positional_options,
-    const std::function<void(const std::string&, bool)> &print,
-    const char *default_log_name, bool log_to_console = false);
+  crypto::hash get_transaction_prefix_hash(const transaction_prefix& tx)
+  {
+    crypto::hash h = crypto::null_hash;
+    get_transaction_prefix_hash(tx, h);
+    return h;
+  }
 }
