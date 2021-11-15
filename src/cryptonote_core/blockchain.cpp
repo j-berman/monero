@@ -1426,6 +1426,9 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       partial_block_reward = true;
     base_reward = money_in_use - fee;
   }
+
+  CHECK_AND_ASSERT_MES(check_view_tags_valid(b.miner_tx, version), false, "miner transaction has invalid view tag(s) in block " << get_block_hash(b));
+
   return true;
 }
 //------------------------------------------------------------------
@@ -3039,12 +3042,10 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
   // from v4, forbid invalid pubkeys
   if (hf_version >= 4) {
     for (const auto &o: tx.vout) {
-      if (o.target.type() == typeid(txout_to_key)) {
-        const txout_to_key& out_to_key = boost::get<txout_to_key>(o.target);
-        if (!crypto::check_key(out_to_key.key)) {
-          tvc.m_invalid_output = true;
-          return false;
-        }
+      crypto::public_key output_public_key;
+      if (get_output_public_key(o, output_public_key) && !crypto::check_key(output_public_key)) {
+        tvc.m_invalid_output = true;
+        return false;
       }
     }
   }
@@ -3133,6 +3134,13 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
         }
       }
     }
+  }
+
+  // from v15, require view tags on outputs
+  if (!check_view_tags_valid(tx, hf_version))
+  {
+    tvc.m_invalid_output = true;
+    return false;
   }
 
   return true;

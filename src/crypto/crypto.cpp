@@ -42,6 +42,9 @@
 #include "warnings.h"
 #include "crypto.h"
 #include "hash.h"
+extern "C" {
+#include "crypto/siphash.h"
+}
 
 #include "cryptonote_config.h"
 
@@ -748,5 +751,14 @@ POP_WARNINGS
     hash_to_scalar(buf.get(), rs_comm_size(pubs_count), h);
     sc_sub(&h, &h, &sum);
     return sc_isnonzero(&h) == 0;
+  }
+
+  void crypto_ops::derive_view_tag(const key_derivation &derivation, size_t output_index, view_tag &view_tag) {
+    ec_scalar scalar;
+    derivation_to_scalar(derivation, output_index, scalar);
+    const char salt[9] = "view_tag"; // separate domain for view tag
+    uint8_t view_tag_full; // siphash result will be 8 bytes
+    siphash(&salt, sizeof(salt), &scalar, &view_tag_full, 8); // note that siphash will only use the first 16 bytes of the scalar
+    memcpy(&view_tag, &view_tag_full, 1); // only need the first byte to realize optimal perf/space efficiency
   }
 }

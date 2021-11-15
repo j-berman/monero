@@ -259,6 +259,15 @@ int main(int argc, char *argv[]) {
       if (expected != actual) {
         goto error;
       }
+    } else if (cmd == "derive_view_tag") {
+      key_derivation derivation;
+      size_t output_index;
+      view_tag expected, actual;
+      get(input, derivation, output_index, expected);
+      derive_view_tag(derivation, output_index, actual);
+      if (expected != actual) {
+        goto error;
+      }
     } else {
       throw ios_base::failure("Unknown function: " + cmd);
     }

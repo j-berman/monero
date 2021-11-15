@@ -153,12 +153,13 @@ namespace cryptonote
       }
       for (size_t n = 0; n < tx.rct_signatures.outPk.size(); ++n)
       {
-        if (tx.vout[n].target.type() != typeid(txout_to_key))
+        crypto::public_key output_public_key;
+        if (!get_output_public_key(tx.vout[n], output_public_key))
         {
           LOG_PRINT_L1("Unsupported output type in tx " << get_transaction_hash(tx));
           return false;
         }
-        rv.outPk[n].dest = rct::pk2rct(boost::get<txout_to_key>(tx.vout[n].target).key);
+        rv.outPk[n].dest = rct::pk2rct(output_public_key);
       }
 
       if (!base_only)
@@ -804,8 +805,9 @@ namespace cryptonote
   {
     for(const tx_out& out: tx.vout)
     {
-      CHECK_AND_ASSERT_MES(out.target.type() == typeid(txout_to_key), false, "wrong variant type: "
-        << out.target.type().name() << ", expected " << typeid(txout_to_key).name()
+      crypto::public_key output_public_key;
+      CHECK_AND_ASSERT_MES(get_output_public_key(out, output_public_key), false, "wrong variant type: "
+        << out.target.type().name() << ", expected txout_to_key or txout_to_tagged_key"
         << ", in transaction id=" << get_transaction_hash(tx));
 
       if (tx.version == 1)
@@ -813,7 +815,7 @@ namespace cryptonote
         CHECK_AND_NO_ASSERT_MES(0 < out.amount, false, "zero amount output in transaction id=" << get_transaction_hash(tx));
       }
 
-      if(!check_key(boost::get<txout_to_key>(out.target).key))
+      if(!check_key(output_public_key))
         return false;
     }
     return true;
@@ -857,6 +859,27 @@ namespace cryptonote
     return outputs_amount;
   }
   //---------------------------------------------------------------
+  bool get_output_public_key(const cryptonote::tx_out& out, crypto::public_key &output_public_key)
+  {
+    // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_key
+    // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
+    if (out.target.type() != typeid(txout_to_key) && out.target.type() != typeid(txout_to_tagged_key))
+      return false;
+
+    output_public_key = out.target.type() == typeid(txout_to_key)
+      ? boost::get< txout_to_key >(out.target).key
+      : boost::get< txout_to_tagged_key >(out.target).key;
+
+    return true;
+  }
+  //---------------------------------------------------------------
+  const crypto::view_tag *get_output_view_tag(const cryptonote::tx_out& out)
+  {
+    return out.target.type() == typeid(txout_to_tagged_key)
+      ? &boost::get< txout_to_tagged_key >(out.target).view_tag
+      : NULL;
+  }
+  //---------------------------------------------------------------
   std::string short_hash_str(const crypto::hash& h)
   {
     std::string res = string_tools::pod_to_hex(h);
@@ -866,45 +889,112 @@ namespace cryptonote
     return res;
   }
   //---------------------------------------------------------------
-  bool is_out_to_acc(const account_keys& acc, const txout_to_key& out_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index)
+  void set_tx_out(const uint64_t amount, const crypto::public_key output_public_key, const bool use_view_tags, const crypto::view_tag view_tag, tx_out &out)
+  {
+    out.amount = amount;
+    if (use_view_tags)
+    {
+      txout_to_tagged_key ttk;
+      ttk.key = output_public_key;
+      ttk.view_tag = view_tag;
+      out.target = ttk;
+    }
+    else
+    {
+      txout_to_key tk;
+      tk.key = output_public_key;
+      out.target = tk;
+    }
+  }
+  //---------------------------------------------------------------
+  bool check_view_tags_valid(const transaction& tx, uint8_t hf_version)
+  {
+    for (const auto &o: tx.vout)
+    {
+      if (hf_version >= HF_VERSION_VIEW_TAGS)
+      {
+        // don't allow old outputs that don't have view tags after HF_VERSION_VIEW_TAGS
+        CHECK_AND_ASSERT_MES(o.target.type() != typeid(txout_to_key), false, "wrong variant type: "
+          << "txout_to_key, expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+      }
+      else
+      {
+        // don't allow view tags until HF_VERSION_VIEW_TAGS
+        CHECK_AND_ASSERT_MES(o.target.type() != typeid(txout_to_tagged_key), false, "wrong variant type: "
+          << "txout_to_tagged_key not supported yet, expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+      }
+    }
+    return true;
+  }
+  //---------------------------------------------------------------
+  bool out_can_be_to_acc(const crypto::view_tag *view_tag, const crypto::key_derivation derivation, const size_t output_index)
+  {
+    // If there is no view tag to check, the output can possibly belong to the account.
+    // Will need to derive the output pub key to be certain whether or not the output belongs to the account.
+    if (!view_tag)
+      return true;
+
+    // If the output's view tag does *not* match the derived view tag, the output should not belong to the account.
+    // Therefore can fail out early to avoid expensive crypto ops needlessly deriving output public key to
+    // determine if output belongs to the account.
+    crypto::view_tag derived_view_tag;
+    crypto::derive_view_tag(derivation, output_index, derived_view_tag);
+    return *view_tag == derived_view_tag;
+  }
+  //---------------------------------------------------------------
+  bool is_out_to_acc(const account_keys& acc, const crypto::public_key& output_public_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index, const crypto::view_tag *view_tag)
   {
     crypto::key_derivation derivation;
     bool r = acc.get_device().generate_key_derivation(tx_pub_key, acc.m_view_secret_key, derivation);
     CHECK_AND_ASSERT_MES(r, false, "Failed to generate key derivation");
     crypto::public_key pk;
-    r = acc.get_device().derive_public_key(derivation, output_index, acc.m_account_address.m_spend_public_key, pk);
-    CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
-    if (pk == out_key.key)
-      return true;
+    if (out_can_be_to_acc(view_tag, derivation, output_index))
+    {
+      r = acc.get_device().derive_public_key(derivation, output_index, acc.m_account_address.m_spend_public_key, pk);
+      CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
+      if (pk == output_public_key)
+        return true;
+    }
+
     // try additional tx pubkeys if available
     if (!additional_tx_pub_keys.empty())
     {
       CHECK_AND_ASSERT_MES(output_index < additional_tx_pub_keys.size(), false, "wrong number of additional tx pubkeys");
       r = acc.get_device().generate_key_derivation(additional_tx_pub_keys[output_index], acc.m_view_secret_key, derivation);
       CHECK_AND_ASSERT_MES(r, false, "Failed to generate key derivation");
-      r = acc.get_device().derive_public_key(derivation, output_index, acc.m_account_address.m_spend_public_key, pk);
-      CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
-      return pk == out_key.key;
+      if (out_can_be_to_acc(view_tag, derivation, output_index))
+      {
+        r = acc.get_device().derive_public_key(derivation, output_index, acc.m_account_address.m_spend_public_key, pk);
+        CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
+        return pk == output_public_key;
+      }
     }
     return false;
   }
   //---------------------------------------------------------------
-  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev)
+  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const crypto::view_tag *view_tag)
   {
     // try the shared tx pubkey
     crypto::public_key subaddress_spendkey;
-    hwdev.derive_subaddress_public_key(out_key, derivation, output_index, subaddress_spendkey);
-    auto found = subaddresses.find(subaddress_spendkey);
-    if (found != subaddresses.end())
-      return subaddress_receive_info{ found->second, derivation };
+    if (out_can_be_to_acc(view_tag, derivation, output_index))
+    {
+      hwdev.derive_subaddress_public_key(out_key, derivation, output_index, subaddress_spendkey);
+      auto found = subaddresses.find(subaddress_spendkey);
+      if (found != subaddresses.end())
+        return subaddress_receive_info{ found->second, derivation };
+    }
+
     // try additional tx pubkeys if available
     if (!additional_derivations.empty())
     {
       CHECK_AND_ASSERT_MES(output_index < additional_derivations.size(), boost::none, "wrong number of additional derivations");
-      hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey);
-      found = subaddresses.find(subaddress_spendkey);
-      if (found != subaddresses.end())
-        return subaddress_receive_info{ found->second, additional_derivations[output_index] };
+      if (out_can_be_to_acc(view_tag, additional_derivations[output_index], output_index))
+      {
+        hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey);
+        auto found = subaddresses.find(subaddress_spendkey);
+        if (found != subaddresses.end())
+          return subaddress_receive_info{ found->second, additional_derivations[output_index] };
+      }
     }
     return boost::none;
   }
@@ -925,8 +1015,9 @@ namespace cryptonote
     size_t i = 0;
     for(const tx_out& o:  tx.vout)
     {
-      CHECK_AND_ASSERT_MES(o.target.type() ==  typeid(txout_to_key), false, "wrong type id in transaction out" );
-      if(is_out_to_acc(acc, boost::get<txout_to_key>(o.target), tx_pub_key, additional_tx_pub_keys, i))
+      crypto::public_key output_public_key;
+      CHECK_AND_ASSERT_MES(get_output_public_key(o, output_public_key), false, "wrong type id in transaction out" );
+      if(is_out_to_acc(acc, output_public_key, tx_pub_key, additional_tx_pub_keys, i, get_output_view_tag(o)))
       {
         outs.push_back(i);
         money_transfered += o.amount;
