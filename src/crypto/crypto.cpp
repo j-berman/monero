@@ -754,11 +754,23 @@ POP_WARNINGS
   }
 
   void crypto_ops::derive_view_tag(const key_derivation &derivation, size_t output_index, view_tag &view_tag) {
-    ec_scalar scalar;
-    derivation_to_scalar(derivation, output_index, scalar);
-    const char salt[9] = "view_tag"; // separate domain for view tag
-    uint8_t view_tag_full; // siphash result will be 8 bytes
-    siphash(&salt, sizeof(salt), &scalar, &view_tag_full, 8); // note that siphash will only use the first 16 bytes of the scalar
+    struct {
+      char salt[8]; // view tag domain-separator
+      char output_index[(sizeof(size_t) * 8 + 6) / 7];
+    } buf;
+    memcpy(buf.salt, "view_tag", 8); // leave off null terminator
+    char *end = buf.output_index;
+    tools::write_varint(end, output_index);
+    assert(end <= buf.output_index + sizeof buf.output_index);
+
+    char siphash_key[16];
+    memcpy(&siphash_key, &derivation, 16);
+
+    // view_tag_full = H[siphash_key](salt, output_index)
+    unsigned char view_tag_full[8];
+    siphash(&buf, end - reinterpret_cast<char *>(&buf), siphash_key, view_tag_full, 8); // siphash result will be 8 bytes
+
+    memwipe(siphash_key, 16);
     memcpy(&view_tag, &view_tag_full, 1); // only need the first byte to realize optimal perf/space efficiency
   }
 }
