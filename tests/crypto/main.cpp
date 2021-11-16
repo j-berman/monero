@@ -268,6 +268,10 @@ int main(int argc, char *argv[]) {
       if (expected != actual) {
         goto error;
       }
+    } else if (cmd == "siphash") {
+      if (siphash_test() != 0) {
+        goto error;
+      }
     } else {
       throw ios_base::failure("Unknown function: " + cmd);
     }
