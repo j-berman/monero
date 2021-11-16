@@ -11667,12 +11667,12 @@ void wallet2::check_tx_key_helper(const crypto::hash &txid, const crypto::key_de
   }
 }
 
-bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, crypto::key_derivation &found_derivation, const crypto::view_tag *view_tag) const
+bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, crypto::key_derivation &found_derivation, const boost::optional<crypto::view_tag> view_tag_opt) const
 {
   crypto::public_key derived_out_key;
   bool found = false;
   bool r;
-  if (out_can_be_to_acc(view_tag, derivation, output_index))
+  if (out_can_be_to_acc(view_tag_opt, derivation, output_index))
   {
     r = crypto::derive_public_key(derivation, output_index, address.m_spend_public_key, derived_out_key);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to derive public key");
@@ -11683,7 +11683,7 @@ bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, c
   if (!found && !additional_derivations.empty())
   {
     const crypto::key_derivation additional_derivation = additional_derivations[output_index];
-    if (out_can_be_to_acc(view_tag, additional_derivation, output_index))
+    if (out_can_be_to_acc(view_tag_opt, additional_derivation, output_index))
     {
       r = crypto::derive_public_key(additional_derivation, output_index, address.m_spend_public_key, derived_out_key);
       THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to derive public key");

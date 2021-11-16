@@ -154,7 +154,7 @@ namespace cryptonote
       summary_amounts += amount = out_amounts[no];
 
       bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
-      crypto::view_tag view_tag = AUTO_VAL_INIT(view_tag);
+      crypto::view_tag view_tag;
       if (use_view_tags)
         crypto::derive_view_tag(derivation, no, view_tag);
 

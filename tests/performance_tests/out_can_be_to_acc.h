@@ -63,10 +63,10 @@ class test_out_can_be_to_acc : public single_tx_test_base
       {
         crypto::generate_key_derivation(m_tx_pub_key, m_view_secret_key, key_derivation);
         crypto::derive_view_tag(key_derivation, m_output_index, vt);
-        m_view_tag = &vt;
+        m_view_tag_opt = vt;
       }
       else
-        m_view_tag = NULL;
+        m_view_tag_opt = boost::optional<crypto::view_tag>();
 
       return true;
     }
@@ -78,7 +78,7 @@ class test_out_can_be_to_acc : public single_tx_test_base
       crypto::generate_key_derivation(m_tx_pub_key, m_view_secret_key, key_derivation);
 
       // if using view tags, this ensures we computed the view tag properly
-      if (!cryptonote::out_can_be_to_acc(m_view_tag, key_derivation, m_output_index))
+      if (!cryptonote::out_can_be_to_acc(m_view_tag_opt, key_derivation, m_output_index))
         return false;
 
       // if user owns output, this tests the output public key matches the derived
@@ -99,5 +99,5 @@ class test_out_can_be_to_acc : public single_tx_test_base
       crypto::secret_key m_view_secret_key;
       crypto::public_key m_spend_public_key;
       crypto::public_key m_output_public_key;
-      crypto::view_tag *m_view_tag;
+      boost::optional<crypto::view_tag> m_view_tag_opt;
 };

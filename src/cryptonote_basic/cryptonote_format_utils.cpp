@@ -873,11 +873,11 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  const crypto::view_tag *get_output_view_tag(const cryptonote::tx_out& out)
+  boost::optional<crypto::view_tag> get_output_view_tag(const cryptonote::tx_out& out)
   {
     return out.target.type() == typeid(txout_to_tagged_key)
-      ? &boost::get< txout_to_tagged_key >(out.target).view_tag
-      : NULL;
+      ? boost::optional<crypto::view_tag>(boost::get< txout_to_tagged_key >(out.target).view_tag)
+      : boost::optional<crypto::view_tag>();
   }
   //---------------------------------------------------------------
   std::string short_hash_str(const crypto::hash& h)
@@ -927,28 +927,30 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool out_can_be_to_acc(const crypto::view_tag *view_tag, const crypto::key_derivation derivation, const size_t output_index)
+  bool out_can_be_to_acc(const boost::optional<crypto::view_tag> view_tag_opt, const crypto::key_derivation derivation, const size_t output_index)
   {
     // If there is no view tag to check, the output can possibly belong to the account.
     // Will need to derive the output pub key to be certain whether or not the output belongs to the account.
-    if (!view_tag)
+    if (!view_tag_opt)
       return true;
+
+    crypto::view_tag view_tag = *view_tag_opt;
 
     // If the output's view tag does *not* match the derived view tag, the output should not belong to the account.
     // Therefore can fail out early to avoid expensive crypto ops needlessly deriving output public key to
     // determine if output belongs to the account.
     crypto::view_tag derived_view_tag;
     crypto::derive_view_tag(derivation, output_index, derived_view_tag);
-    return *view_tag == derived_view_tag;
+    return view_tag == derived_view_tag;
   }
   //---------------------------------------------------------------
-  bool is_out_to_acc(const account_keys& acc, const crypto::public_key& output_public_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index, const crypto::view_tag *view_tag)
+  bool is_out_to_acc(const account_keys& acc, const crypto::public_key& output_public_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index, const boost::optional<crypto::view_tag> view_tag_opt)
   {
     crypto::key_derivation derivation;
     bool r = acc.get_device().generate_key_derivation(tx_pub_key, acc.m_view_secret_key, derivation);
     CHECK_AND_ASSERT_MES(r, false, "Failed to generate key derivation");
     crypto::public_key pk;
-    if (out_can_be_to_acc(view_tag, derivation, output_index))
+    if (out_can_be_to_acc(view_tag_opt, derivation, output_index))
     {
       r = acc.get_device().derive_public_key(derivation, output_index, acc.m_account_address.m_spend_public_key, pk);
       CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
@@ -962,7 +964,7 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(output_index < additional_tx_pub_keys.size(), false, "wrong number of additional tx pubkeys");
       r = acc.get_device().generate_key_derivation(additional_tx_pub_keys[output_index], acc.m_view_secret_key, derivation);
       CHECK_AND_ASSERT_MES(r, false, "Failed to generate key derivation");
-      if (out_can_be_to_acc(view_tag, derivation, output_index))
+      if (out_can_be_to_acc(view_tag_opt, derivation, output_index))
       {
         r = acc.get_device().derive_public_key(derivation, output_index, acc.m_account_address.m_spend_public_key, pk);
         CHECK_AND_ASSERT_MES(r, false, "Failed to derive public key");
@@ -972,11 +974,11 @@ namespace cryptonote
     return false;
   }
   //---------------------------------------------------------------
-  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const crypto::view_tag *view_tag)
+  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const boost::optional<crypto::view_tag> view_tag_opt)
   {
     // try the shared tx pubkey
     crypto::public_key subaddress_spendkey;
-    if (out_can_be_to_acc(view_tag, derivation, output_index))
+    if (out_can_be_to_acc(view_tag_opt, derivation, output_index))
     {
       hwdev.derive_subaddress_public_key(out_key, derivation, output_index, subaddress_spendkey);
       auto found = subaddresses.find(subaddress_spendkey);
@@ -988,7 +990,7 @@ namespace cryptonote
     if (!additional_derivations.empty())
     {
       CHECK_AND_ASSERT_MES(output_index < additional_derivations.size(), boost::none, "wrong number of additional derivations");
-      if (out_can_be_to_acc(view_tag, additional_derivations[output_index], output_index))
+      if (out_can_be_to_acc(view_tag_opt, additional_derivations[output_index], output_index))
       {
         hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey);
         auto found = subaddresses.find(subaddress_spendkey);
