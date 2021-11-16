@@ -771,6 +771,9 @@ POP_WARNINGS
     siphash(&buf, end - reinterpret_cast<char *>(&buf), siphash_key, view_tag_full, 8); // siphash result will be 8 bytes
 
     memwipe(siphash_key, 16);
-    memcpy(&view_tag, &view_tag_full, sizeof(crypto::view_tag)); // only need the first byte to realize optimal perf/space efficiency
+
+    // only need a slice of view_tag_full to realize optimal perf/space efficiency
+    static_assert(sizeof(crypto::view_tag) <= sizeof(view_tag_full));
+    memcpy(&view_tag, &view_tag_full, sizeof(crypto::view_tag));
   }
 }
