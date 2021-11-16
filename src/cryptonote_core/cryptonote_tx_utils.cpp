@@ -150,8 +150,8 @@ namespace cryptonote
       r = crypto::derive_public_key(derivation, no, miner_address.m_spend_public_key, out_eph_public_key);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << no << ", "<< miner_address.m_spend_public_key << ")");
 
-      uint64_t amount;
-      summary_amounts += amount = out_amounts[no];
+      uint64_t amount = out_amounts[no];
+      summary_amounts += amount;
 
       bool use_view_tags = hard_fork_version >= HF_VERSION_VIEW_TAGS;
       crypto::view_tag view_tag;
