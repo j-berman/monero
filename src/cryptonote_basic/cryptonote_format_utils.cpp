@@ -907,21 +907,21 @@ namespace cryptonote
     }
   }
   //---------------------------------------------------------------
-  bool check_view_tags_valid(const transaction& tx, uint8_t hf_version)
+  bool check_output_types(const transaction& tx, const uint8_t hf_version)
   {
     for (const auto &o: tx.vout)
     {
       if (hf_version >= HF_VERSION_VIEW_TAGS)
       {
-        // don't allow old outputs that don't have view tags after HF_VERSION_VIEW_TAGS
-        CHECK_AND_ASSERT_MES(o.target.type() != typeid(txout_to_key), false, "wrong variant type: "
-          << "txout_to_key, expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+        // from v15, require outputs have view tags
+        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
       }
       else
       {
-        // don't allow view tags until HF_VERSION_VIEW_TAGS
-        CHECK_AND_ASSERT_MES(o.target.type() != typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << "txout_to_tagged_key not supported yet, expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+        // require outputs to be of type txout_to_key
+        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
       }
     }
     return true;

@@ -1169,9 +1169,9 @@ namespace cryptonote
       return false;
     }
 
-    if (!check_view_tags_valid(tx, hf_version))
+    if (!check_output_types(tx, hf_version))
     {
-      MERROR_VER("tx does not use valid view tags");
+      MERROR_VER("tx does not use valid output type(s)");
       return false;
     }
 
