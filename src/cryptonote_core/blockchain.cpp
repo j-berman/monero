@@ -1429,7 +1429,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
       partial_block_reward = true;
     base_reward = money_in_use - fee;
   }
-
   return true;
 }
 //------------------------------------------------------------------
