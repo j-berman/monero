@@ -773,7 +773,7 @@ POP_WARNINGS
     memwipe(siphash_key, 16);
 
     // only need a slice of view_tag_full to realize optimal perf/space efficiency
-    static_assert(sizeof(crypto::view_tag) <= sizeof(view_tag_full));
+    static_assert(sizeof(crypto::view_tag) <= sizeof(view_tag_full), "view tag should not be larger than hash result");
     memcpy(&view_tag, &view_tag_full, sizeof(crypto::view_tag));
   }
 }
