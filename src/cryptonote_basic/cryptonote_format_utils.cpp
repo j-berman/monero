@@ -929,6 +929,8 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool out_can_be_to_acc(const boost::optional<crypto::view_tag> view_tag_opt, const crypto::key_derivation derivation, const size_t output_index)
   {
+    // return true;
+
     // If there is no view tag to check, the output can possibly belong to the account.
     // Will need to derive the output pub key to be certain whether or not the output belongs to the account.
     if (!view_tag_opt)
@@ -942,6 +944,7 @@ namespace cryptonote
     crypto::view_tag derived_view_tag;
     crypto::derive_view_tag(derivation, output_index, derived_view_tag);
     return view_tag == derived_view_tag;
+    // return derived_view_tag.data == 0x08; // the derived view tags should be uniformly distributed, so searching for a match to a specific byte should effectively yield the same expected number of matches (1/256)
   }
   //---------------------------------------------------------------
   bool is_out_to_acc(const account_keys& acc, const crypto::public_key& output_public_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index, const boost::optional<crypto::view_tag> view_tag_opt)

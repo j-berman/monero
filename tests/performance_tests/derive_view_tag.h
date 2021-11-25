@@ -32,13 +32,16 @@
 
 #include "crypto/crypto.h"
 #include "cryptonote_basic/cryptonote_basic.h"
+#include "common/threadpool.h"
 
 #include "single_tx_test_base.h"
 
+template<size_t parallel_batch_size>
 class test_derive_view_tag : public single_tx_test_base
 {
 public:
-  static const size_t loop_count = 10000;
+  static const size_t loop_count = 1000;
+  static const size_t reloop_count = 200;
 
   bool init()
   {
@@ -52,8 +55,41 @@ public:
 
   bool test()
   {
+    crypto::key_derivation key_derivation = m_key_derivation;
     crypto::view_tag view_tag;
-    crypto::derive_view_tag(m_key_derivation, 0, view_tag);
+
+    tools::threadpool& tpool = tools::threadpool::getInstance();
+    tools::threadpool::waiter waiter(tpool);
+
+    if (parallel_batch_size == 0)
+    {
+      // no threads, just test synchronous behavior
+      for (size_t i = 0; i < reloop_count; ++i)
+        crypto::derive_view_tag(key_derivation, i, view_tag);
+    }
+    else
+    {
+      // submit calls to derive_view_tag in batches of size parallel_batch_size to the thread pool
+      size_t num_batches = std::floor(reloop_count / parallel_batch_size) + (reloop_count % parallel_batch_size > 0 ? 1 : 0);
+      size_t num_derivations = 0;
+      for (size_t i = 0, batch_start = 0; i < num_batches; ++i)
+      {
+        size_t batch_end = std::min(batch_start + parallel_batch_size, reloop_count);
+        tpool.submit(&waiter, [&key_derivation, &view_tag, batch_start, batch_end]() {
+          for (size_t k = batch_start; k < batch_end; ++k)
+            crypto::derive_view_tag(key_derivation, k, view_tag);
+        }, true);
+        num_derivations += batch_end - batch_start;
+        batch_start = batch_end;
+      }
+
+      if (num_derivations != reloop_count)
+        return false;
+
+      if (!waiter.wait())
+        return false;
+    }
+
     return true;
   }
 

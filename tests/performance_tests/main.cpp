@@ -71,7 +71,7 @@ int main(int argc, char** argv)
 {
   TRY_ENTRY();
   tools::on_startup();
-  set_process_affinity(1);
+  // set_process_affinity(1);
   set_thread_high_priority();
 
   mlog_configure(mlog_get_default_log_path("performance_tests.log"), true);
@@ -210,7 +210,13 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE0(filter, p, test_sc_check);
   TEST_PERFORMANCE1(filter, p, test_signature, false);
   TEST_PERFORMANCE1(filter, p, test_signature, true);
-  TEST_PERFORMANCE0(filter, p, test_derive_view_tag);
+
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 0);
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 1);
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 100);
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 1000);
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 5000);
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 10000);
 
   TEST_PERFORMANCE2(filter, p, test_wallet2_expand_subaddresses, 50, 200);
 

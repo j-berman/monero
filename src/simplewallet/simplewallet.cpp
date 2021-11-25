@@ -59,6 +59,7 @@
 #include "common/dns_utils.h"
 #include "common/base58.h"
 #include "common/scoped_message_writer.h"
+#include "common/perf_timer.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "simplewallet.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -5903,6 +5904,7 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
   PAUSE_READLINE();
 
   message_writer() << tr("Starting refresh...");
+  const uint64_t tstart = tools::get_tick_count();
 
   uint64_t fetched_blocks = 0;
   bool received_money = false;
@@ -5928,7 +5930,9 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
     ok = true;
     // Clear line "Height xxx of xxx"
     std::cout << "\r                                                                \r";
-    success_msg_writer(true) << tr("Refresh done, blocks received: ") << fetched_blocks;
+    const uint64_t tend = tools::get_tick_count();
+    const uint64_t ns = tools::ticks_to_ns(tend - tstart);
+    success_msg_writer(true) << tr("Refresh done, blocks received: ") << fetched_blocks << tr(", time to scan: ") << ns/1e6 << tr(" ms");
     if (is_init)
       print_accounts();
     show_balance_unlocked();
