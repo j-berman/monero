@@ -2036,8 +2036,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
     int num_vouts_received = 0;
     tx_pub_key = pub_key_field.pub_key;
-    tools::threadpool& tpool = tools::threadpool::getInstance();
-    tools::threadpool::waiter waiter(tpool);
     const cryptonote::account_keys& keys = m_account.get_keys();
     crypto::key_derivation derivation;
 
@@ -2107,10 +2105,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         // the first one was already checked
         for (size_t i = 1; i < tx.vout.size(); ++i)
         {
-          tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
-            std::cref(is_out_data_ptr), std::ref(tx_scan_info[i]), std::ref(output_found[i])), true);
+          check_acc_out_precomp_once(tx.vout[i], derivation, additional_derivations, i, is_out_data_ptr, tx_scan_info[i], output_found[i]);
         }
-        THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
         // then scan all outputs from 0
         hw::device &hwdev = m_account.get_device();
         boost::unique_lock<hw::device> hwdev_lock (hwdev);
@@ -2126,32 +2122,6 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             {
               tx_amounts_individual_outs[tx_scan_info[i].received->index].push_back(tx_scan_info[i].money_transfered);
             }
-          }
-        }
-      }
-    }
-    else if (tx.vout.size() > 1 && tools::threadpool::getInstance().get_max_concurrency() > 1 && !is_out_data_ptr)
-    {
-      for (size_t i = 0; i < tx.vout.size(); ++i)
-      {
-        tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
-            std::cref(is_out_data_ptr), std::ref(tx_scan_info[i]), std::ref(output_found[i])), true);
-      }
-      THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
-
-      hw::device &hwdev = m_account.get_device();
-      boost::unique_lock<hw::device> hwdev_lock (hwdev);
-      hwdev.set_mode(hw::device::NONE);
-      for (size_t i = 0; i < tx.vout.size(); ++i)
-      {
-        THROW_WALLET_EXCEPTION_IF(tx_scan_info[i].error, error::acc_outs_lookup_error, tx, tx_pub_key, m_account.get_keys());
-        if (tx_scan_info[i].received)
-        {
-          hwdev.conceal_derivation(tx_scan_info[i].received->derivation, tx_pub_key, additional_tx_pub_keys.data, derivation, additional_derivations);
-          scan_output(tx, miner_tx, tx_pub_key, i, tx_scan_info[i], num_vouts_received, tx_money_got_in_outs, outs, pool);
-          if (!tx_scan_info[i].error)
-          {
-            tx_amounts_individual_outs[tx_scan_info[i].received->index].push_back(tx_scan_info[i].money_transfered);
           }
         }
       }
@@ -2853,6 +2823,13 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       }
     }
   };
+  struct geniod_params
+  {
+    const cryptonote::transaction &tx;
+    size_t n_outs;
+    size_t txidx;
+  };
+  std::vector<geniod_params> geniod_batch;
 
   txidx = 0;
   for (size_t i = 0; i < blocks.size(); ++i)
@@ -2868,18 +2845,39 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
       const cryptonote::transaction& tx = parsed_blocks[i].block.miner_tx;
       const size_t n_vouts = (m_refresh_type == RefreshType::RefreshOptimizeCoinbase && tx.version < 2) ? 1 : tx.vout.size();
-      tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
+      geniod_batch.push_back(geniod_params{ tx, n_vouts, txidx });
     }
     ++txidx;
     for (size_t j = 0; j < parsed_blocks[i].txes.size(); ++j)
     {
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
-      tpool.submit(&waiter, [&, i, j, txidx](){ geniod(parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx); }, true);
+      geniod_batch.push_back(geniod_params{ parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx });
       ++txidx;
     }
   }
   THROW_WALLET_EXCEPTION_IF(txidx != tx_cache_data.size(), error::wallet_internal_error, "txidx did not reach expected value");
+
+  // Submit geniod calls to the threadpool in batches of size GENIOD_BATCH_SIZE
+  // Realizes more optimal benefit accounting for the overhead of threads
+  size_t GENIOD_BATCH_SIZE = 100;
+  size_t num_geniod_batches = std::floor(geniod_batch.size() / GENIOD_BATCH_SIZE) + (geniod_batch.size() % GENIOD_BATCH_SIZE > 0 ? 1 : 0);
+  size_t num_batch_txes = 0;
+  for (size_t i = 0, batch_start = 0; i < num_geniod_batches; ++i)
+  {
+    size_t batch_end = std::min(batch_start + GENIOD_BATCH_SIZE, geniod_batch.size());
+    tpool.submit(&waiter, [&geniod_batch, &geniod, batch_start, batch_end]() {
+      for (size_t k = batch_start; k < batch_end; ++k)
+      {
+        geniod_params p = geniod_batch[k];
+        geniod(p.tx, p.n_outs, p.txidx);
+      }
+    }, true);
+    num_batch_txes += batch_end - batch_start;
+    batch_start = batch_end;
+  }
+  THROW_WALLET_EXCEPTION_IF(num_batch_txes != geniod_batch.size(), error::wallet_internal_error, "num_batch_txes does not match geniod_batch size");
   THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
+
   hwdev.set_mode(hw::device::NONE);
 
   size_t tx_cache_data_offset = 0;
