@@ -42,9 +42,6 @@
 #include "warnings.h"
 #include "crypto.h"
 #include "hash.h"
-extern "C" {
-#include "crypto/siphash.h"
-}
 
 #include "cryptonote_config.h"
 
@@ -756,21 +753,18 @@ POP_WARNINGS
   void crypto_ops::derive_view_tag(const key_derivation &derivation, size_t output_index, view_tag &view_tag) {
     struct {
       char salt[8]; // view tag domain-separator
+      key_derivation derivation;
       char output_index[(sizeof(size_t) * 8 + 6) / 7];
     } buf;
-    memcpy(buf.salt, "view_tag", 8); // leave off null terminator
     char *end = buf.output_index;
+    memcpy(buf.salt, "view_tag", 8); // leave off null terminator
+    buf.derivation = derivation;
     tools::write_varint(end, output_index);
     assert(end <= buf.output_index + sizeof buf.output_index);
 
-    char siphash_key[16];
-    memcpy(&siphash_key, &derivation, 16);
-
-    // view_tag_full = H[siphash_key](salt, output_index)
-    unsigned char view_tag_full[8];
-    siphash(&buf, end - reinterpret_cast<char *>(&buf), siphash_key, view_tag_full, 8); // siphash result will be 8 bytes
-
-    memwipe(siphash_key, 16);
+    // view_tag_full = H[salt|derivation|output_index]
+    hash view_tag_full;
+    cn_fast_hash(&buf, end - reinterpret_cast<char *>(&buf), view_tag_full);
 
     // only need a slice of view_tag_full to realize optimal perf/space efficiency
     static_assert(sizeof(crypto::view_tag) <= sizeof(view_tag_full), "view tag should not be larger than hash result");

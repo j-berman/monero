@@ -32,12 +32,10 @@ set(crypto_sources
   crypto.cpp
   hash.c
   main.cpp
-  random.c
-  siphash_test.c)
+  random.c)
 
 set(crypto_headers
-  crypto-tests.h
-  siphash_test_vectors.h)
+  crypto-tests.h)
 
 monero_add_minimal_executable(cncrypto-tests
   ${crypto_sources}

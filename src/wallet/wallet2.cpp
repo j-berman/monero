@@ -2865,6 +2865,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   for (size_t i = 0, batch_start = 0; i < num_geniod_batches; ++i)
   {
     size_t batch_end = std::min(batch_start + GENIOD_BATCH_SIZE, geniod_batch.size());
+    THROW_WALLET_EXCEPTION_IF(batch_end < batch_start, error::wallet_internal_error, "Thread batch end overflow");
     tpool.submit(&waiter, [&geniod_batch, &geniod, batch_start, batch_end]() {
       for (size_t k = batch_start; k < batch_end; ++k)
       {
@@ -2875,7 +2876,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
     num_batch_txes += batch_end - batch_start;
     batch_start = batch_end;
   }
-  THROW_WALLET_EXCEPTION_IF(num_batch_txes != geniod_batch.size(), error::wallet_internal_error, "num_batch_txes does not match geniod_batch size");
+  THROW_WALLET_EXCEPTION_IF(num_batch_txes != geniod_batch.size(), error::wallet_internal_error, "txes batched for thread pool did not reach expected value");
   THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
 
   hwdev.set_mode(hw::device::NONE);
