@@ -2845,38 +2845,49 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
       const cryptonote::transaction& tx = parsed_blocks[i].block.miner_tx;
       const size_t n_vouts = (m_refresh_type == RefreshType::RefreshOptimizeCoinbase && tx.version < 2) ? 1 : tx.vout.size();
-      geniod_batch.push_back(geniod_params{ tx, n_vouts, txidx });
+      if (parsed_blocks[i].block.major_version >= HF_VERSION_VIEW_TAGS)
+        geniod_batch.push_back(geniod_params{ tx, n_vouts, txidx });
+      else
+        tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
     }
     ++txidx;
     for (size_t j = 0; j < parsed_blocks[i].txes.size(); ++j)
     {
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
-      geniod_batch.push_back(geniod_params{ parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx });
+      if (parsed_blocks[i].block.major_version >= HF_VERSION_VIEW_TAGS)
+        geniod_batch.push_back(geniod_params{ parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx });
+      else
+        tpool.submit(&waiter, [&, i, j, txidx](){ geniod(parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx); }, true);
       ++txidx;
     }
   }
   THROW_WALLET_EXCEPTION_IF(txidx != tx_cache_data.size(), error::wallet_internal_error, "txidx did not reach expected value");
 
-  // Submit geniod calls to the threadpool in batches of size GENIOD_BATCH_SIZE
-  // Realizes more optimal benefit accounting for the overhead of threads
-  size_t GENIOD_BATCH_SIZE = 100;
-  size_t num_geniod_batches = std::floor(geniod_batch.size() / GENIOD_BATCH_SIZE) + (geniod_batch.size() % GENIOD_BATCH_SIZE > 0 ? 1 : 0);
-  size_t num_batch_txes = 0;
-  for (size_t i = 0, batch_start = 0; i < num_geniod_batches; ++i)
+  // View tags significantly speed up the geniod function that determines if an output belongs to the account.
+  // Since determining output ownership is so fast when view tags are enabled, the overhead from submitting individual geniods to the
+  // thread pool eats into the benefit of executing in parallel. So to maximize the benefit from threads when view tags are enabled,
+  // the wallet starts submitting geniod function calls to the thread pool in batches of size GENIOD_BATCH_SIZE.
+  if (geniod_batch.size())
   {
-    size_t batch_end = std::min(batch_start + GENIOD_BATCH_SIZE, geniod_batch.size());
-    THROW_WALLET_EXCEPTION_IF(batch_end < batch_start, error::wallet_internal_error, "Thread batch end overflow");
-    tpool.submit(&waiter, [&geniod_batch, &geniod, batch_start, batch_end]() {
-      for (size_t k = batch_start; k < batch_end; ++k)
-      {
-        geniod_params p = geniod_batch[k];
-        geniod(p.tx, p.n_outs, p.txidx);
-      }
-    }, true);
-    num_batch_txes += batch_end - batch_start;
-    batch_start = batch_end;
+    size_t GENIOD_BATCH_SIZE = 100;
+    size_t num_geniod_batches = std::ceil(geniod_batch.size() / static_cast<double>(GENIOD_BATCH_SIZE));
+    size_t num_batch_txes = 0;
+    for (size_t i = 0, batch_start = 0; i < num_geniod_batches; ++i)
+    {
+      size_t batch_end = std::min(batch_start + GENIOD_BATCH_SIZE, geniod_batch.size());
+      THROW_WALLET_EXCEPTION_IF(batch_end < batch_start, error::wallet_internal_error, "Thread batch end overflow");
+      tpool.submit(&waiter, [&geniod_batch, &geniod, batch_start, batch_end]() {
+        for (size_t k = batch_start; k < batch_end; ++k)
+        {
+          geniod_params p = geniod_batch[k];
+          geniod(p.tx, p.n_outs, p.txidx);
+        }
+      }, true);
+      num_batch_txes += batch_end - batch_start;
+      batch_start = batch_end;
+    }
+    THROW_WALLET_EXCEPTION_IF(num_batch_txes != geniod_batch.size(), error::wallet_internal_error, "txes batched for thread pool did not reach expected value");
   }
-  THROW_WALLET_EXCEPTION_IF(num_batch_txes != geniod_batch.size(), error::wallet_internal_error, "txes batched for thread pool did not reach expected value");
   THROW_WALLET_EXCEPTION_IF(!waiter.wait(), error::wallet_internal_error, "Exception in thread pool");
 
   hwdev.set_mode(hw::device::NONE);
