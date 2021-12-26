@@ -44,37 +44,155 @@ namespace po = boost::program_options;
 using namespace epee;
 using namespace cryptonote;
 
-struct output_data
-{
-  uint64_t amount;
-  uint64_t index;
-  mutable bool coinbase;
-  mutable uint64_t height;
-  output_data(uint64_t a, uint64_t i, bool cb, uint64_t h): amount(a), index(i), coinbase(cb), height(h) {}
-  bool operator==(const output_data &other) const { return other.amount == amount && other.index == index; }
-  void info(bool c, uint64_t h) const { coinbase = c; height =h; }
-};
-namespace std
-{
-  template<> struct hash<output_data>
-  {
-    size_t operator()(const output_data &od) const
-    {
-      const uint64_t data[2] = {od.amount, od.index};
-      crypto::hash h;
-      crypto::cn_fast_hash(data, 2 * sizeof(uint64_t), h);
-      return reinterpret_cast<const std::size_t &>(h);
-    }
-  };
-}
+const uint64_t START_HEIGHT = 2508000;
+const uint64_t END_HEIGHT = 2522940; // core_storage->get_current_blockchain_height() - 1;
 
-struct reference
+const uint64_t MIN_OUTPUT_AGE = 3 * 720; // 60 * 720;
+const uint64_t OUTPUT_AGE_DIFF = 60; // 2 * 720;
+
+#define GAMMA_SHAPE 19.28
+#define GAMMA_SCALE (1/1.61)
+#define DEFAULT_UNLOCK_TIME (CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE * DIFFICULTY_TARGET_V2)
+#define RECENT_SPEND_WINDOW_v17_3_0 (15 * DIFFICULTY_TARGET_V2)
+#define RECENT_SPEND_WINDOW_v17_2_3 (50 * DIFFICULTY_TARGET_V2)
+
+#define v17_3_0 1
+#define v17_2_3 2
+#define pre_v17_2_3 3
+#define mymonero_monero_lws 4
+
+std::gamma_distribution<double> gamma_dist = std::gamma_distribution<double>(GAMMA_SHAPE, GAMMA_SCALE);
+const size_t blocks_in_a_year = 86400 * 365 / DIFFICULTY_TARGET_V2;
+
+struct gamma_engine
 {
-  uint64_t height;
-  uint64_t ring_size;
-  uint64_t position;
-  reference(uint64_t h, uint64_t rs, uint64_t p): height(h), ring_size(rs), position(p) {}
+  typedef uint64_t result_type;
+  static constexpr result_type min() { return 0; }
+  static constexpr result_type max() { return std::numeric_limits<result_type>::max(); }
+  result_type operator()() { return crypto::rand<result_type>(); }
+} engine;
+
+uint64_t get_output_age(std::vector<uint64_t> &output_heights, uint64_t output_index, uint64_t blockchain_height, std::string tx_hash = "")
+{
+  if (output_index >= output_heights.size())
+    throw std::logic_error("output_index not found " + std::to_string(output_index) + " " + std::to_string(output_heights.size()));
+
+  uint64_t output_height = output_heights[output_index];
+  uint64_t output_age = blockchain_height - output_height;
+
+  // sanity checks
+  if ((output_index == 40408 && output_height != 1227180) ||
+      (output_index == 27478088 && output_height != 2300000) ||
+      (output_index == 45373870 && output_height != 2522238))
+    throw std::logic_error("Failed output height sanity check...");
+
+  if (output_index == 35468500 && output_age != 10 && tx_hash == "41526a1870bb3e92735b69989d782044029a4375915b11b6664f2754481a7dea")
+    throw std::logic_error("Failed output age sanity check...");
+
+  return output_age;
 };
+
+uint64_t gamma_pick(std::vector<uint64_t> &output_heights, std::vector<uint64_t> &rct_offsets, uint64_t rct_offsets_start_height, uint64_t blockchain_height, size_t version)
+{
+  size_t rct_offset_index_for_current_height = blockchain_height - rct_offsets_start_height;
+  const size_t blocks_to_consider = std::min<size_t>(rct_offset_index_for_current_height, blocks_in_a_year);
+  const size_t outputs_to_consider = rct_offsets[rct_offset_index_for_current_height] - (blocks_to_consider < rct_offset_index_for_current_height ? rct_offsets[rct_offset_index_for_current_height - blocks_to_consider - 1] : 0);
+
+  uint64_t num_rct_outputs;
+  switch (version)
+  {
+    case v17_3_0:
+    case v17_2_3:
+    case pre_v17_2_3:
+      num_rct_outputs = rct_offsets[rct_offset_index_for_current_height - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE];
+      break;
+    case mymonero_monero_lws:
+      num_rct_outputs = rct_offsets[rct_offset_index_for_current_height];
+      break;
+    default:
+      throw std::runtime_error("Unknown version");
+      break;
+  };
+
+  double average_output_time;
+  switch (version)
+  {
+    case v17_3_0:
+    case mymonero_monero_lws:
+      average_output_time = DIFFICULTY_TARGET_V2 * blocks_to_consider / static_cast<double>(outputs_to_consider);
+      break;
+    case v17_2_3:
+    case pre_v17_2_3:
+      average_output_time = DIFFICULTY_TARGET_V2 * blocks_to_consider / outputs_to_consider;
+      break;
+    default:
+      throw std::runtime_error("Unknown version");
+      break;
+  };
+
+  double x = gamma_dist(engine);
+  x = exp(x);
+  switch (version)
+  {
+    case v17_3_0:
+    case v17_2_3:
+      if (x > DEFAULT_UNLOCK_TIME)
+        x -= DEFAULT_UNLOCK_TIME;
+      else
+        x = crypto::rand_idx(static_cast<uint64_t>(version == v17_3_0 ? RECENT_SPEND_WINDOW_v17_3_0 : RECENT_SPEND_WINDOW_v17_2_3));
+      break;
+    case pre_v17_2_3:
+    case mymonero_monero_lws:
+      break;
+    default:
+      throw std::runtime_error("Unknown version");
+      break;
+  };
+
+  uint64_t output_index = x / average_output_time;
+  if (output_index >= num_rct_outputs)
+    return gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blockchain_height, version); // bad pick
+  output_index = num_rct_outputs - 1 - output_index;
+
+  uint64_t output_age = get_output_age(output_heights, output_index, blockchain_height);
+
+  if (output_age < CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE)
+  {
+    if (version == mymonero_monero_lws)
+      return gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blockchain_height, version); // bad pick
+    else
+      throw std::logic_error("Should never be younger than unlock time in non-MyMonero/monero-lws versions");
+  }
+
+  return output_age;
+};
+
+std::vector<uint64_t> set_output_heights(std::vector<uint64_t> &rct_offsets, uint64_t rct_offsets_start_height)
+{
+  std::vector<uint64_t> output_heights;
+  output_heights.reserve(rct_offsets[rct_offsets.size() - 1]);
+
+  uint64_t start = 0;
+  for (uint64_t i = 0; i < rct_offsets.size(); ++i)
+  {
+    uint64_t end = rct_offsets[i];
+    while (start < end)
+    {
+      output_heights.push_back(rct_offsets_start_height + i);
+      ++start;
+    }
+  }
+
+  // if ((output_heights[40408] != 1227180) ||
+  //   (output_heights[27478088] != 2300000) ||
+  //   (output_heights[45373870] != 2522238) ||
+  //   (output_heights[45317542] != 2521386) ||
+  //   (output_heights[45317542] != output_heights[45317541]) ||
+  //   (output_heights[45317542] != output_heights[45317477]))
+  //   throw std::logic_error("Failed output height sanity check...");
+
+  return output_heights;
+}
 
 int main(int argc, char* argv[])
 {
@@ -181,63 +299,309 @@ int main(int argc, char* argv[])
 
   LOG_PRINT_L0("Building usage patterns...");
 
-  std::unordered_map<output_data, std::list<reference>> outputs;
+  size_t done = 0;
   std::unordered_map<uint64_t,uint64_t> indices;
 
   LOG_PRINT_L0("Reading blockchain from " << input);
-  core_storage->for_all_transactions([&](const crypto::hash &hash, const cryptonote::transaction &tx)->bool
+
+  LOG_PRINT_L0("Loading rct_offsets...");
+  uint64_t amount = 0;
+  uint64_t from_height = 0;
+  uint64_t return_height = 0;
+  std::vector<uint64_t> rct_offsets;
+  uint64_t base = 0;
+  core_storage->get_output_distribution(amount, from_height, END_HEIGHT, return_height, rct_offsets, base);
+  uint64_t rct_offsets_start_height = END_HEIGHT - rct_offsets.size() + 1;
+  LOG_PRINT_L0("Finished loading rct_offsets... ");
+
+  LOG_PRINT_L0("Setting output_heights to speed things up...");
+  std::vector<uint64_t> output_heights = set_output_heights(rct_offsets, rct_offsets_start_height);
+  LOG_PRINT_L0("Finished setting output_heights...");
+
+  uint64_t count_2_input_txes_total = 0;
+  uint64_t count_2_input_txes_observed = 0;
+
+  uint64_t count_2_input_txes_wallet2_v17_3_0 = 0;
+  uint64_t count_2_input_txes_wallet2_v17_2_3 = 0;
+  uint64_t count_2_input_txes_wallet2_pre_v17_2_3 = 0;
+  uint64_t count_2_input_txes_mymonero_monero_lws = 0;
+
+  LOG_PRINT_L0("Minimum output age: " << MIN_OUTPUT_AGE << ", Maximum output age difference: " << OUTPUT_AGE_DIFF);
+  uint64_t range_start_height = START_HEIGHT;
+  uint64_t next_log = range_start_height;
+  while (range_start_height < END_HEIGHT)
   {
-    const bool coinbase = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
-    const uint64_t height = core_storage->get_db().get_tx_block_height(hash);
+    size_t min_block_count = 0;
+    size_t max_block_count = 1000;
+    size_t max_tx_count = max_block_count * 100;
+    size_t max_size = (100*1024*1024); // 100 MB
+    bool pruned = true;
+    bool skip_coinbase = true;
+    bool get_miner_tx_hash = false;
 
-    // create new outputs
-    for (const auto &out: tx.vout)
+    std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata>>>> blocks;
+    core_storage->get_db().get_blocks_from(range_start_height, min_block_count, max_block_count, max_tx_count, max_size, blocks, pruned, skip_coinbase, get_miner_tx_hash);
+    if (!blocks.size())
+      break;
+
+    // iterate over every tx in every block
+    uint64_t blk_no = range_start_height;
+    for (const auto &blk : blocks)
     {
-      if (opt_rct_only && out.amount)
-        continue;
-      indices[out.amount]++;
-      output_data od(out.amount, indices[out.amount], coinbase, height);
-      auto itb = outputs.emplace(od, std::list<reference>());
-      itb.first->first.info(coinbase, height);
-    }
-
-    for (const auto &in: tx.vin)
-    {
-      if (in.type() != typeid(txin_to_key))
-        continue;
-      const auto &txin = boost::get<txin_to_key>(in);
-      if (opt_rct_only && txin.amount != 0)
-        continue;
-
-      const std::vector<uint64_t> absolute = cryptonote::relative_output_offsets_to_absolute(txin.key_offsets);
-      for (size_t n = 0; n < txin.key_offsets.size(); ++n)
+      uint64_t LOG_INTERVAL = 1000;
+      if (blk_no % LOG_INTERVAL == 0)
       {
-        output_data od(txin.amount, absolute[n], coinbase, height);
-        outputs[od].push_back(reference(height, txin.key_offsets.size(), n));
-      }
-    }
-    return true;
-  }, true);
+        double percent_observed = count_2_input_txes_observed > 0 ? 100 * (double) count_2_input_txes_observed / count_2_input_txes_total : 0;
 
-  std::unordered_map<uint64_t, uint64_t> counts;
-  size_t total = 0;
-  for (const auto &out: outputs)
-  {
-    counts[out.second.size()]++;
-    total++;
-  }
-  if (total > 0)
-  {
-    for (const auto &c: counts)
-    {
-      float percent = 100.f * c.second / total;
-      MINFO(std::to_string(c.second) << " outputs used " << c.first << " times (" << percent << "%)");
+        double percent_expected_v17_3_0 = count_2_input_txes_observed > 0 ? 100 * (double) count_2_input_txes_wallet2_v17_3_0 / count_2_input_txes_total : 0;
+        double percent_expected_v17_2_3 = count_2_input_txes_observed > 0 ? 100 * (double) count_2_input_txes_wallet2_v17_2_3 / count_2_input_txes_total : 0;
+        double percent_expected_pre_v17_2_3 = count_2_input_txes_observed > 0 ? 100 * (double) count_2_input_txes_wallet2_pre_v17_2_3 / count_2_input_txes_total : 0;
+        double percent_expected_mymonero_monero_lws = count_2_input_txes_observed > 0 ? 100 * (double) count_2_input_txes_mymonero_monero_lws / count_2_input_txes_total : 0;
+
+        LOG_PRINT_L0("Reading blocks " << blk_no << " - " << std::min(blk_no + LOG_INTERVAL, END_HEIGHT) << " (observed: " << percent_observed << "%, v17.3.0: " << percent_expected_v17_3_0 << "%, v17.2.3: " <<  percent_expected_v17_2_3 << "%, pre v17.2.3: " << percent_expected_pre_v17_2_3 << "%, MyMonero+monero-lws: " << percent_expected_mymonero_monero_lws << "%)");
+      }
+
+      for (const auto &tx_blob : blk.second)
+      {
+        cryptonote::transaction tx;
+        if (!parse_and_validate_tx_base_from_blob(tx_blob.second, tx))
+          throw std::runtime_error("Messed up parsing");
+
+        // only care about 2-input tx's for this analysis
+        if (tx.vin.size() == 2)
+        {
+          if (tx.vin[0].type() != typeid(txin_to_key) || tx.vin[1].type() != typeid(txin_to_key))
+            continue;
+          const auto &txin0 = boost::get<txin_to_key>(tx.vin[0]);
+          const auto &txin1 = boost::get<txin_to_key>(tx.vin[1]);
+          if (txin0.amount != 0 || txin1.amount != 0)
+            continue;
+          if (txin0.key_offsets.size() != 11 || txin1.key_offsets.size() != 11)
+            continue;
+
+          std::string tx_hash = epee::string_tools::pod_to_hex(tx_blob.first);
+          ++count_2_input_txes_total;
+
+          /**
+           *
+           *
+           * Check if observed ring 1 has output older than X blocks old, and ring 2 has output within Y blocks of that output.
+           *
+           *
+          */
+          const std::vector<uint64_t> actual_absolute0 = cryptonote::relative_output_offsets_to_absolute(txin0.key_offsets);
+          const std::vector<uint64_t> actual_absolute1 = cryptonote::relative_output_offsets_to_absolute(txin1.key_offsets);
+
+          // iterate over each ring member of actual ring 1
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            uint64_t output_age0 = get_output_age(output_heights, actual_absolute0[i], blk_no, tx_hash);
+
+            // only care about outputs that are older than X blocks old
+            if (output_age0 >= MIN_OUTPUT_AGE)
+            {
+              // iterate over each ring member of ring 1
+              for (size_t j = 0; j < txin1.key_offsets.size(); ++j)
+              {
+                uint64_t output_age1 = get_output_age(output_heights, actual_absolute1[j], blk_no, tx_hash);
+
+                if (std::abs((double) output_age0 - (double) output_age1) <= OUTPUT_AGE_DIFF)
+                {
+                  ++count_2_input_txes_observed;
+
+                  // manually break for loops
+                  j = txin1.key_offsets.size();
+                  i = txin0.key_offsets.size();
+                }
+              }
+            }
+          }
+
+          /**
+           *
+           *
+           * v17.3.0 gamma selection algorithm
+           *
+           *
+          */
+          // now gamma select outputs for every input, and check the gammas
+          std::vector<uint64_t> expected_absolute0;
+          std::vector<uint64_t> expected_absolute1;
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            expected_absolute0.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, v17_3_0));
+            expected_absolute1.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, v17_3_0));
+          }
+
+          // iterate over each ring member of expected ring 1
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            uint64_t expected_output_age0 = expected_absolute0[i];
+
+            // only care about outputs that are older than X blocks old
+            if (expected_output_age0 >= MIN_OUTPUT_AGE)
+            {
+              // iterate over each ring member of ring 1
+              for (size_t j = 0; j < txin1.key_offsets.size(); ++j)
+              {
+                uint64_t expected_output_age1 = expected_absolute1[j];
+
+                if (std::abs((double) expected_output_age0 - (double) expected_output_age1) <= OUTPUT_AGE_DIFF)
+                {
+                  ++count_2_input_txes_wallet2_v17_3_0;
+
+                  // manually break for loops
+                  j = txin1.key_offsets.size();
+                  i = txin0.key_offsets.size();
+                }
+
+              }
+            }
+          }
+
+          /**
+           *
+           *
+           * v17.2.3
+           *
+           *
+          */
+          // now gamma select outputs for every input, and check the gammas
+          std::vector<uint64_t> v17_2_3_abs0;
+          std::vector<uint64_t> v17_2_3_abs1;
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            v17_2_3_abs0.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, v17_2_3));
+            v17_2_3_abs1.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, v17_2_3));
+          }
+
+          // iterate over each ring member of expected ring 1
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            uint64_t expected_output_age0 = v17_2_3_abs0[i];
+
+            // only care about outputs that are older than X blocks old
+            if (expected_output_age0 >= MIN_OUTPUT_AGE)
+            {
+              // iterate over each ring member of ring 1
+              for (size_t j = 0; j < txin1.key_offsets.size(); ++j)
+              {
+                uint64_t expected_output_age1 = v17_2_3_abs1[j];
+
+                if (std::abs((double) expected_output_age0 - (double) expected_output_age1) <= OUTPUT_AGE_DIFF)
+                {
+                  ++count_2_input_txes_wallet2_v17_2_3;
+
+                  // manually break for loops
+                  j = txin1.key_offsets.size();
+                  i = txin0.key_offsets.size();
+                }
+
+              }
+            }
+          }
+
+          /**
+           *
+           *
+           * pre v17.2.3
+           *
+           *
+          */
+          // now gamma select outputs for every input, and check the gammas
+          std::vector<uint64_t> pre_v17_2_3_abs0;
+          std::vector<uint64_t> pre_v17_2_3_abs1;
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            pre_v17_2_3_abs0.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, pre_v17_2_3));
+            pre_v17_2_3_abs1.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, pre_v17_2_3));
+          }
+
+          // iterate over each ring member of expected ring 1
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            uint64_t expected_output_age0 = pre_v17_2_3_abs0[i];
+
+            // only care about outputs that are older than X blocks old
+            if (expected_output_age0 >= MIN_OUTPUT_AGE)
+            {
+              // iterate over each ring member of ring 1
+              for (size_t j = 0; j < txin1.key_offsets.size(); ++j)
+              {
+                uint64_t expected_output_age1 = pre_v17_2_3_abs1[j];
+
+                if (std::abs((double) expected_output_age0 - (double) expected_output_age1) <= OUTPUT_AGE_DIFF)
+                {
+                  ++count_2_input_txes_wallet2_pre_v17_2_3;
+
+                  // manually break for loops
+                  j = txin1.key_offsets.size();
+                  i = txin0.key_offsets.size();
+                }
+
+              }
+            }
+          }
+
+          /**
+           *
+           *
+           * MyMonero+monero-lws
+           *
+           *
+          */
+          // now gamma select outputs for every input, and check the gammas
+          std::vector<uint64_t> mymonero_monero_lws_abs0;
+          std::vector<uint64_t> mymonero_monero_lws_abs1;
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            mymonero_monero_lws_abs0.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, mymonero_monero_lws));
+            mymonero_monero_lws_abs1.push_back(gamma_pick(output_heights, rct_offsets, rct_offsets_start_height, blk_no, mymonero_monero_lws));
+          }
+
+          // iterate over each ring member of expected ring 1
+          for (size_t i = 0; i < txin0.key_offsets.size(); ++i)
+          {
+            uint64_t expected_output_age0 = mymonero_monero_lws_abs0[i];
+
+            // only care about outputs that are older than X blocks old
+            if (expected_output_age0 >= MIN_OUTPUT_AGE)
+            {
+              // iterate over each ring member of ring 1
+              for (size_t j = 0; j < txin1.key_offsets.size(); ++j)
+              {
+                uint64_t expected_output_age1 = mymonero_monero_lws_abs1[j];
+
+                if (std::abs((double) expected_output_age0 - (double) expected_output_age1) <= OUTPUT_AGE_DIFF)
+                {
+                  ++count_2_input_txes_mymonero_monero_lws;
+
+                  // manually break for loops
+                  j = txin1.key_offsets.size();
+                  i = txin0.key_offsets.size();
+                }
+
+              }
+            }
+          }
+        }
+      }
+      blk_no += 1;
+      if (blk_no >= END_HEIGHT)
+        break;
     }
+
+    range_start_height += blocks.size();
   }
-  else
-  {
-    MINFO("No outputs to process");
-  }
+
+  LOG_PRINT_L0("Count of 2 input txes total: " << count_2_input_txes_total);
+
+  LOG_PRINT_L0("Count of 2 input txes observed: " << count_2_input_txes_observed << " (" << 100 * (double) count_2_input_txes_observed / count_2_input_txes_total << "%)");
+
+  LOG_PRINT_L0("Count of 2 input txes v17.3.0 expected: " << count_2_input_txes_wallet2_v17_3_0 << " (" << 100 * (double) count_2_input_txes_wallet2_v17_3_0 / count_2_input_txes_total << "%)");
+  LOG_PRINT_L0("Count of 2 input txes v17.2.3 expected: " << count_2_input_txes_wallet2_v17_2_3 << " (" <<  100 *(double) count_2_input_txes_wallet2_v17_2_3 / count_2_input_txes_total << "%)");
+  LOG_PRINT_L0("Count of 2 input txes pre v17.2.3 expected: " << count_2_input_txes_wallet2_pre_v17_2_3 << " (" << 100 * (double) count_2_input_txes_wallet2_pre_v17_2_3 / count_2_input_txes_total << "%)");
+  LOG_PRINT_L0("Count of 2 input txes MyMonero + monero-lws expected: " << count_2_input_txes_mymonero_monero_lws << " (" << 100 * (double) count_2_input_txes_mymonero_monero_lws / count_2_input_txes_total << "%)");
 
   LOG_PRINT_L0("Blockchain usage exported OK");
   return 0;
