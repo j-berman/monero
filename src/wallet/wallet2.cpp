@@ -8985,7 +8985,7 @@ void wallet2::transfer_selected(const std::vector<cryptonote::tx_destination_ent
   ptx.construction_data.unlock_time = unlock_time;
   ptx.construction_data.use_rct = false;
   ptx.construction_data.rct_config = { rct::RangeProofBorromean, 0 };
-  ptx.construction_data.use_view_tags = use_fork_rules(get_view_tag_fork(), 0);
+  ptx.construction_data.use_view_tags = use_view_tags;
   ptx.construction_data.dests = dsts;
   // record which subaddress indices are being used as inputs
   ptx.construction_data.subaddr_account = subaddr_account;
