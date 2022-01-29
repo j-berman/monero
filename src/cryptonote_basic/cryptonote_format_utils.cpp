@@ -911,17 +911,29 @@ namespace cryptonote
   {
     for (const auto &o: tx.vout)
     {
-      if (hf_version >= HF_VERSION_VIEW_TAGS)
+      if (hf_version > HF_VERSION_VIEW_TAGS)
       {
         // from v15, require outputs have view tags
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
       }
-      else
+      else if (hf_version < HF_VERSION_VIEW_TAGS)
       {
         // require outputs to be of type txout_to_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
           << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+      }
+      else
+      {
+        // require outputs be of type txout_to_key OR txout_to_tagged_key
+        // to allow grace period before requiring all to be txout_to_tagged_key
+        CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+
+        // require all outputs in a tx be of the same type
+        CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
+          << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
+          << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
       }
     }
     return true;

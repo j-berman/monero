@@ -584,7 +584,7 @@ bool gen_rct_tx_rct_has_no_view_tag_from_hf_view_tags::generate(std::vector<test
   const rct::RCTConfig rct_config { rct::RangeProofPaddedBulletproof, 3 };
   bool use_view_tags = false;
   bool valid = false;
-  return generate_with_full(events, out_idx, mixin, amount_paid, CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE, HF_VERSION_VIEW_TAGS, rct_config, use_view_tags, valid, NULL, NULL);
+  return generate_with_full(events, out_idx, mixin, amount_paid, CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE, HF_VERSION_VIEW_TAGS+1, rct_config, use_view_tags, valid, NULL, NULL);
 }
 
 bool gen_rct_tx_rct_has_view_tag_before_hf_view_tags::generate(std::vector<test_event_entry>& events) const
