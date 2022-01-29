@@ -505,6 +505,16 @@ private:
       uint32_t subaddr_account;   // subaddress account of your wallet to be used in this transfer
       std::set<uint32_t> subaddr_indices;  // set of address indices used as inputs in this transfer
 
+      enum construction_flags_ : uint8_t
+      {
+        _use_rct          = 1 << 0, // 00000001
+        _use_view_tags    = 1 << 1  // 00000010
+        // next flag      = 1 << 2  // 00000100
+        // ...
+        // final flag     = 1 << 7  // 10000000
+      };
+      uint8_t construction_flags;
+
       BEGIN_SERIALIZE_OBJECT()
         FIELD(sources)
         FIELD(change_dts)
@@ -512,9 +522,27 @@ private:
         FIELD(selected_transfers)
         FIELD(extra)
         FIELD(unlock_time)
-        FIELD(use_rct)
+
+        // converted `use_rct` field into construction_flags when view tags
+        // were introduced to maintain backwards compatibility
+        if (!typename Archive<W>::is_saving())
+        {
+          FIELD_N("use_rct", construction_flags)
+          use_rct = (construction_flags & _use_rct) > 0;
+          use_view_tags = (construction_flags & _use_view_tags) > 0;
+        }
+        else
+        {
+          construction_flags = 0;
+          if (use_rct)
+            construction_flags ^= _use_rct;
+          if (use_view_tags)
+            construction_flags ^= _use_view_tags;
+
+          FIELD_N("use_rct", construction_flags)
+        }
+
         FIELD(rct_config)
-        FIELD(use_view_tags)
         FIELD(dests)
         FIELD(subaddr_account)
         FIELD(subaddr_indices)
