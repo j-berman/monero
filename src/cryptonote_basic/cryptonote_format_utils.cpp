@@ -889,7 +889,7 @@ namespace cryptonote
     return res;
   }
   //---------------------------------------------------------------
-  void set_tx_out(const uint64_t amount, const crypto::public_key output_public_key, const bool use_view_tags, const crypto::view_tag view_tag, tx_out &out)
+  void set_tx_out(const uint64_t amount, const crypto::public_key& output_public_key, const bool use_view_tags, const crypto::view_tag& view_tag, tx_out &out)
   {
     out.amount = amount;
     if (use_view_tags)
@@ -927,7 +927,7 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool out_can_be_to_acc(const boost::optional<crypto::view_tag> view_tag_opt, const crypto::key_derivation derivation, const size_t output_index)
+  bool out_can_be_to_acc(const boost::optional<crypto::view_tag>& view_tag_opt, const crypto::key_derivation& derivation, const size_t output_index)
   {
     // If there is no view tag to check, the output can possibly belong to the account.
     // Will need to derive the output pub key to be certain whether or not the output belongs to the account.
@@ -944,7 +944,7 @@ namespace cryptonote
     return view_tag == derived_view_tag;
   }
   //---------------------------------------------------------------
-  bool is_out_to_acc(const account_keys& acc, const crypto::public_key& output_public_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index, const boost::optional<crypto::view_tag> view_tag_opt)
+  bool is_out_to_acc(const account_keys& acc, const crypto::public_key& output_public_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index, const boost::optional<crypto::view_tag>& view_tag_opt)
   {
     crypto::key_derivation derivation;
     bool r = acc.get_device().generate_key_derivation(tx_pub_key, acc.m_view_secret_key, derivation);
@@ -974,7 +974,7 @@ namespace cryptonote
     return false;
   }
   //---------------------------------------------------------------
-  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const boost::optional<crypto::view_tag> view_tag_opt)
+  boost::optional<subaddress_receive_info> is_out_to_acc_precomp(const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::key_derivation& derivation, const std::vector<crypto::key_derivation>& additional_derivations, size_t output_index, hw::device &hwdev, const boost::optional<crypto::view_tag>& view_tag_opt)
   {
     // try the shared tx pubkey
     crypto::public_key subaddress_spendkey;

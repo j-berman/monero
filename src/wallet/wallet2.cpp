@@ -11586,7 +11586,7 @@ void wallet2::check_tx_key_helper(const cryptonote::transaction &tx, const crypt
       continue;
 
     crypto::key_derivation found_derivation;
-    if (is_out_to_acc(address, output_public_key, derivation, additional_derivations, n, found_derivation, get_output_view_tag(tx.vout[n])))
+    if (is_out_to_acc(address, output_public_key, derivation, additional_derivations, n, get_output_view_tag(tx.vout[n]), found_derivation))
     {
       uint64_t amount;
       if (tx.version == 1 || tx.rct_signatures.type == rct::RCTTypeNull)
@@ -11678,13 +11678,15 @@ void wallet2::check_tx_key_helper(const crypto::hash &txid, const crypto::key_de
   }
 }
 
-bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, crypto::key_derivation &found_derivation, const boost::optional<crypto::view_tag> view_tag_opt) const
+bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, const crypto::public_key& out_key, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const size_t output_index, const boost::optional<crypto::view_tag> &view_tag_opt, crypto::key_derivation &found_derivation) const
 {
   crypto::public_key derived_out_key;
   bool found = false;
   bool r;
+  // first run quick check if output has matching view tag, otherwise output should not belong to account
   if (out_can_be_to_acc(view_tag_opt, derivation, output_index))
   {
+    // if view tag match, run slower check deriving output pub key and comparing to expected
     r = crypto::derive_public_key(derivation, output_index, address.m_spend_public_key, derived_out_key);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to derive public key");
     found = out_key == derived_out_key;
