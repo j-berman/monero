@@ -751,11 +751,14 @@ POP_WARNINGS
   }
 
   void crypto_ops::derive_view_tag(const key_derivation &derivation, size_t output_index, view_tag &view_tag) {
+    #pragma pack(push, 1)
     struct {
       char salt[8]; // view tag domain-separator
       key_derivation derivation;
       char output_index[(sizeof(size_t) * 8 + 6) / 7];
     } buf;
+    #pragma pack(pop)
+
     char *end = buf.output_index;
     memcpy(buf.salt, "view_tag", 8); // leave off null terminator
     buf.derivation = derivation;

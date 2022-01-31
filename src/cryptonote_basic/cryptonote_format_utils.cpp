@@ -863,12 +863,12 @@ namespace cryptonote
   {
     // before HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_key
     // after HF_VERSION_VIEW_TAGS, outputs with public keys are of type txout_to_tagged_key
-    if (out.target.type() != typeid(txout_to_key) && out.target.type() != typeid(txout_to_tagged_key))
+    if (out.target.type() == typeid(txout_to_key))
+      output_public_key = boost::get< txout_to_key >(out.target).key;
+    else if (out.target.type() == typeid(txout_to_tagged_key))
+      output_public_key = boost::get< txout_to_tagged_key >(out.target).key;
+    else
       return false;
-
-    output_public_key = out.target.type() == typeid(txout_to_key)
-      ? boost::get< txout_to_key >(out.target).key
-      : boost::get< txout_to_tagged_key >(out.target).key;
 
     return true;
   }

@@ -2833,6 +2833,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   geniods.reserve(num_txes);
 
   txidx = 0;
+  uint8_t hf_version_view_tags = get_view_tag_fork();
   for (size_t i = 0; i < blocks.size(); ++i)
   {
     if (should_skip_block(parsed_blocks[i].block, start_height + i))
@@ -2846,7 +2847,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
       const cryptonote::transaction& tx = parsed_blocks[i].block.miner_tx;
       const size_t n_vouts = (m_refresh_type == RefreshType::RefreshOptimizeCoinbase && tx.version < 2) ? 1 : tx.vout.size();
-      if (parsed_blocks[i].block.major_version >= get_view_tag_fork())
+      if (parsed_blocks[i].block.major_version >= hf_version_view_tags)
         geniods.push_back(geniod_params{ tx, n_vouts, txidx });
       else
         tpool.submit(&waiter, [&, n_vouts, txidx](){ geniod(tx, n_vouts, txidx); }, true);
@@ -2855,7 +2856,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
     for (size_t j = 0; j < parsed_blocks[i].txes.size(); ++j)
     {
       THROW_WALLET_EXCEPTION_IF(txidx >= tx_cache_data.size(), error::wallet_internal_error, "txidx out of range");
-      if (parsed_blocks[i].block.major_version >= get_view_tag_fork())
+      if (parsed_blocks[i].block.major_version >= hf_version_view_tags)
         geniods.push_back(geniod_params{ parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx });
       else
         tpool.submit(&waiter, [&, i, j, txidx](){ geniod(parsed_blocks[i].txes[j], parsed_blocks[i].txes[j].vout.size(), txidx); }, true);
@@ -2865,8 +2866,8 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   THROW_WALLET_EXCEPTION_IF(txidx != tx_cache_data.size(), error::wallet_internal_error, "txidx did not reach expected value");
 
   // View tags significantly speed up the geniod function that determines if an output belongs to the account.
-  // Since determining output ownership is so fast when view tags are enabled, the overhead from submitting individual geniods to the
-  // thread pool eats into the benefit of executing in parallel. So to maximize the benefit from threads when view tags are enabled,
+  // Because the speedup is so large, the overhead from submitting individual geniods to the thread pool eats into
+  // the benefit of executing in parallel. So to maximize the benefit from threads when view tags are enabled,
   // the wallet starts submitting geniod function calls to the thread pool in batches of size GENIOD_BATCH_SIZE.
   if (geniods.size())
   {
@@ -2880,7 +2881,7 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
       tpool.submit(&waiter, [&geniods, &geniod, batch_start, batch_end]() {
         for (size_t i = batch_start; i < batch_end; ++i)
         {
-          geniod_params gp = geniods[i];
+          const geniod_params &gp = geniods[i];
           geniod(gp.tx, gp.n_outs, gp.txidx);
         }
       }, true);
@@ -11689,19 +11690,25 @@ bool wallet2::is_out_to_acc(const cryptonote::account_public_address &address, c
     // if view tag match, run slower check deriving output pub key and comparing to expected
     r = crypto::derive_public_key(derivation, output_index, address.m_spend_public_key, derived_out_key);
     THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to derive public key");
-    found = out_key == derived_out_key;
+    if (out_key == derived_out_key)
+    {
+      found = true;
+      found_derivation = derivation;
+    }
   }
 
-  found_derivation = derivation;
   if (!found && !additional_derivations.empty())
   {
-    const crypto::key_derivation additional_derivation = additional_derivations[output_index];
+    const crypto::key_derivation &additional_derivation = additional_derivations[output_index];
     if (out_can_be_to_acc(view_tag_opt, additional_derivation, output_index))
     {
       r = crypto::derive_public_key(additional_derivation, output_index, address.m_spend_public_key, derived_out_key);
       THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to derive public key");
-      found = out_key == derived_out_key;
-      found_derivation = additional_derivation;
+      if (out_key == derived_out_key)
+      {
+        found = true;
+        found_derivation = additional_derivation;
+      }
     }
   }
 
@@ -12723,7 +12730,7 @@ std::pair<uint64_t, std::vector<std::pair<crypto::key_image, crypto::signature>>
     const transfer_details &td = m_transfers[n];
 
     // get ephemeral public key
-    crypto::public_key pkey = td.get_public_key();
+    const crypto::public_key pkey = td.get_public_key();
 
     // get tx pub key
     std::vector<tx_extra_field> tx_extra_fields;
@@ -12840,7 +12847,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     const crypto::signature &signature = signed_key_images[n].second;
 
     // get ephemeral public key
-    crypto::public_key pkey = td.get_public_key();
+    const crypto::public_key pkey = td.get_public_key();
 
     if (!td.m_key_image_known || !(key_image == td.m_key_image))
     {
