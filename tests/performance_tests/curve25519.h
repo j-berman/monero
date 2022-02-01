@@ -1055,7 +1055,7 @@ class test_curve25519 : public single_tx_test_base
     m_spend_public_key = acc.get_keys().m_account_address.m_spend_public_key;
 
     // private view key that'll be used as a scalar when multiplying on curve25519
-    memcpy(&m_priv_view_key_curve25519, &m_priv_view_key, 32);
+    memcpy(m_priv_view_key_curve25519, &m_priv_view_key, 32);
 
     // generate NUM_POINTS random tx pub key equivalents
     m_tx_pub_keys.reserve(NUM_POINTS);
@@ -1082,7 +1082,7 @@ class test_curve25519 : public single_tx_test_base
           if (crypto_scalarmult_curve25519_base(pk, sk) != 0)
             return false;
 
-          memcpy(&m_pk, &pk, 32);
+          memcpy(&m_pk, pk, 32);
           m_pks_curve25519.push_back(m_pk);
           break;
         }
@@ -1135,7 +1135,7 @@ class test_curve25519 : public single_tx_test_base
         {
           // these copies are extra relative to ed25519 test, but shouldn't really matter much
           unsigned char tx_pub_key[32];
-          memcpy(&tx_pub_key, &m_tx_pub_keys[i], 32);
+          memcpy(tx_pub_key, &m_tx_pub_keys[i], 32);
 
           unsigned char curve25519_pk[32];
           if (crypto_sign_ed25519_pk_to_curve25519_remove_extra_ops(curve25519_pk, tx_pub_key) != 0)
@@ -1146,20 +1146,20 @@ class test_curve25519 : public single_tx_test_base
             return false;
 
           // anything else needed here?
-          memcpy(&derivation, &derivation_curve25519, 32);
+          memcpy(&derivation, derivation_curve25519, 32);
           break;
         }
         case CURVE25519:
         {
           unsigned char pk[32];
-          memcpy(&pk, &m_pks_curve25519[i], 32);
+          memcpy(pk, &m_pks_curve25519[i], 32);
 
           unsigned char derivation_curve25519[32];
           if (crypto_scalarmult_curve25519(derivation_curve25519, m_priv_view_key_curve25519, pk) != 0)
             return false;
 
           // anything else needed here?
-          memcpy(&derivation, &derivation_curve25519, 32);
+          memcpy(&derivation, derivation_curve25519, 32);
           break;
         }
         default:
@@ -1197,26 +1197,26 @@ class test_curve25519 : public single_tx_test_base
 Core i7-10510U 1.80 GHz - 32gb RAM - Ubuntu 20.04
 
 ed25519 variable base scalar mult...
-test_curve25519<0, false> (10 calls) - OK: 445 ms/call (min 432 ms, 90th 459 ms, median 439 ms, std dev 18 ms)
+test_curve25519<0, false> (10 calls) - OK: 433 ms/call (min 429 ms, 90th 440 ms, median 433 ms, std dev 3 ms)
 
 
 ed25519 to curve25519, then variable base scalar mult (extra ops removed)...
-test_curve25519<1, false> (10 calls) - OK: 451 ms/call (min 446 ms, 90th 461 ms, median 449 ms, std dev 5 ms)
+test_curve25519<1, false> (10 calls) - OK: 441 ms/call (min 439 ms, 90th 443 ms, median 441 ms, std dev 1 ms)
 
 
 curve25519 variable base scalar mult...
-test_curve25519<2, false> (10 calls) - OK: 379 ms/call (min 378 ms, 90th 382 ms, median 379 ms, std dev 1 ms)
+test_curve25519<2, false> (10 calls) - OK: 377 ms/call (min 375 ms, 90th 380 ms, median 376 ms, std dev 2 ms)
 
 
 ed25519 variable base scalar mult (view tag check included)...
-test_curve25519<0, true> (10 calls) - OK: 503 ms/call (min 473 ms, 90th 543 ms, median 491 ms, std dev 32 ms)
+test_curve25519<0, true> (10 calls) - OK: 469 ms/call (min 465 ms, 90th 470 ms, median 467 ms, std dev 6 ms)
 
 
 ed25519 to curve25519, then variable base scalar mult (extra ops removed and view tag check included))...
-test_curve25519<1, true> (10 calls) - OK: 486 ms/call (min 485 ms, 90th 488 ms, median 487 ms, std dev 0 ms)
+test_curve25519<1, true> (10 calls) - OK: 473 ms/call (min 472 ms, 90th 474 ms, median 474 ms, std dev 2 ms)
 
 
 curve25519 variable base scalar mult (view tag check included)...
-test_curve25519<2, true> (10 calls) - OK: 409 ms/call (min 409 ms, 90th 410 ms, median 410 ms, std dev 0 ms)
+test_curve25519<2, true> (10 calls) - OK: 402 ms/call (min 400 ms, 90th 403 ms, median 402 ms, std dev 3 ms)
 
 */
