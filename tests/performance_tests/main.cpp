@@ -210,7 +210,10 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE0(filter, p, test_sc_check);
   TEST_PERFORMANCE1(filter, p, test_signature, false);
   TEST_PERFORMANCE1(filter, p, test_signature, true);
-  TEST_PERFORMANCE0(filter, p, test_derive_view_tag);
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 0); // keccak
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 1); // SipHash 2-4
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 2); // blake2
+  TEST_PERFORMANCE1(filter, p, test_derive_view_tag, 3); // blake3
 
   TEST_PERFORMANCE2(filter, p, test_wallet2_expand_subaddresses, 50, 200);
 

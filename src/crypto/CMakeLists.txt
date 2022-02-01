@@ -28,6 +28,9 @@
 
 set(crypto_sources
   aesb.c
+  blake3.c
+  blake3_dispatch.c
+  blake3_portable.c
   blake256.c
   chacha.c
   crypto-ops-data.c
@@ -44,6 +47,7 @@ set(crypto_sources
   keccak.c
   oaes_lib.c
   random.c
+  siphash.c
   skein.c
   slow-hash.c
   rx-slow-hash.c
@@ -51,7 +55,12 @@ set(crypto_sources
   tree-hash.c)
 
 if(ARCH_ID STREQUAL "i386" OR ARCH_ID STREQUAL "x86_64" OR ARCH_ID STREQUAL "x86-64" OR ARCH_ID STREQUAL "amd64")
-list(APPEND crypto_sources CryptonightR_template.S)
+list(APPEND crypto_sources
+  CryptonightR_template.S
+  blake3_sse2_x86-64_unix.S
+  blake3_sse41_x86-64_unix.S
+  blake3_avx2_x86-64_unix.S
+  blake3_avx512_x86-64_unix.S)
 endif()
 
 include_directories(${RANDOMX_INCLUDE})
@@ -60,6 +69,8 @@ set(crypto_headers)
 
 set(crypto_private_headers
   blake256.h
+  blake3_impl.h
+  blake3.h
   chacha.h
   crypto-ops.h
   crypto.h
@@ -75,6 +86,7 @@ set(crypto_private_headers
   oaes_config.h
   oaes_lib.h
   random.h
+  siphash.h
   skein.h
   skein_port.h
   CryptonightR_JIT.h

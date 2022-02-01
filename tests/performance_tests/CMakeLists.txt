@@ -34,6 +34,7 @@ set(performance_tests_headers
   check_hash.h
   cn_slow_hash.h
   construct_tx.h
+  curve25519.h
   derive_public_key.h
   derive_secret_key.h
   ge_frombytes_vartime.h
