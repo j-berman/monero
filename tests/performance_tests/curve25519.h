@@ -33,7 +33,6 @@
 #include <sodium.h>
 
 #include <sodium/randombytes.h>
-#include <sodium/crypto_scalarmult_ed25519.h>
 #include <sodium/crypto_sign_ed25519.h>
 #include <sodium/crypto_scalarmult_curve25519.h>
 
@@ -1025,14 +1024,10 @@ crypto_sign_ed25519_pk_to_curve25519_remove_extra_ops(unsigned char *curve25519_
  *
 */
 
-bool check_view_tag(const unsigned char *shared_secret)
+bool check_view_tag(crypto::key_derivation& derivation)
 {
-  crypto::key_derivation derivation;
-  memcpy(&derivation, shared_secret, 32);
-
   crypto::view_tag vt;
   crypto::derive_view_tag(derivation, 0, vt);
-
   return vt == EXPECTED_VIEW_TAG;
 }
 
@@ -1053,37 +1048,47 @@ class test_curve25519 : public single_tx_test_base
     if (sodium_init() < 0)
       return false;
 
-    randombytes_buf(m_sk, 32);
+    // generate a normal Monero wallet
+    cryptonote::account_base acc;
+    acc.generate();
+    m_priv_view_key = acc.get_keys().m_view_secret_key;
+    m_spend_public_key = acc.get_keys().m_account_address.m_spend_public_key;
 
-    m_pks.reserve(NUM_POINTS);
+    // private view key that'll be used as a scalar when multiplying on curve25519
+    memcpy(&m_priv_view_key_curve25519, &m_priv_view_key, 32);
+
+    // generate NUM_POINTS random tx pub key equivalents
+    m_tx_pub_keys.reserve(NUM_POINTS);
+    m_pks_curve25519.reserve(NUM_POINTS);
     for (int i = 0; i < NUM_POINTS; ++i)
     {
-      unsigned char sk[32];
-      randombytes_buf(sk, 32);
-
-      unsigned char pk[32];
       switch (test_ver)
       {
         case ED25519:
         case ED25519_TO_CURVE25519_THEN_SCALAR_MULT_REMOVE_EXTRA_OPS:
         {
-          if (crypto_scalarmult_ed25519_base(pk, sk) != 0)
-            return false;
+          cryptonote::keypair tx_key_pair = cryptonote::keypair::generate(hw::get_device("default"));
+          m_tx_pub_keys.push_back(tx_key_pair.pub);
           break;
         }
         case CURVE25519:
         {
+          PK m_pk;
+
+          unsigned char sk[32];
+          randombytes_buf(sk, 32);
+
+          unsigned char pk[32];
           if (crypto_scalarmult_curve25519_base(pk, sk) != 0)
             return false;
+
+          memcpy(&m_pk, &pk, 32);
+          m_pks_curve25519.push_back(m_pk);
           break;
         }
         default:
           return false;
       }
-
-      PK m_pk;
-      memcpy(&m_pk, &pk, 32);
-      m_pks.push_back(m_pk);
     }
 
     switch (test_ver)
@@ -1112,34 +1117,49 @@ class test_curve25519 : public single_tx_test_base
 
   bool test()
   {
+    hw::device &hw_dev = hw::get_device("default");
+
     for (int i = 0; i < NUM_POINTS; ++i)
     {
-      unsigned char pk[32];
-      memcpy(&pk, &m_pks[i], 32);
-
       // derive the first shared secret
-      unsigned char shared_secret[32];
+      crypto::key_derivation derivation;
       switch (test_ver)
       {
         case ED25519:
         {
-          if (crypto_scalarmult_ed25519(shared_secret, m_sk, pk) != 0)
+          if (!hw_dev.generate_key_derivation(m_tx_pub_keys[i], m_priv_view_key, derivation))
             return false;
           break;
         }
         case ED25519_TO_CURVE25519_THEN_SCALAR_MULT_REMOVE_EXTRA_OPS:
         {
+          // these copies are extra relative to ed25519 test, but shouldn't really matter much
+          unsigned char tx_pub_key[32];
+          memcpy(&tx_pub_key, &m_tx_pub_keys[i], 32);
+
           unsigned char curve25519_pk[32];
-          if (crypto_sign_ed25519_pk_to_curve25519_remove_extra_ops(curve25519_pk, pk) != 0)
+          if (crypto_sign_ed25519_pk_to_curve25519_remove_extra_ops(curve25519_pk, tx_pub_key) != 0)
             return false;
-          if (crypto_scalarmult_curve25519(shared_secret, m_sk, curve25519_pk) != 0)
+
+          unsigned char derivation_curve25519[32];
+          if (crypto_scalarmult_curve25519(derivation_curve25519, m_priv_view_key_curve25519, curve25519_pk) != 0)
             return false;
+
+          // anything else needed here?
+          memcpy(&derivation, &derivation_curve25519, 32);
           break;
         }
         case CURVE25519:
         {
-          if (crypto_scalarmult_curve25519(shared_secret, m_sk, pk) != 0)
+          unsigned char pk[32];
+          memcpy(&pk, &m_pks_curve25519[i], 32);
+
+          unsigned char derivation_curve25519[32];
+          if (crypto_scalarmult_curve25519(derivation_curve25519, m_priv_view_key_curve25519, pk) != 0)
             return false;
+
+          // anything else needed here?
+          memcpy(&derivation, &derivation_curve25519, 32);
           break;
         }
         default:
@@ -1147,16 +1167,25 @@ class test_curve25519 : public single_tx_test_base
       }
 
       // now check for a view tag match
-      if (include_view_tags && check_view_tag(shared_secret))
+      bool view_tag_match = false;
+      if (include_view_tags && check_view_tag(derivation))
       {
-        // For the view tag matches that were derived from the converted ed25519->curve25519 shared secret, will now 
-        // need to scalar mult ed25519 to get the shared secret used in the rest of the tx (key_derivation)
+        // For the view tag matches that were derived from the converted ed25519->curve25519 shared secret,
+        // will now need to do normal ed25519 derivation
         if (test_ver == ED25519_TO_CURVE25519_THEN_SCALAR_MULT_REMOVE_EXTRA_OPS)
         {
-          unsigned char key_derivation[32];
-          if (crypto_scalarmult_ed25519(key_derivation, m_sk, pk) != 0)
+          if (!hw_dev.generate_key_derivation(m_tx_pub_keys[i], m_priv_view_key, derivation))
             return false;
         }
+        view_tag_match = true;
+      }
+
+      // finally, derive output pub key
+      if (!include_view_tags || view_tag_match)
+      {
+        crypto::public_key out_key;
+        if (!hw_dev.derive_public_key(derivation, 0, m_spend_public_key, out_key))
+          return false;
       }
     }
 
@@ -1164,8 +1193,12 @@ class test_curve25519 : public single_tx_test_base
   }
 
   private:
-    unsigned char m_sk[32];
-    std::vector<PK> m_pks;
+    crypto::secret_key m_priv_view_key;
+    crypto::public_key m_spend_public_key;
+    unsigned char m_priv_view_key_curve25519[32];
+
+    std::vector<crypto::public_key> m_tx_pub_keys;
+    std::vector<PK> m_pks_curve25519;
 };
 
 /**
@@ -1173,26 +1206,26 @@ class test_curve25519 : public single_tx_test_base
 Core i7-10510U 1.80 GHz - 32gb RAM - Ubuntu 20.04
 
 ed25519 variable base scalar mult...
-test_curve25519<0, false> (10 calls) - OK: 982 ms/call (min 976 ms, 90th 988 ms, median 983 ms, std dev 5 ms)
+test_curve25519<0, false> (10 calls) - OK: 862 ms/call (min 844 ms, 90th 892 ms, median 854 ms, std dev 23 ms)
 
 
 ed25519 to curve25519, then variable base scalar mult (extra ops removed)...
-test_curve25519<1, false> (10 calls) - OK: 444 ms/call (min 442 ms, 90th 447 ms, median 444 ms, std dev 1 ms)
+test_curve25519<1, false> (10 calls) - OK: 882 ms/call (min 867 ms, 90th 895 ms, median 882 ms, std dev 14 ms)
 
 
 curve25519 variable base scalar mult...
-test_curve25519<2, false> (10 calls) - OK: 376 ms/call (min 375 ms, 90th 377 ms, median 376 ms, std dev 0 ms)
+test_curve25519<2, false> (10 calls) - OK: 822 ms/call (min 814 ms, 90th 831 ms, median 820 ms, std dev 11 ms)
 
 
 ed25519 variable base scalar mult (view tag check included)...
-test_curve25519<0, true> (10 calls) - OK: 1048 ms/call (min 1045 ms, 90th 1050 ms, median 1048 ms, std dev 5 ms)
+test_curve25519<0, true> (10 calls) - OK: 477 ms/call (min 473 ms, 90th 482 ms, median 477 ms, std dev 3 ms)
 
 
 ed25519 to curve25519, then variable base scalar mult (extra ops removed and view tag check included))...
-test_curve25519<1, true> (10 calls) - OK: 475 ms/call (min 474 ms, 90th 477 ms, median 476 ms, std dev 1 ms)
+test_curve25519<1, true> (10 calls) - OK: 479 ms/call (min 474 ms, 90th 487 ms, median 479 ms, std dev 4 ms)
 
 
 curve25519 variable base scalar mult (view tag check included)...
-test_curve25519<2, true> (10 calls) - OK: 398 ms/call (min 398 ms, 90th 399 ms, median 398 ms, std dev 0 ms)
+test_curve25519<2, true> (10 calls) - OK: 414 ms/call (min 408 ms, 90th 420 ms, median 413 ms, std dev 5 ms)
 
 */
