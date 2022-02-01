@@ -40,6 +40,7 @@
 #include "check_tx_signature.h"
 #include "check_hash.h"
 #include "cn_slow_hash.h"
+#include "curve25519.h"
 #include "derive_public_key.h"
 #include "derive_secret_key.h"
 #include "derive_view_tag.h"
@@ -192,6 +193,13 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE4(filter, p, test_check_hash, 1, 0, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0xffffffffffffffff, 0xffffffffffffffff, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff);
+
+  TEST_PERFORMANCE2(filter, p, test_curve25519, 0, false); // 0: ed25519, bool: include_view_tags
+  TEST_PERFORMANCE2(filter, p, test_curve25519, 1, false); // 1: ed25519->curve25519
+  TEST_PERFORMANCE2(filter, p, test_curve25519, 2, false); // 2: curve25519
+  TEST_PERFORMANCE2(filter, p, test_curve25519, 0, true);
+  TEST_PERFORMANCE2(filter, p, test_curve25519, 1, true);
+  TEST_PERFORMANCE2(filter, p, test_curve25519, 2, true);
 
   TEST_PERFORMANCE0(filter, p, test_is_out_to_acc);
   TEST_PERFORMANCE0(filter, p, test_is_out_to_acc_precomp);
