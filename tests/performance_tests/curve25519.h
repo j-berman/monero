@@ -997,7 +997,7 @@ crypto_sign_ed25519_pk_to_curve25519_remove_extra_ops(unsigned char *curve25519_
 
     // get y coordinate of ed25519 point
     unsigned char ed25519_pk_copy[32];
-    memcpy(&ed25519_pk_copy, ed25519_pk, 32);
+    memcpy(ed25519_pk_copy, ed25519_pk, 32);
     ed25519_pk_copy[31] &= UCHAR_MAX >> 1;
     fe25519_frombytes(original_y, ed25519_pk_copy);
 
@@ -1167,7 +1167,6 @@ class test_curve25519 : public single_tx_test_base
       }
 
       // now check for a view tag match
-      bool view_tag_match = false;
       if (include_view_tags && check_view_tag(derivation))
       {
         // For the view tag matches that were derived from the converted ed25519->curve25519 shared secret,
@@ -1177,16 +1176,8 @@ class test_curve25519 : public single_tx_test_base
           if (!hw_dev.generate_key_derivation(m_tx_pub_keys[i], m_priv_view_key, derivation))
             return false;
         }
-        view_tag_match = true;
       }
 
-      // finally, derive output pub key
-      if (!include_view_tags || view_tag_match)
-      {
-        crypto::public_key out_key;
-        if (!hw_dev.derive_public_key(derivation, 0, m_spend_public_key, out_key))
-          return false;
-      }
     }
 
     return true;
@@ -1206,26 +1197,26 @@ class test_curve25519 : public single_tx_test_base
 Core i7-10510U 1.80 GHz - 32gb RAM - Ubuntu 20.04
 
 ed25519 variable base scalar mult...
-test_curve25519<0, false> (10 calls) - OK: 862 ms/call (min 844 ms, 90th 892 ms, median 854 ms, std dev 23 ms)
+test_curve25519<0, false> (10 calls) - OK: 445 ms/call (min 432 ms, 90th 459 ms, median 439 ms, std dev 18 ms)
 
 
 ed25519 to curve25519, then variable base scalar mult (extra ops removed)...
-test_curve25519<1, false> (10 calls) - OK: 882 ms/call (min 867 ms, 90th 895 ms, median 882 ms, std dev 14 ms)
+test_curve25519<1, false> (10 calls) - OK: 451 ms/call (min 446 ms, 90th 461 ms, median 449 ms, std dev 5 ms)
 
 
 curve25519 variable base scalar mult...
-test_curve25519<2, false> (10 calls) - OK: 822 ms/call (min 814 ms, 90th 831 ms, median 820 ms, std dev 11 ms)
+test_curve25519<2, false> (10 calls) - OK: 379 ms/call (min 378 ms, 90th 382 ms, median 379 ms, std dev 1 ms)
 
 
 ed25519 variable base scalar mult (view tag check included)...
-test_curve25519<0, true> (10 calls) - OK: 477 ms/call (min 473 ms, 90th 482 ms, median 477 ms, std dev 3 ms)
+test_curve25519<0, true> (10 calls) - OK: 503 ms/call (min 473 ms, 90th 543 ms, median 491 ms, std dev 32 ms)
 
 
 ed25519 to curve25519, then variable base scalar mult (extra ops removed and view tag check included))...
-test_curve25519<1, true> (10 calls) - OK: 479 ms/call (min 474 ms, 90th 487 ms, median 479 ms, std dev 4 ms)
+test_curve25519<1, true> (10 calls) - OK: 486 ms/call (min 485 ms, 90th 488 ms, median 487 ms, std dev 0 ms)
 
 
 curve25519 variable base scalar mult (view tag check included)...
-test_curve25519<2, true> (10 calls) - OK: 414 ms/call (min 408 ms, 90th 420 ms, median 413 ms, std dev 5 ms)
+test_curve25519<2, true> (10 calls) - OK: 409 ms/call (min 409 ms, 90th 410 ms, median 410 ms, std dev 0 ms)
 
 */
