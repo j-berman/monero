@@ -1796,11 +1796,6 @@ uint32_t WalletImpl::defaultMixin() const
     return m_wallet->default_mixin();
 }
 
-void WalletImpl::setDefaultMixin(uint32_t arg)
-{
-    m_wallet->default_mixin(arg);
-}
-
 bool WalletImpl::setCacheAttribute(const std::string &key, const std::string &val)
 {
     m_wallet->set_attribute(key, val);

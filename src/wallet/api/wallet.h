@@ -180,7 +180,6 @@ public:
     virtual SubaddressAccount * subaddressAccount() override;
     virtual void setListener(WalletListener * l) override;
     virtual uint32_t defaultMixin() const override;
-    virtual void setDefaultMixin(uint32_t arg) override;
 
     virtual bool setCacheAttribute(const std::string &key, const std::string &val) override;
     virtual std::string getCacheAttribute(const std::string &key) const override;

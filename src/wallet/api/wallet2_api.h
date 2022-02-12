@@ -944,11 +944,6 @@ struct Wallet
      * \return
      */
     virtual uint32_t defaultMixin() const = 0;
-    /*!
-     * \brief setDefaultMixin - setum number of mixins to be used for new transactions
-     * \param arg
-     */
-    virtual void setDefaultMixin(uint32_t arg) = 0;
 
     /*!
      * \brief setCacheAttribute - attach an arbitrary string to a wallet cache attribute

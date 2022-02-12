@@ -2604,8 +2604,6 @@ your wallet again (your wallet keys are NOT at risk in any case).
    Whether to print detailed information about ring members during confirmation.
  store-tx-info &lt;1|0&gt;
    Whether to store outgoing tx info (destination address, payment ID, tx secret key) for future reference.
- default-ring-size &lt;n&gt;
-   Set the default ring size (obsolete).
  auto-refresh &lt;1|0&gt;
    Whether to automatically synchronize new blocks from the daemon.
  refresh-type &lt;full|optimize-coinbase|no-coinbase|default&gt;
