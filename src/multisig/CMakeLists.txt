@@ -32,6 +32,7 @@ set(multisig_sources
   multisig_account_kex_impl.cpp
   multisig_clsag_context.cpp
   multisig_kex_msg.cpp
+  multisig_signer_set_filter.cpp
   multisig_tx_builder_ringct.cpp)
 
 set(multisig_headers)
