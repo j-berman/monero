@@ -186,8 +186,8 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
         }
     }
 
-    virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx,
-                                uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index)
+    virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction_prefix& in_tx,
+                                uint64_t amount, const cryptonote::transaction_prefix& spend_tx, const cryptonote::subaddress_index& subaddr_index)
     {
         // TODO;
         std::string tx_hash = epee::string_tools::pod_to_hex(txid);
@@ -1129,6 +1129,36 @@ void WalletImpl::setAutoRefreshInterval(int millis)
 int WalletImpl::autoRefreshInterval() const
 {
     return m_refreshIntervalMillis;
+}
+
+bool WalletImpl::enableBackgroundSyncMode()
+{
+    try
+    {
+        clearStatus();
+        m_wallet->enable_background_sync_mode();
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR("Error enabling background sync mode: " << e.what());
+        setStatusError(e.what());
+    }
+    return status() == Status_Ok;
+}
+
+bool WalletImpl::disableBackgroundSyncMode(const std::string &password)
+{
+    try
+    {
+        clearStatus();
+        m_wallet->disable_background_sync_mode(password);
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR("Error disabling background sync mode: " << e.what());
+        setStatusError(e.what());
+    }
+    return status() == Status_Ok;
 }
 
 UnsignedTransaction *WalletImpl::loadUnsignedTx(const std::string &unsigned_filename) {

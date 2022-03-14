@@ -744,6 +744,16 @@ struct Wallet
     virtual int autoRefreshInterval() const = 0;
 
     /**
+     * @brief enableBackgroundSyncMode - enable background sync mode (scans with just view key)
+     */
+    virtual bool enableBackgroundSyncMode() = 0;
+
+    /**
+     * @brief disableBackgroundSyncMode - disable background sync mode (brings back spend key)
+     */
+    virtual bool disableBackgroundSyncMode(const std::string &password) = 0;
+
+    /**
      * @brief addSubaddressAccount - appends a new subaddress account at the end of the last major index of existing subaddress accounts
      * @param label - the label for the new account (which is the as the label of the primary address (accountIndex,0))
      */

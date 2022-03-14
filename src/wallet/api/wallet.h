@@ -126,6 +126,8 @@ public:
     int autoRefreshInterval() const override;
     void setRefreshFromBlockHeight(uint64_t refresh_from_block_height) override;
     uint64_t getRefreshFromBlockHeight() const override { return m_wallet->get_refresh_from_block_height(); };
+    bool enableBackgroundSyncMode() override;
+    bool disableBackgroundSyncMode(const std::string &password) override;
     void setRecoveringFromSeed(bool recoveringFromSeed) override;
     void setRecoveringFromDevice(bool recoveringFromDevice) override;
     void setSubaddressLookahead(uint32_t major, uint32_t minor) override;

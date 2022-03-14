@@ -139,7 +139,7 @@ private:
     virtual void on_new_block(uint64_t height, const cryptonote::block& block) {}
     virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time) {}
     virtual void on_unconfirmed_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index) {}
-    virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index) {}
+    virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction_prefix& in_tx, uint64_t amount, const cryptonote::transaction_prefix& spend_tx, const cryptonote::subaddress_index& subaddr_index) {}
     virtual void on_skip_transaction(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx) {}
     virtual boost::optional<epee::wipeable_string> on_get_password(const char *reason) { return boost::none; }
     // Light wallet callbacks
@@ -514,8 +514,22 @@ private:
       END_SERIALIZE()
     };
 
+    struct plausible_spend_tx
+    {
+      cryptonote::transaction_prefix tx;
+      uint64_t fee;
+      uint64_t timestamp;
+
+      BEGIN_SERIALIZE_OBJECT()
+        FIELD(tx)
+        FIELD(fee)
+        FIELD(timestamp)
+      END_SERIALIZE()
+    };
+
     typedef std::vector<transfer_details> transfer_container;
     typedef serializable_unordered_multimap<crypto::hash, payment_details> payment_container;
+    typedef serializable_unordered_map<crypto::hash, plausible_spend_tx> plausible_spend_container;
 
     struct multisig_sig
     {
@@ -1115,7 +1129,7 @@ private:
 
     BEGIN_SERIALIZE_OBJECT()
       MAGIC_FIELD("monero wallet cache")
-      VERSION_FIELD(0)
+      VERSION_FIELD(1)
       FIELD(m_blockchain)
       FIELD(m_transfers)
       FIELD(m_account_public_address)
@@ -1141,6 +1155,8 @@ private:
       FIELD(m_device_last_key_image_sync)
       FIELD(m_cold_key_images)
       FIELD(m_rpc_client_secret_key)
+      if (version == 1)
+        FIELD(m_plausible_spend_txs)
     END_SERIALIZE()
 
     /*!
@@ -1204,6 +1220,7 @@ private:
     void ignore_outputs_below(uint64_t value) { m_ignore_outputs_below = value; }
     bool track_uses() const { return m_track_uses; }
     void track_uses(bool value) { m_track_uses = value; }
+    bool background_sync_mode_enabled() const { return m_background_sync_mode; }
     BackgroundMiningSetupType setup_background_mining() const { return m_setup_background_mining; }
     void setup_background_mining(BackgroundMiningSetupType value) { m_setup_background_mining = value; }
     uint32_t inactivity_lock_timeout() const { return m_inactivity_lock_timeout; }
@@ -1506,6 +1523,10 @@ private:
     uint64_t get_bytes_sent() const;
     uint64_t get_bytes_received() const;
 
+    void identify_spends_using_background_synced_data(const epee::wipeable_string &password);
+    void enable_background_sync_mode();
+    void disable_background_sync_mode(const epee::wipeable_string &password);
+
     // MMS -------------------------------------------------------------------------------------------------
     mms::message_store& get_message_store() { return m_message_store; };
     const mms::message_store& get_message_store() const { return m_message_store; };
@@ -1547,6 +1568,7 @@ private:
      * \param password       Password of wallet file
      */
     bool load_keys(const std::string& keys_file_name, const epee::wipeable_string& password);
+    void load_keys_from_file(const std::string& keys_file_name, const epee::wipeable_string& password, bool already_locked = false);
     /*!
      * \brief Load wallet keys information from a string buffer.
      * \param keys_buf       Keys buffer to load
@@ -1569,7 +1591,7 @@ private:
     uint64_t select_transfers(uint64_t needed_money, std::vector<size_t> unused_transfers_indices, std::vector<size_t>& selected_transfers) const;
     bool prepare_file_names(const std::string& file_path);
     void process_unconfirmed(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height);
-    void process_outgoing(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
+    void process_outgoing(const crypto::hash &txid, const cryptonote::transaction_prefix& tx, uint64_t fee, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
     void add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amount_in, const std::vector<cryptonote::tx_destination_entry> &dests, const crypto::hash &payment_id, uint64_t change_amount, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
     void generate_genesis(cryptonote::block& b) const;
     void check_genesis(const crypto::hash& genesis_hash) const; //throws
@@ -1594,6 +1616,7 @@ private:
     bool tx_add_fake_output(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, uint64_t global_index, const crypto::public_key& tx_public_key, const rct::key& mask, uint64_t real_index, bool unlocked) const;
     bool should_pick_a_second_output(bool use_rct, size_t n_transfers, const std::vector<size_t> &unused_transfers_indices, const std::vector<size_t> &unused_dust_indices) const;
     std::vector<size_t> get_only_rct(const std::vector<size_t> &unused_dust_indices, const std::vector<size_t> &unused_transfers_indices) const;
+    void decrypt_keys_to_scan_outputs(bool pool);
     void scan_output(const cryptonote::transaction &tx, bool miner_tx, const crypto::public_key &tx_pub_key, size_t i, tx_scan_info_t &tx_scan_info, int &num_vouts_received, std::unordered_map<cryptonote::subaddress_index, uint64_t> &tx_money_got_in_outs, std::vector<size_t> &outs, bool pool);
     void trim_hashchain();
     crypto::key_image get_multisig_composite_key_image(size_t n) const;
@@ -1669,6 +1692,7 @@ private:
     const std::vector<std::vector<tools::wallet2::multisig_info>> *m_multisig_rescan_info;
     const std::vector<std::vector<rct::key>> *m_multisig_rescan_k;
     serializable_unordered_map<crypto::public_key, crypto::key_image> m_cold_key_images;
+    plausible_spend_container m_plausible_spend_txs;
 
     std::atomic<bool> m_run;
 
@@ -1717,6 +1741,8 @@ private:
     uint64_t m_ignore_outputs_above;
     uint64_t m_ignore_outputs_below;
     bool m_track_uses;
+    bool m_background_sync_mode;
+    boost::mutex m_background_sync_mode_lock;
     uint32_t m_inactivity_lock_timeout;
     BackgroundMiningSetupType m_setup_background_mining;
     bool m_persistent_rpc_client_id;
@@ -1767,6 +1793,8 @@ private:
 
     crypto::chacha_key m_cache_key;
     std::shared_ptr<wallet_keys_unlocker> m_encrypt_keys_after_refresh;
+    boost::mutex m_encrypt_keys_after_refresh_lock;
+    bool m_delay_encrypt_keys_after_refresh;
 
     bool m_unattended;
     bool m_devices_registered;

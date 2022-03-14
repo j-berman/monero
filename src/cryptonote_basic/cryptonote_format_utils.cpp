@@ -868,7 +868,7 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  uint64_t get_outs_money_amount(const transaction& tx)
+  uint64_t get_outs_money_amount(const transaction_prefix& tx)
   {
     uint64_t outputs_amount = 0;
     for(const auto& o: tx.vout)

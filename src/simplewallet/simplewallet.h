@@ -149,6 +149,7 @@ namespace cryptonote
     bool set_ignore_outputs_below(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_track_uses(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_inactivity_lock_timeout(const std::vector<std::string> &args = std::vector<std::string>());
+    bool set_background_sync_mode(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_setup_background_mining(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_device_name(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_export_format(const std::vector<std::string> &args = std::vector<std::string>());
@@ -347,7 +348,7 @@ namespace cryptonote
     virtual void on_new_block(uint64_t height, const cryptonote::block& block);
     virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time);
     virtual void on_unconfirmed_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index);
-    virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index);
+    virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction_prefix& in_tx, uint64_t amount, const cryptonote::transaction_prefix& spend_tx, const cryptonote::subaddress_index& subaddr_index);
     virtual void on_skip_transaction(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx);
     virtual boost::optional<epee::wipeable_string> on_get_password(const char *reason);
     virtual void on_device_button_request(uint64_t code);

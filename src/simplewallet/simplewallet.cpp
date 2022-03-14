@@ -3011,6 +3011,23 @@ bool simple_wallet::set_inactivity_lock_timeout(const std::vector<std::string> &
   return true;
 }
 
+bool simple_wallet::set_background_sync_mode(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
+{
+  const auto pwd_container = get_and_verify_password();
+  if (pwd_container)
+  {
+    if (args[1] == "1")
+      m_wallet->enable_background_sync_mode();
+    else if(args[1] == "0")
+      m_wallet->disable_background_sync_mode(pwd_container->password());
+    else
+    {
+      tools::fail_msg_writer() << tr("Invalid argument mode: must be either 0 or 1");
+    }
+  }
+  return true;
+}
+
 bool simple_wallet::set_setup_background_mining(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   const auto pwd_container = get_and_verify_password();
@@ -3419,6 +3436,8 @@ simple_wallet::simple_wallet()
                                   "  Ignore outputs of amount below this threshold when spending.\n "
                                   "track-uses <1|0>\n "
                                   "  Whether to keep track of owned outputs uses.\n "
+                                  "background-sync-mode <1|0>\n "
+                                  "  Whether to enable background sync mode. Set this to enable scanning without a spend key.\n "
                                   "setup-background-mining <1|0>\n "
                                   "  Whether to enable background mining. Set this to support the network and to get a chance to receive new monero.\n "
                                   "device-name <device_name[:device_spec]>\n "
@@ -3833,6 +3852,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "ignore-outputs-above = " << cryptonote::print_money(m_wallet->ignore_outputs_above());
     success_msg_writer() << "ignore-outputs-below = " << cryptonote::print_money(m_wallet->ignore_outputs_below());
     success_msg_writer() << "track-uses = " << m_wallet->track_uses();
+    success_msg_writer() << "background-sync-mode = " << m_wallet->background_sync_mode_enabled();
     success_msg_writer() << "setup-background-mining = " << setup_background_mining_string;
     success_msg_writer() << "device-name = " << m_wallet->device_name();
     success_msg_writer() << "export-format = " << (m_wallet->export_format() == tools::wallet2::ExportFormat::Ascii ? "ascii" : "binary");
@@ -3904,6 +3924,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("ignore-outputs-below", set_ignore_outputs_below, tr("amount"));
     CHECK_SIMPLE_VARIABLE("track-uses", set_track_uses, tr("0 or 1"));
     CHECK_SIMPLE_VARIABLE("inactivity-lock-timeout", set_inactivity_lock_timeout, tr("unsigned integer (seconds, 0 to disable)"));
+    CHECK_SIMPLE_VARIABLE("background-sync-mode", set_background_sync_mode, tr("0 or 1"));
     CHECK_SIMPLE_VARIABLE("setup-background-mining", set_setup_background_mining, tr("1/yes or 0/no"));
     CHECK_SIMPLE_VARIABLE("device-name", set_device_name, tr("<device_name[:device_spec]>"));
     CHECK_SIMPLE_VARIABLE("export-format", set_export_format, tr("\"binary\" or \"ascii\""));
@@ -5715,7 +5736,7 @@ void simple_wallet::on_unconfirmed_money_received(uint64_t height, const crypto:
   // Not implemented in CLI wallet
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index)
+void simple_wallet::on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction_prefix& in_tx, uint64_t amount, const cryptonote::transaction_prefix& spend_tx, const cryptonote::subaddress_index& subaddr_index)
 {
   if (m_locked)
     return;
@@ -5949,7 +5970,12 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
   if (m_wallet->has_multisig_partial_key_images())
     extra = tr(" (Some owned outputs have partial key images - import_multisig_info needed)");
   else if (m_wallet->has_unknown_key_images())
-    extra += tr(" (Some owned outputs have missing key images - export_outputs, import_outputs, export_key_images, and import_key_images needed)");
+  {
+    if (m_wallet->background_sync_mode_enabled())
+      extra += tr(" (Background sync mode enabled, therefore correct balance is unknown - disable background sync mode to see known correct balance)");
+    else
+      extra += tr(" (Some owned outputs have missing key images - export_outputs, import_outputs, export_key_images, and import_key_images needed)");
+  }
   success_msg_writer() << tr("Currently selected account: [") << m_current_subaddress_account << tr("] ") << m_wallet->get_subaddress_label({m_current_subaddress_account, 0});
   const std::string tag = m_wallet->get_account_tags().second[m_current_subaddress_account];
   success_msg_writer() << tr("Tag: ") << (tag.empty() ? std::string{tr("(No tag assigned)")} : tag);

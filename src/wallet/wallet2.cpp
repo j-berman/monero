@@ -1050,13 +1050,8 @@ wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, const boost::optional<too
   locked(password != boost::none)
 {
   boost::lock_guard<boost::mutex> lock(lockers_lock);
-  if (lockers++ > 0)
-    locked = false;
-  if (!locked || w.is_unattended() || w.ask_password() != tools::wallet2::AskPasswordToDecrypt || w.watch_only())
-  {
-    locked = false;
+  if (lockers++ > 0 || !locked || w.is_unattended() || w.ask_password() != tools::wallet2::AskPasswordToDecrypt || w.watch_only() || w.background_sync_mode_enabled())
     return;
-  }
   const epee::wipeable_string pass = password->password();
   w.generate_chacha_key_from_password(pass, key);
   w.decrypt_keys(key);
@@ -1067,9 +1062,7 @@ wallet_keys_unlocker::wallet_keys_unlocker(wallet2 &w, bool locked, const epee::
   locked(locked)
 {
   boost::lock_guard<boost::mutex> lock(lockers_lock);
-  if (lockers++ > 0)
-    locked = false;
-  if (!locked)
+  if (lockers++ > 0 || !locked)
     return;
   w.generate_chacha_key_from_password(password, key);
   w.decrypt_keys(key);
@@ -1085,8 +1078,7 @@ wallet_keys_unlocker::~wallet_keys_unlocker()
       MERROR("There are no lockers in wallet_keys_unlocker dtor");
       return;
     }
-    --lockers;
-    if (!locked)
+    if (--lockers > 0 || !locked)
       return;
     w.encrypt_keys(key);
   }
@@ -1168,6 +1160,7 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_ignore_outputs_above(MONEY_SUPPLY),
   m_ignore_outputs_below(0),
   m_track_uses(false),
+  m_background_sync_mode(false),
   m_inactivity_lock_timeout(DEFAULT_INACTIVITY_LOCK_TIMEOUT),
   m_setup_background_mining(BackgroundMiningMaybe),
   m_persistent_rpc_client_id(false),
@@ -1202,7 +1195,8 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_rpc_version(0),
   m_export_format(ExportFormat::Binary),
   m_load_deprecated_formats(false),
-  m_credits_target(0)
+  m_credits_target(0),
+  m_delay_encrypt_keys_after_refresh(false)
 {
   set_rpc_client_secret_key(rct::rct2sk(rct::skGen()));
 }
@@ -1831,12 +1825,10 @@ static uint64_t decodeRct(const rct::rctSig & rv, const crypto::key_derivation &
   }
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, const crypto::public_key &tx_pub_key, size_t i, tx_scan_info_t &tx_scan_info, int &num_vouts_received, std::unordered_map<cryptonote::subaddress_index, uint64_t> &tx_money_got_in_outs, std::vector<size_t> &outs, bool pool)
+void wallet2::decrypt_keys_to_scan_outputs(bool pool)
 {
-  THROW_WALLET_EXCEPTION_IF(i >= tx.vout.size(), error::wallet_internal_error, "Invalid vout index");
-
   // if keys are encrypted, ask for password
-  if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_multisig_rescan_k)
+  if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_multisig_rescan_k && !m_background_sync_mode)
   {
     static critical_section password_lock;
     CRITICAL_REGION_LOCAL(password_lock);
@@ -1845,11 +1837,20 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
       boost::optional<epee::wipeable_string> pwd = m_callback->on_get_password(pool ? "output found in pool" : "output received");
       THROW_WALLET_EXCEPTION_IF(!pwd, error::password_needed, tr("Password is needed to compute key image for incoming monero"));
       THROW_WALLET_EXCEPTION_IF(!verify_password(*pwd), error::password_needed, tr("Invalid password: password is needed to compute key image for incoming monero"));
+
+      // set keys to be re-encrypted using password after refresh loop finishes
       m_encrypt_keys_after_refresh.reset(new wallet_keys_unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only, *pwd));
     }
   }
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, const crypto::public_key &tx_pub_key, size_t i, tx_scan_info_t &tx_scan_info, int &num_vouts_received, std::unordered_map<cryptonote::subaddress_index, uint64_t> &tx_money_got_in_outs, std::vector<size_t> &outs, bool pool)
+{
+  THROW_WALLET_EXCEPTION_IF(i >= tx.vout.size(), error::wallet_internal_error, "Invalid vout index");
 
-  if (m_multisig)
+  decrypt_keys_to_scan_outputs(pool);
+
+  if (m_multisig || m_background_sync_mode)
   {
     tx_scan_info.in_ephemeral.pub = boost::get<cryptonote::txout_to_key>(tx.vout[i].target).key;
     tx_scan_info.in_ephemeral.sec = crypto::null_skey;
@@ -1935,6 +1936,15 @@ bool wallet2::spends_one_of_ours(const cryptonote::transaction &tx) const
 void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote::transaction& tx, const std::vector<uint64_t> &o_indices, uint64_t height, uint8_t block_version, uint64_t ts, bool miner_tx, bool pool, bool double_spend_seen, const tx_cache_data &tx_cache_data, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache)
 {
   PERF_TIMER(process_new_transaction);
+
+  // This lock expects synchronous execution of process_new_transaction. This
+  // ensures that when switching between background sync mode and not, that the
+  // spend key does not change, which could cause an issue when trying to
+  // generate key images for received outputs. This can eventually be optimized
+  // to a rw lock, allowing multiple readers at once so long as there is no
+  // existing attempt to change the background sync mode.
+  boost::lock_guard<boost::mutex> guard(m_background_sync_mode_lock);
+
   // In this function, tx (probably) only contains the base information
   // (that is, the prunable stuff may or may not be included)
   if (!miner_tx && !pool)
@@ -2140,11 +2150,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
       for(size_t o: outs)
       {
-	THROW_WALLET_EXCEPTION_IF(tx.vout.size() <= o, error::wallet_internal_error, "wrong out in transaction: internal index=" +
-				  std::to_string(o) + ", total_outs=" + std::to_string(tx.vout.size()));
+        THROW_WALLET_EXCEPTION_IF(tx.vout.size() <= o, error::wallet_internal_error, "wrong out in transaction: internal index=" +
+                std::to_string(o) + ", total_outs=" + std::to_string(tx.vout.size()));
 
         auto kit = m_pub_keys.find(tx_scan_info[o].in_ephemeral.pub);
-	THROW_WALLET_EXCEPTION_IF(kit != m_pub_keys.end() && kit->second >= m_transfers.size(),
+        THROW_WALLET_EXCEPTION_IF(kit != m_pub_keys.end() && kit->second >= m_transfers.size(),
             error::wallet_internal_error, std::string("Unexpected transfer index from public key: ")
             + "got " + (kit == m_pub_keys.end() ? "<none>" : boost::lexical_cast<std::string>(kit->second))
             + ", m_transfers.size() is " + boost::lexical_cast<std::string>(m_transfers.size()));
@@ -2153,15 +2163,15 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           uint64_t amount = tx.vout[o].amount ? tx.vout[o].amount : tx_scan_info[o].amount;
           if (!pool)
           {
-	    m_transfers.push_back(transfer_details{});
-	    transfer_details& td = m_transfers.back();
-	    td.m_block_height = height;
-	    td.m_internal_output_index = o;
-	    td.m_global_output_index = o_indices[o];
-	    td.m_tx = (const cryptonote::transaction_prefix&)tx;
-	    td.m_txid = txid;
+            m_transfers.push_back(transfer_details{});
+            transfer_details& td = m_transfers.back();
+            td.m_block_height = height;
+            td.m_internal_output_index = o;
+            td.m_global_output_index = o_indices[o];
+            td.m_tx = (const cryptonote::transaction_prefix&)tx;
+            td.m_txid = txid;
             td.m_key_image = tx_scan_info[o].ki;
-            td.m_key_image_known = !m_watch_only && !m_multisig;
+            td.m_key_image_known = !m_watch_only && !m_multisig && !m_background_sync_mode;
             if (!td.m_key_image_known)
             {
               // we might have cold signed, and have a mapping to key images
@@ -2203,10 +2213,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               td.m_rct = false;
             }
             td.m_frozen = false;
-	    set_unspent(m_transfers.size()-1);
+            set_unspent(m_transfers.size()-1);
             if (td.m_key_image_known)
-	      m_key_images[td.m_key_image] = m_transfers.size()-1;
-	    m_pub_keys[tx_scan_info[o].in_ephemeral.pub] = m_transfers.size()-1;
+              m_key_images[td.m_key_image] = m_transfers.size()-1;
+            m_pub_keys[tx_scan_info[o].in_ephemeral.pub] = m_transfers.size()-1;
             if (output_tracker_cache)
               (*output_tracker_cache)[std::make_pair(tx.vout[o].amount, td.m_global_output_index)] = m_transfers.size() - 1;
             if (m_multisig)
@@ -2216,16 +2226,17 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
               if (m_multisig_rescan_info && m_multisig_rescan_info->front().size() >= m_transfers.size())
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
-	    LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
-	    if (0 != m_callback)
-	      m_callback->on_money_received(height, txid, tx, td.m_amount, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+            LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
+            if (0 != m_callback) {
+              m_callback->on_money_received(height, txid, tx, td.m_amount, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+            }
           }
           total_received_1 += amount;
           notify = true;
         }
-	else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx_scan_info[o].amount)
+        else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx_scan_info[o].amount)
         {
-	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+          LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << (m_transfers[kit->second].m_spent ? "spent" : "unspent") << " "
               << print_money(m_transfers[kit->second].amount()) << " in tx " << m_transfers[kit->second].m_txid << ", received output ignored");
@@ -2241,7 +2252,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         }
         else
         {
-	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+          LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << print_money(m_transfers[kit->second].amount()) << ", replacing with new output");
           // The new larger output replaced a previous smaller one
@@ -2256,11 +2267,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
           if (!pool)
           {
             transfer_details &td = m_transfers[kit->second];
-	    td.m_block_height = height;
-	    td.m_internal_output_index = o;
-	    td.m_global_output_index = o_indices[o];
-	    td.m_tx = (const cryptonote::transaction_prefix&)tx;
-	    td.m_txid = txid;
+            td.m_block_height = height;
+            td.m_internal_output_index = o;
+            td.m_global_output_index = o_indices[o];
+            td.m_tx = (const cryptonote::transaction_prefix&)tx;
+            td.m_txid = txid;
             td.m_amount = amount;
             td.m_pk_index = pk_index - 1;
             td.m_subaddr_index = tx_scan_info[o].received->index;
@@ -2291,11 +2302,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
             THROW_WALLET_EXCEPTION_IF(td.get_public_key() != tx_scan_info[o].in_ephemeral.pub, error::wallet_internal_error, "Inconsistent public keys");
-	    THROW_WALLET_EXCEPTION_IF(td.m_spent, error::wallet_internal_error, "Inconsistent spent status");
+            THROW_WALLET_EXCEPTION_IF(td.m_spent, error::wallet_internal_error, "Inconsistent spent status");
 
-	    LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
-	    if (0 != m_callback)
-	      m_callback->on_money_received(height, txid, tx, td.m_amount, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+            LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
+            if (0 != m_callback)
+              m_callback->on_money_received(height, txid, tx, td.m_amount, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
           }
           total_received_1 += extra_amount;
           notify = true;
@@ -2305,6 +2316,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   }
 
   THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs.size() != tx_amounts_individual_outs.size(), error::wallet_internal_error, "Inconsistent size of output arrays");
+  uint64_t fee = miner_tx ? 0 : get_tx_fee(tx);
 
   uint64_t tx_money_spent_in_ins = 0;
   // The line below is equivalent to "boost::optional<uint32_t> subaddr_account;", but avoids the GCC warning: ‘*((void*)& subaddr_account +4)’ may be used uninitialized in this function
@@ -2353,7 +2365,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       }
     }
 
-    if (!pool && m_track_uses)
+    if (!pool && (m_track_uses || m_background_sync_mode))
     {
       PERF_TIMER(track_uses);
       const uint64_t amount = in_to_key.amount;
@@ -2368,6 +2380,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             size_t idx = i->second;
             THROW_WALLET_EXCEPTION_IF(idx >= m_transfers.size(), error::wallet_internal_error, "Output tracker cache index out of range");
             m_transfers[idx].m_uses.push_back(std::make_pair(height, txid));
+            if (m_background_sync_mode && !m_transfers[idx].m_key_image_known)
+              m_plausible_spend_txs[txid] = plausible_spend_tx{(cryptonote::transaction_prefix&)tx, fee, ts};
           }
         }
       }
@@ -2376,13 +2390,17 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         if (amount != in_to_key.amount)
           continue;
         for (uint64_t offset: offsets)
+        {
           if (offset == td.m_global_output_index)
+          {
             td.m_uses.push_back(std::make_pair(height, txid));
+            if (m_background_sync_mode && !td.m_key_image_known)
+              m_plausible_spend_txs[txid] = plausible_spend_tx{(cryptonote::transaction_prefix&)tx, fee, ts};
+          }
+        }
       }
     }
   }
-
-  uint64_t fee = miner_tx ? 0 : tx.version == 1 ? tx_money_spent_in_ins - get_outs_money_amount(tx) : tx.rct_signatures.txnFee;
 
   if (tx_money_spent_in_ins > 0 && !pool)
   {
@@ -2391,7 +2409,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       {
         return acc + (p.first.major == *subaddr_account ? p.second : 0);
       });
-    process_outgoing(txid, tx, height, ts, tx_money_spent_in_ins, self_received, *subaddr_account, subaddr_indices);
+    process_outgoing(txid, tx, fee, height, ts, tx_money_spent_in_ins, self_received, *subaddr_account, subaddr_indices);
     // if sending to yourself at the same subaddress account, set the outgoing payment amount to 0 so that it's less confusing
     if (tx_money_spent_in_ins == self_received + fee)
     {
@@ -2537,7 +2555,7 @@ void wallet2::process_unconfirmed(const crypto::hash &txid, const cryptonote::tr
   }
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::transaction &tx, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices)
+void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::transaction_prefix &tx, uint64_t fee, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices)
 {
   std::pair<std::unordered_map<crypto::hash, confirmed_transfer_details>::iterator, bool> entry = m_confirmed_txs.insert(std::make_pair(txid, confirmed_transfer_details()));
   // fill with the info we know, some info might already be there
@@ -2550,7 +2568,7 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
     if (tx.version == 1)
       entry.first->second.m_amount_out = get_outs_money_amount(tx);
     else
-      entry.first->second.m_amount_out = spent - tx.rct_signatures.txnFee;
+      entry.first->second.m_amount_out = spent - fee;
     entry.first->second.m_change = received;
 
     std::vector<tx_extra_field> tx_extra_fields;
@@ -2975,10 +2993,6 @@ void wallet2::remove_obsolete_pool_txs(const std::vector<crypto::hash> &tx_hashe
 void wallet2::update_pool_state(std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>> &process_txs, bool refreshed)
 {
   MTRACE("update_pool_state start");
-
-  auto keys_reencryptor = epee::misc_utils::create_scope_leave_handler([&, this]() {
-    m_encrypt_keys_after_refresh.reset();
-  });
 
   // get the pool state
   cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL_HASHES_BIN::request req;
@@ -3408,7 +3422,9 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   start_height = 0;
 
   auto keys_reencryptor = epee::misc_utils::create_scope_leave_handler([&, this]() {
-    m_encrypt_keys_after_refresh.reset();
+    boost::lock_guard<boost::mutex> guard(m_encrypt_keys_after_refresh_lock);
+    if (!m_delay_encrypt_keys_after_refresh)
+      m_encrypt_keys_after_refresh.reset();
   });
 
   auto scope_exit_handler_hwdev = epee::misc_utils::create_scope_leave_handler([&](){hwdev.computing_key_images(false);});
@@ -3686,7 +3702,11 @@ void wallet2::detach_blockchain(uint64_t height, std::map<std::pair<uint64_t, ui
   for (transfer_details &td: m_transfers)
   {
     while (!td.m_uses.empty() && td.m_uses.back().first >= height)
+    {
+      if (m_plausible_spend_txs.find(td.m_uses.back().second) != m_plausible_spend_txs.end())
+        m_plausible_spend_txs.erase(td.m_uses.back().second);
       td.m_uses.pop_back();
+    }
   }
 
   if (output_tracker_cache)
@@ -3764,6 +3784,7 @@ bool wallet2::clear()
   m_subaddress_labels.clear();
   m_multisig_rounds_passed = 0;
   m_device_last_key_image_sync = 0;
+  m_plausible_spend_txs.clear();
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -4053,6 +4074,8 @@ void wallet2::setup_keys(const epee::wipeable_string &password)
 //----------------------------------------------------------------------------------------------------
 void wallet2::change_password(const std::string &filename, const epee::wipeable_string &original_password, const epee::wipeable_string &new_password)
 {
+  boost::lock_guard<boost::mutex> guard(m_background_sync_mode_lock);
+
   if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only)
     decrypt_keys(original_password);
   setup_keys(new_password);
@@ -4092,6 +4115,32 @@ bool wallet2::load_keys(const std::string& keys_file_name, const epee::wipeable_
     m_keys_file_locker.reset();
   }
   return r;
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::load_keys_from_file(const std::string& keys_file_name, const epee::wipeable_string& password, bool already_locked)
+{
+  boost::system::error_code e;
+  bool exists = boost::filesystem::exists(keys_file_name, e);
+  THROW_WALLET_EXCEPTION_IF(e || !exists, error::file_not_found, m_keys_file);
+
+  if (already_locked)
+  {
+    THROW_WALLET_EXCEPTION_IF(!is_keys_file_locked(), error::wallet_internal_error, "internal error: \"" + keys_file_name + "\" is expected to be open by this wallet program");
+  }
+  else
+  {
+    lock_keys_file();
+    THROW_WALLET_EXCEPTION_IF(!is_keys_file_locked(), error::wallet_internal_error, "internal error: \"" + keys_file_name + "\" is opened by another wallet program");
+  }
+
+  // this temporary unlocking is necessary for Windows (otherwise the file couldn't be loaded).
+  unlock_keys_file();
+  if (!load_keys(keys_file_name, password))
+  {
+    THROW_WALLET_EXCEPTION_IF(true, error::file_read_error, keys_file_name);
+  }
+  LOG_PRINT_L0("Loaded wallet keys file, with public address: " << m_account.get_public_address_str(m_nettype));
+  lock_keys_file();
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_string& password) {
@@ -5391,32 +5440,20 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
   bool use_fs = !wallet_.empty();
   THROW_WALLET_EXCEPTION_IF((use_fs && !keys_buf.empty()) || (!use_fs && keys_buf.empty()), error::file_read_error, "must load keys either from file system or from buffer");\
 
-  boost::system::error_code e;
   if (use_fs)
   {
-    bool exists = boost::filesystem::exists(m_keys_file, e);
-    THROW_WALLET_EXCEPTION_IF(e || !exists, error::file_not_found, m_keys_file);
-    lock_keys_file();
-    THROW_WALLET_EXCEPTION_IF(!is_keys_file_locked(), error::wallet_internal_error, "internal error: \"" + m_keys_file + "\" is opened by another wallet program");
-
-    // this temporary unlocking is necessary for Windows (otherwise the file couldn't be loaded).
-    unlock_keys_file();
-    if (!load_keys(m_keys_file, password))
-    {
-      THROW_WALLET_EXCEPTION_IF(true, error::file_read_error, m_keys_file);
-    }
-    LOG_PRINT_L0("Loaded wallet keys file, with public address: " << m_account.get_public_address_str(m_nettype));
-    lock_keys_file();
+    load_keys_from_file(m_keys_file, password, false/*already_locked*/);
   }
   else if (!load_keys_buf(keys_buf, password))
   {
     THROW_WALLET_EXCEPTION_IF(true, error::file_read_error, "failed to load keys from buffer");
   }
 
-  wallet_keys_unlocker unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only, password);
+  wallet_keys_unlocker unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_background_sync_mode, password);
 
   //keys loaded ok!
   //try to load wallet cache. but even if we failed, it is not big problem
+  boost::system::error_code e;
   bool cache_missing = use_fs ? (!boost::filesystem::exists(m_wallet_file, e) || e) : cache_buf.empty();
   if (cache_missing)
   {
@@ -5573,6 +5610,17 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
   catch (const std::exception &e)
   {
     MERROR("Failed to initialize MMS, it will be unusable");
+  }
+
+  try
+  {
+    // pick up on any key images of background synced outs if there are any
+    boost::lock_guard<boost::mutex> guard(m_background_sync_mode_lock);
+    identify_spends_using_background_synced_data(password);
+  }
+  catch (const std::exception &e)
+  {
+    MERROR("Failed to identify spends using background synced data");
   }
 }
 //----------------------------------------------------------------------------------------------------
@@ -12455,6 +12503,36 @@ uint64_t wallet2::import_key_images(const std::string &filename, uint64_t &spent
 }
 
 //----------------------------------------------------------------------------------------------------
+/**
+ *
+ * Erase corresponding incoming payments to the same subaddress account that is
+ * spending in the transaction. "Payments" are supposed to be incoming payments
+ * from other accounts. If a spend tx is in the payments container, then it was
+ * incorrectly picked up as an incoming payment, which happens when it is picked
+ * up as a received output with no known corresponding spend in the tx, which
+ * happens when we scan without a spend key. Put more simply, this general
+ * function makes sure outputs a subaddress account received are not treated
+ * as "payment" from someone else when the subaddress account originated the tx,
+ * but rather treated more like change.
+ *
+ */
+void erase_incoming_payments_for_spends(wallet2::payment_container &payments, const crypto::hash &spend_txid, uint32_t spending_subaddr_account)
+{
+  for (auto j = payments.begin(); j != payments.end(); )
+  {
+    if (j->second.m_tx_hash == spend_txid && j->second.m_subaddr_index.major == spending_subaddr_account)
+    {
+      LOG_PRINT_L2("Erasing spend tx from payments with payment ID: " << j->first << " / spend tx: " << spend_txid
+          << " / amount: " << j->second.m_amount << " / subaddr account: " << spending_subaddr_account);
+      j = payments.erase(j);
+    }
+    else
+    {
+      ++j;
+    }
+  }
+}
+//----------------------------------------------------------------------------------------------------
 uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_image, crypto::signature>> &signed_key_images, size_t offset, uint64_t &spent, uint64_t &unspent, bool check_spent)
 {
   PERF_TIMER(import_key_images_lots);
@@ -12706,17 +12784,9 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       }
 
       // create outgoing payment
-      process_outgoing(*spent_txid, spent_tx, e.block_height, e.block_timestamp, tx_money_spent_in_ins, tx_money_got_in_outs, subaddr_account, subaddr_indices);
+      process_outgoing(*spent_txid, spent_tx, get_tx_fee(spent_tx), e.block_height, e.block_timestamp, tx_money_spent_in_ins, tx_money_got_in_outs, subaddr_account, subaddr_indices);
 
-      // erase corresponding incoming payment
-      for (auto j = m_payments.begin(); j != m_payments.end(); ++j)
-      {
-        if (j->second.m_tx_hash == *spent_txid)
-        {
-          m_payments.erase(j);
-          break;
-        }
-      }
+      erase_incoming_payments_for_spends(m_payments, *spent_txid, subaddr_account);
 
       ++spent_txid;
     }
@@ -12781,7 +12851,356 @@ bool wallet2::import_key_images(signed_tx_set & signed_tx, size_t offset, bool o
 
   return import_key_images(signed_tx.key_images, offset, only_selected_transfers ? boost::make_optional(selected_transfers) : boost::none);
 }
+//----------------------------------------------------------------------------------------------------
+void clear_plausbile_spend_txs(std::unordered_set<crypto::hash> &processed_plausible_txs, wallet2::plausible_spend_container &all_plausible_spend_txs, wallet2::transfer_container &transfers, bool track_uses)
+{
+  if (processed_plausible_txs.empty() && all_plausible_spend_txs.empty())
+    return;
 
+  bool processed_all_plausible_txs = processed_plausible_txs.size() == all_plausible_spend_txs.size();
+  if (!processed_all_plausible_txs)
+  {
+    LOG_ERROR("Unexpected difference in size of processed plausible txs (" << processed_plausible_txs.size() << ")"
+        << " versus all plausible spend txs (" << all_plausible_spend_txs.size() << ")");
+  }
+  else
+  {
+    // make sure every processed tx is a member of the set of ALL plausibles
+    for (const crypto::hash &ptx: processed_plausible_txs)
+    {
+      if (all_plausible_spend_txs.find(ptx) == all_plausible_spend_txs.end())
+      {
+        LOG_ERROR("Unable to find tx " << epee::string_tools::pod_to_hex(ptx) << " in plausible spend txs");
+        processed_all_plausible_txs = false;
+        break;
+      }
+    }
+  }
+
+  if (processed_all_plausible_txs)
+  {
+    LOG_PRINT_L2("Clearing all " << all_plausible_spend_txs.size() << " plausible spend txs");
+    all_plausible_spend_txs.clear();
+    if (!track_uses)
+    {
+      for (wallet2::transfer_details &td : transfers)
+        td.m_uses.clear();
+    }
+  }
+}
+//----------------------------------------------------------------------------------------------------
+/**
+ *
+ * In background sync mode, we identify received outputs using just a view key,
+ * as well as transactions where the user plausibly spent received outputs.
+ * When the user is ready to use the spend key again, we call this function to
+ * generate key images for all outputs received, determine if the outputs have
+ * been spent or not, and update associated transaction data with correct
+ * amounts spent and received now that we have all that data.
+ *
+ * "Plausible spend transactions" are transactions where 1+ rings contain an
+ * output that the user received. We don't know if the user spent in these
+ * transactions or not, hence "plausible". We need the output's key image to see
+ * if it has been spent or not, comparing the generated key image with the
+ * key image of the ring in which the output is included. If the same, we have
+ * identified a spend transaction. At the end of this function, once we've
+ * generated all key images and updated all tx data, we can safely remove all
+ * these plausible spend transactions from the wallet cache, since we will know
+ * whether or not they are true spends definitively.
+ *
+ * By storing all plausible spends when scanning in background sync mode, we
+ * avoid the need to query the daemon with key images, revealing key images
+ * to some 3rd party nodes (for users who don't run their own nodes). This is
+ * not a perfect solution to avoid revealing key images to a 3rd party node,
+ * since tx submission trivially reveals tx's and key images too. But it's
+ * probably better than revealing a large number of key images at once, and is
+ * especially better than revealing *unused* key images to a 3rd party node,
+ * which would enable the 3rd party to deduce that a tx is spending an output at
+ * least X old when the key image is included in the chain. It may also be
+ * useful to thwart traffic analysis that tries to determine # of key images,
+ * and therefore a minimum bound on # of tx's, for users connecting to their
+ * own remote node.
+ *
+ */
+void wallet2::identify_spends_using_background_synced_data(const epee::wipeable_string &password)
+{
+  // we're going to need the spend key, so if we can't get it, return
+  if (m_background_sync_mode || m_multisig || m_watch_only)
+    return;
+
+  hw::device &hwdev = m_account.get_device();
+
+  std::unordered_map<crypto::public_key, std::pair<uint32_t, uint64_t>> out_to_account_and_amount;
+  std::unordered_map<crypto::key_image, uint64_t> key_image_to_amount;
+  struct outgoing_tx
+  {
+    cryptonote::transaction_prefix tx;
+    uint64_t fee;
+    uint64_t height;
+    uint64_t timestamp;
+    uint64_t money_spent;
+    uint64_t money_received;
+    uint32_t subaddr_account;
+    std::set<uint32_t> subaddr_indices;
+  };
+  std::unordered_map<crypto::hash, outgoing_tx> outgoing_txs;
+  std::unordered_set<crypto::hash> processed_plausible_txs;
+
+  bool reencrypt_spend_key = false;
+  auto keys_reencryptor = epee::misc_utils::create_scope_leave_handler([&, this]() {
+    boost::lock_guard<boost::mutex> guard(m_encrypt_keys_after_refresh_lock);
+    if (reencrypt_spend_key)
+    {
+      m_encrypt_keys_after_refresh.reset();
+      m_delay_encrypt_keys_after_refresh = false;
+    }
+  });
+
+  for (size_t i = 0; i < m_transfers.size(); ++i)
+  {
+    transfer_details& td = m_transfers[i];
+
+    // Collect all out amounts to tally up amounts received in txs. This is used
+    // later on when updating amount received in confirmed txs.
+    const crypto::public_key &out_pub_key = boost::get<cryptonote::txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key;
+    uint64_t amount = td.amount();
+    out_to_account_and_amount[out_pub_key] = make_pair(td.m_subaddr_index.major, amount);
+
+    if (td.m_key_image_known)
+    {
+      // If background sync is enabled, and scanner picks up on a tx where the
+      // user spent 2+ outs, 1 with key image known, the other(s) with key image
+      // not yet known, then need to collect amounts of known key images, so can
+      // correctly tally amount spent in the tx to use to update confirmed txs.
+      key_image_to_amount[td.m_key_image] = amount;
+    }
+    else
+    {
+      // Decrypt the spend key if needed, so we can generate key images. Make
+      // sure spend key stays in decrypted state for duration of this function
+      if (!reencrypt_spend_key)
+      {
+        boost::lock_guard<boost::mutex> guard(m_encrypt_keys_after_refresh_lock);
+        m_encrypt_keys_after_refresh.reset(new wallet_keys_unlocker(*this, m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only, password));
+        reencrypt_spend_key = true;
+        m_delay_encrypt_keys_after_refresh = true;
+      }
+
+      const crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(td.m_tx, td.m_pk_index);
+      const std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(td.m_tx);
+
+      crypto::key_image ki;
+      cryptonote::keypair in_ephemeral;
+      bool r = generate_key_image_helper(m_account.get_keys(), m_subaddresses, out_pub_key, tx_pub_key, additional_tx_pub_keys, td.m_internal_output_index, in_ephemeral, ki, hwdev);
+      THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "Failed to generate key image");
+      THROW_WALLET_EXCEPTION_IF(in_ephemeral.pub != out_pub_key, error::wallet_internal_error, "Generated pub key does not match output public key");
+      THROW_WALLET_EXCEPTION_IF(m_pub_keys[out_pub_key] != i, error::wallet_internal_error, "Out pub key in wallet cache does not match expected");
+
+      // update transfer with known key image
+      m_key_images[ki] = i;
+      td.m_key_image = std::move(ki);
+      td.m_key_image_known = true;
+      td.m_key_image_request = false;
+      td.m_key_image_partial = false;
+
+      // determine if key image has been included in the chain i.e. if output
+      // has been spent or not. We do this by iterating over all tx's that
+      // used the output in a ring
+      bool found_spent = false;
+      crypto::hash spent_txid;
+      cryptonote::transaction_prefix spent_tx;
+      uint64_t fee = 0;
+      uint64_t spent_height = 0;
+      uint64_t spent_timestamp = 0;
+      uint64_t spent_amount = 0;
+      uint32_t subaddr_account = (uint32_t)-1;
+      uint32_t subaddr_index = (uint32_t)-1;
+      for (const std::pair<uint64_t, crypto::hash> &uses : td.m_uses)
+      {
+        const uint64_t height = uses.first;
+        const crypto::hash &txid = uses.second;
+
+        // Collect all processed plausible txs to make sure we get them all,
+        // so we know we can safely clear them all at the end of
+        // identify_spends_using_background_synced_data()
+        processed_plausible_txs.insert(txid);
+        if (found_spent)
+          continue;
+
+        for(auto &in: m_plausible_spend_txs[txid].tx.vin)
+        {
+          if(in.type() != typeid(cryptonote::txin_to_key))
+            continue;
+          const cryptonote::txin_to_key &in_to_key = boost::get<cryptonote::txin_to_key>(in);
+          if (td.m_key_image == in_to_key.k_image)
+          {
+            if (in_to_key.amount > 0)
+            {
+              if(in_to_key.amount != amount)
+              {
+                MERROR("Inconsistent amount in tx input: got " << print_money(in_to_key.amount) <<
+                  ", expected " << print_money(amount));
+                td.m_amount = in_to_key.amount;
+              }
+              spent_amount = in_to_key.amount;
+            }
+            else
+            {
+              spent_amount = amount;
+            }
+
+            spent_txid = txid;
+            spent_height = height;
+
+            spent_tx = m_plausible_spend_txs[txid].tx;
+            fee = m_plausible_spend_txs[txid].fee;
+            spent_timestamp = m_plausible_spend_txs[txid].timestamp;
+
+            LOG_PRINT_L0("Spent money: " << cryptonote::print_money(spent_amount) << ", with tx: " << spent_txid);
+            set_spent(i, spent_height);
+
+            if (subaddr_account != (uint32_t)-1 && subaddr_account != td.m_subaddr_index.major)
+              LOG_PRINT_L0("WARNING: This tx spends outputs received by different subaddress accounts, which isn't supposed to happen");
+            subaddr_account = td.m_subaddr_index.major;
+            subaddr_index = td.m_subaddr_index.minor;
+
+            if (m_callback)
+              m_callback->on_money_spent(spent_height, spent_txid, spent_tx, spent_amount, spent_tx, td.m_subaddr_index);
+
+            found_spent = true;
+            break;
+          }
+        }
+      }
+
+      // Prepare to update the transaction's spent data
+      if (found_spent)
+      {
+        THROW_WALLET_EXCEPTION_IF(m_unconfirmed_txs.find(spent_txid) != m_unconfirmed_txs.end(), error::wallet_internal_error,
+          "Found unconfirmed spend tx that should be in confirmed: " + epee::string_tools::pod_to_hex(spent_txid));
+
+        if (outgoing_txs.find(spent_txid) == outgoing_txs.end())
+        {
+          std::set<uint32_t> subaddr_indices{subaddr_index};
+          outgoing_txs[spent_txid] = outgoing_tx{spent_tx, fee, spent_height, spent_timestamp, spent_amount, 0/*money_received*/, subaddr_account, subaddr_indices};
+        }
+        else
+        {
+          outgoing_txs[spent_txid].money_spent += spent_amount;
+          if (subaddr_account != (uint32_t)-1 && subaddr_account != outgoing_txs[spent_txid].subaddr_account)
+            LOG_PRINT_L0("WARNING: This tx spends outputs received by different subaddress accounts, which isn't supposed to happen");
+          outgoing_txs[spent_txid].subaddr_indices.insert(subaddr_index);
+        }
+      }
+    }
+  }
+
+  for (auto &ot : outgoing_txs)
+  {
+    const crypto::hash &txid = ot.first;
+    outgoing_tx &tx_to_process = ot.second;
+
+    for (const auto &out : tx_to_process.tx.vout)
+    {
+      const crypto::public_key &out_pub_key = boost::get<cryptonote::txout_to_key>(out.target).key;
+
+      // only add the amounts received to the subaddress account that is spending
+      if (out_to_account_and_amount.find(out_pub_key) != out_to_account_and_amount.end())
+        if (tx_to_process.subaddr_account == out_to_account_and_amount[out_pub_key].first)
+          tx_to_process.money_received += out_to_account_and_amount[out_pub_key].second;
+    }
+
+    for (const auto &in : tx_to_process.tx.vin)
+    {
+      if(in.type() != typeid(cryptonote::txin_to_key))
+        continue;
+      const cryptonote::txin_to_key &in_to_key = boost::get<cryptonote::txin_to_key>(in);
+      if (key_image_to_amount.find(in_to_key.k_image) != key_image_to_amount.end())
+        tx_to_process.money_spent += key_image_to_amount[in_to_key.k_image];
+    }
+
+    if (m_confirmed_txs.find(txid) != m_confirmed_txs.end())
+    {
+      m_confirmed_txs[txid].m_amount_in = tx_to_process.money_spent;
+      if (tx_to_process.tx.version == 1)
+        m_confirmed_txs[txid].m_amount_out = get_outs_money_amount(tx_to_process.tx);
+      else
+        m_confirmed_txs[txid].m_amount_out = tx_to_process.money_spent - tx_to_process.fee;
+      m_confirmed_txs[txid].m_change = tx_to_process.money_received;
+
+      m_confirmed_txs[txid].m_subaddr_account = tx_to_process.subaddr_account;
+      m_confirmed_txs[txid].m_subaddr_indices = tx_to_process.subaddr_indices;
+    }
+
+    process_outgoing(txid, tx_to_process.tx, tx_to_process.fee, tx_to_process.height, tx_to_process.timestamp,
+      tx_to_process.money_spent, tx_to_process.money_received,
+      tx_to_process.subaddr_account, tx_to_process.subaddr_indices
+    );
+
+    erase_incoming_payments_for_spends(m_payments, txid, tx_to_process.subaddr_account);
+  }
+
+  // No need to keep data of other plausible spend tx's around since we know the
+  // key images now and can determine real spends when scanning; get rid of it.
+  // Will sanity check we processed all the plausible spend tx's to make sure we
+  // got them all before clearing.
+  clear_plausbile_spend_txs(processed_plausible_txs, m_plausible_spend_txs, m_transfers, m_track_uses);
+
+  if (!m_plausible_spend_txs.empty())
+  {
+    // Only circumstance I can think of where this can happen is if underlying
+    // m_transfers or m_plausible_spend_txs change while in this function.
+    // This should be protected, but worst case, if it's not, it should correct
+    // itself and shouldn't be fatal. We don't delete the data that could help
+    // correct the issue until we're certain everything is kosher.
+    MERROR("Failed to process all outs scanned from background syncing");
+  }
+}
+//----------------------------------------------------------------------------------------------------
+/**
+ *
+ * In background sync mode, the wallet continously scans for received outs (and
+ * plausibly spent outs) using just the view key. This mode enables a client to
+ * run the sync process in the background, without keeping the spend key in
+ * decrypted state in memory. When a user returns to the wallet and decrypts the
+ * spend key, the wallet reads the scanned data, generates key images, and
+ * determines if key images have been spent in order to reduce - or remove - the
+ * need for the user to sit waiting for the wallet to scan the chain. Upon
+ * disabling the background sync mode, the wallet picks up scanning right where
+ * the background sync left off.
+ *
+ */
+void wallet2::enable_background_sync_mode()
+{
+  THROW_WALLET_EXCEPTION_IF(m_multisig || m_watch_only, error::wallet_internal_error, m_multisig
+    ? "Background sync mode not implemented for multisig wallets"
+    : "Background sync mode not implemented for view only wallets");
+
+  boost::lock_guard<boost::mutex> guard(m_background_sync_mode_lock);
+  if (m_background_sync_mode)
+    return;
+  m_background_sync_mode = true;
+
+  // Background sync mode is specifically designed to operate w/o the spend key.
+  // Get rid of it. Will bring it back when we disable the background sync mode.
+  m_account.forget_spend_key();
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::disable_background_sync_mode(const epee::wipeable_string &password)
+{
+  boost::lock_guard<boost::mutex> guard(m_background_sync_mode_lock);
+  if (!m_background_sync_mode)
+    return;
+  m_background_sync_mode = false;
+
+  // Bring back the spend key
+  load_keys_from_file(m_keys_file, password, true/*already locked*/);
+
+  // Time to use the spend key to generate the key images of all those outs we
+  // picked up on while background syncing
+  identify_spends_using_background_synced_data(password);
+}
+//----------------------------------------------------------------------------------------------------
 wallet2::payment_container wallet2::export_payments() const
 {
   payment_container payments;

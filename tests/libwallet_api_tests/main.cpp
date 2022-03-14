@@ -550,6 +550,103 @@ TEST_F(WalletTest1, WalletRefresh)
     ASSERT_TRUE(wmgr->closeWallet(wallet1));
 }
 
+TEST_F(WalletTest1, WalletRescanBlockchain)
+{
+    Monero::Wallet * wallet1 = wmgr->openWallet(CURRENT_SRC_WALLET, TESTNET_WALLET_PASS, Monero::NetworkType::TESTNET);
+    ASSERT_TRUE(wallet1->init(TESTNET_DAEMON_ADDRESS, 0));
+    ASSERT_TRUE(wallet1->refresh());
+
+    uint64_t balance1 = wallet1->balance(0);
+    uint64_t unlockedBalance1 = wallet1->unlockedBalance(0);
+    ASSERT_TRUE(balance1 > 0);
+    ASSERT_TRUE(unlockedBalance1 > 0);
+
+    ASSERT_TRUE(wallet1->rescanBlockchain());
+
+    ASSERT_TRUE(balance1 == wallet1->balance(0));
+    std::cout << "wallet balance: " << wallet1->balance(0) << std::endl;
+    ASSERT_TRUE(unlockedBalance1 == wallet1->unlockedBalance(0));
+    std::cout << "wallet unlocked balance: " << wallet1->unlockedBalance(0) << std::endl;
+    ASSERT_TRUE(wmgr->closeWallet(wallet1));
+}
+
+TEST_F(WalletTest1, WalletEnableBackgroundSyncMode)
+{
+    Monero::Wallet * wallet1 = wmgr->openWallet(CURRENT_SRC_WALLET, TESTNET_WALLET_PASS, Monero::NetworkType::TESTNET);
+    ASSERT_TRUE(wallet1->init(TESTNET_DAEMON_ADDRESS, 0));
+    ASSERT_TRUE(wallet1->refresh());
+
+    uint64_t balance1 = wallet1->balance(0);
+    uint64_t unlockedBalance1 = wallet1->unlockedBalance(0);
+    ASSERT_TRUE(balance1 > 0);
+    ASSERT_TRUE(unlockedBalance1 > 0);
+
+    std::cout << "enabling background sync mode..." << std::endl;
+    ASSERT_TRUE(wallet1->enableBackgroundSyncMode());
+    ASSERT_TRUE(wallet1->rescanBlockchain());
+
+    // higher balance expected in background sync mode for unaccounted spends
+    ASSERT_TRUE(balance1 < wallet1->balance(0));
+    std::cout << "wallet balance: " << wallet1->balance(0) << std::endl;
+    ASSERT_TRUE(unlockedBalance1 < wallet1->unlockedBalance(0));
+    std::cout << "wallet unlocked balance: " << wallet1->unlockedBalance(0) << std::endl;
+    ASSERT_TRUE(wmgr->closeWallet(wallet1));
+}
+
+TEST_F(WalletTest1, WalletDisableBackgroundSyncMode)
+{
+    Monero::Wallet * wallet1 = wmgr->openWallet(CURRENT_SRC_WALLET, TESTNET_WALLET_PASS, Monero::NetworkType::TESTNET);
+    ASSERT_TRUE(wallet1->init(TESTNET_DAEMON_ADDRESS, 0));
+    ASSERT_TRUE(wallet1->refresh());
+
+    uint64_t balance1 = wallet1->balance(0);
+    uint64_t unlockedBalance1 = wallet1->unlockedBalance(0);
+    ASSERT_TRUE(balance1 > 0);
+    ASSERT_TRUE(unlockedBalance1 > 0);
+
+    ASSERT_TRUE(wallet1->enableBackgroundSyncMode());
+    ASSERT_TRUE(wallet1->rescanBlockchain());
+
+    // disabling should suck in all background sync'd data, then use the spend
+    // key to calculate correct balance
+    std::cout << "disabling background sync mode..." << std::endl;
+    ASSERT_TRUE(wallet1->disableBackgroundSyncMode(TESTNET_WALLET_PASS));
+
+    ASSERT_TRUE(balance1 == wallet1->balance(0));
+    std::cout << "wallet balance: " << wallet1->balance(0) << std::endl;
+    ASSERT_TRUE(unlockedBalance1 == wallet1->unlockedBalance(0));
+    std::cout << "wallet unlocked balance: " << wallet1->unlockedBalance(0) << std::endl;
+    ASSERT_TRUE(wmgr->closeWallet(wallet1));
+}
+
+TEST_F(WalletTest1, WalletEnableBackgroundSyncModeThenReopen)
+{
+    Monero::Wallet * wallet1 = wmgr->openWallet(CURRENT_SRC_WALLET, TESTNET_WALLET_PASS, Monero::NetworkType::TESTNET);
+    ASSERT_TRUE(wallet1->init(TESTNET_DAEMON_ADDRESS, 0));
+    ASSERT_TRUE(wallet1->refresh());
+
+    uint64_t balance1 = wallet1->balance(0);
+    uint64_t unlockedBalance1 = wallet1->unlockedBalance(0);
+    ASSERT_TRUE(balance1 > 0);
+    ASSERT_TRUE(unlockedBalance1 > 0);
+
+    ASSERT_TRUE(wallet1->enableBackgroundSyncMode());
+    ASSERT_TRUE(wallet1->rescanBlockchain());
+    ASSERT_TRUE(wmgr->closeWallet(wallet1));
+
+    // reopening the wallet and init'ing should suck in all background sync'd
+    // data, then use the spend key to calculate correct balance
+    std::cout << "reopening wallet after scanning in background sync mode..." << std::endl;
+    Monero::Wallet * wallet2 = wmgr->openWallet(CURRENT_SRC_WALLET, TESTNET_WALLET_PASS, Monero::NetworkType::TESTNET);
+    ASSERT_TRUE(wallet2->init(TESTNET_DAEMON_ADDRESS, 0));
+
+    ASSERT_TRUE(balance1 == wallet2->balance(0));
+    std::cout << "wallet balance: " << wallet2->balance(0) << std::endl;
+    ASSERT_TRUE(unlockedBalance1 == wallet2->unlockedBalance(0));
+    std::cout << "wallet unlocked balance: " << wallet2->unlockedBalance(0) << std::endl;
+    ASSERT_TRUE(wmgr->closeWallet(wallet2));
+}
+
 TEST_F(WalletTest1, WalletConvertsToString)
 {
     std::string strAmount = Monero::Wallet::displayAmount(AMOUNT_5XMR);
