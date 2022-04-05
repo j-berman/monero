@@ -56,6 +56,5 @@ target_link_libraries(multisig
     cryptonote_core
     common
     cncrypto
-    seraphis
   PRIVATE
     ${EXTRA_LIBRARIES})
