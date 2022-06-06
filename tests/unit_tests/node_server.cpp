@@ -724,7 +724,7 @@ TEST(cryptonote_protocol_handler, race_condition)
       auto conn = connections.first;
       auto shared_state = daemon.main.shared_state;
       const auto tag = get_conn_tag(*conn);
-      conn->strand_.post([tag, conn, shared_state, &events]{
+      conn->callback_strand_.post([tag, conn, shared_state, &events]{
         shared_state->for_connection(tag, [](context_t &context){
           context.m_expect_height = -1;
           context.m_expect_response = -1;
@@ -819,7 +819,7 @@ TEST(cryptonote_protocol_handler, race_condition)
       auto conn = daemon.main.conn.back();
       auto shared_state = daemon.main.shared_state;
       const auto tag = get_conn_tag(*conn);
-      conn->strand_.post([tag, conn, shared_state, &events]{
+      conn->callback_strand_.post([tag, conn, shared_state, &events]{
         shared_state->for_connection(tag, [](context_t &context){
           EXPECT_TRUE(context.m_state == contexts::cryptonote::state_normal);
           return true;

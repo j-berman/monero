@@ -113,6 +113,7 @@ class connection_basic { // not-templated base class for rapid developmet of som
     volatile bool m_is_multithreaded;
     /// Strand to ensure the connection's handlers are not called concurrently.
     boost::asio::io_service::strand strand_;
+    boost::asio::io_service::strand callback_strand_;
     /// Socket for the connection.
     boost::asio::ssl::stream<boost::asio::ip::tcp::socket> socket_;
     ssl_support_t m_ssl_support;
