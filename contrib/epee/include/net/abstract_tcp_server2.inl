@@ -798,13 +798,8 @@ namespace net_utils
     // Initiate graceful connection closure.
     m_timer.cancel();
     boost::system::error_code ignored_ec;
-    if (m_ssl_support == epee::net_utils::ssl_support_t::e_ssl_support_enabled)
-    {
-      const shared_state &state = static_cast<const shared_state&>(get_state());
-      if (!state.stop_signal_sent)
-        socket_.shutdown(ignored_ec);
-    }
     socket().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored_ec);
+    socket().close(ignored_ec);
     if (!m_host.empty())
     {
       try { host_count(m_host, -1); } catch (...) { /* ignore */ }

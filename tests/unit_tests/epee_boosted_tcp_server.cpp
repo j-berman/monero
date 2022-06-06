@@ -462,3 +462,63 @@ TEST(test_epee_connection, test_lifetime)
   server.timed_wait_server_stop(5 * 1000);
   server.deinit_server();
 }
+
+TEST(test_epee_connection, ssl_shutdown)
+{
+  struct context_t: epee::net_utils::connection_context_base {
+    static constexpr size_t get_max_bytes(int) noexcept { return -1; }
+    static constexpr int handshake_command() noexcept { return 1001; }
+    static constexpr bool handshake_complete() noexcept { return true; }
+  };
+
+  struct command_handler_t: epee::levin::levin_commands_handler<context_t> {
+    virtual int invoke(int, const epee::span<const uint8_t>, epee::byte_stream&, context_t&) override { return {}; }
+    virtual int notify(int, const epee::span<const uint8_t>, context_t&) override { return {}; }
+    virtual void callback(context_t&) override {}
+    virtual void on_connection_new(context_t&) override {}
+    virtual void on_connection_close(context_t&) override { }
+    virtual ~command_handler_t() override {}
+    static void destroy(epee::levin::levin_commands_handler<context_t>* ptr) { delete ptr; }
+  };
+
+  using handler_t = epee::levin::async_protocol_handler<context_t>;
+  using io_context_t = boost::asio::io_service;
+  using endpoint_t = boost::asio::ip::tcp::endpoint;
+  using server_t = epee::net_utils::boosted_tcp_server<handler_t>;
+  using socket_t = boost::asio::ip::tcp::socket;
+  using ssl_socket_t = boost::asio::ssl::stream<socket_t>;
+  using ssl_context_t = boost::asio::ssl::context;
+  using ec_t = boost::system::error_code;
+
+  endpoint_t endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 5263);
+  server_t server(epee::net_utils::e_connection_type_P2P);
+  server.init_server(endpoint.port(),
+    endpoint.address().to_string(),
+    0,
+    "",
+    false,
+    true,
+    epee::net_utils::ssl_support_t::e_ssl_support_enabled
+  );
+  server.get_config_shared()->set_handler(new command_handler_t, &command_handler_t::destroy);
+  server.run_server(2, false);
+
+  ssl_context_t ssl_context{boost::asio::ssl::context::sslv23};
+  io_context_t io_context;
+  ssl_socket_t socket(io_context, ssl_context);
+  ec_t ec;
+  socket.next_layer().connect(endpoint, ec);
+  EXPECT_EQ(ec.value(), 0);
+  socket.handshake(boost::asio::ssl::stream_base::client, ec);
+  EXPECT_EQ(ec.value(), 0);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  while (server.get_config_shared()->get_connections_count() < 1);
+  server.get_config_shared()->del_in_connections(1);
+  while (server.get_config_shared()->get_connections_count() > 0);
+  server.send_stop_signal();
+  EXPECT_TRUE(server.timed_wait_server_stop(5 * 1000));
+  server.deinit_server();
+  socket.next_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+  socket.next_layer().close(ec);
+  socket.shutdown(ec);
+}
