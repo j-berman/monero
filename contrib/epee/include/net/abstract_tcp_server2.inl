@@ -241,7 +241,7 @@ namespace net_utils
     if(!self)
       return false;
 
-    strand_.post(boost::bind(&connection<t_protocol_handler>::call_back_starter, self));
+    callback_strand_.post(boost::bind(&connection<t_protocol_handler>::call_back_starter, self));
     CATCH_ENTRY_L0("connection<t_protocol_handler>::request_callback()", false);
     return true;
   }
@@ -372,7 +372,13 @@ namespace net_utils
       logger_handle_net_read(bytes_transferred);
       context.m_last_recv = time(NULL);
       context.m_recv_cnt += bytes_transferred;
-      m_ready_to_close = false;
+
+    m_ready_to_close = false;
+    auto self = safe_shared_from_this();
+    if(!self)
+      return;
+    callback_strand_.post(
+    [this, self, bytes_transferred]{
       bool recv_res = m_protocol_handler.handle_recv(buffer_.data(), bytes_transferred);
       if(!recv_res)
       {  
@@ -391,11 +397,13 @@ namespace net_utils
         reset_timer(get_timeout_from_bytes_read(bytes_transferred), false);
         async_read_some(boost::asio::buffer(buffer_),
           strand_.wrap(
-            boost::bind(&connection<t_protocol_handler>::handle_read, connection<t_protocol_handler>::shared_from_this(),
+            boost::bind(&connection<t_protocol_handler>::handle_read, self,
               boost::asio::placeholders::error,
               boost::asio::placeholders::bytes_transferred)));
         //_info("[sock " << socket().native_handle() << "]Async read requested.");
       }
+    }
+    );
     }else
     {
       _dbg3("[sock " << socket().native_handle() << "] Some not success at read: " << e.message() << ':' << e.value());

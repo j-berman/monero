@@ -462,3 +462,133 @@ TEST(test_epee_connection, test_lifetime)
   server.timed_wait_server_stop(5 * 1000);
   server.deinit_server();
 }
+
+TEST(boosted_tcp_server, strand_deadlock)
+{
+  using context_t = epee::net_utils::connection_context_base;
+  using lock_t = std::mutex;
+  using unique_lock_t = std::unique_lock<lock_t>;
+
+  struct config_t {
+    using condition_t = std::condition_variable_any;
+    using lock_guard_t = std::lock_guard<lock_t>;
+    void notify_success()
+    {
+      lock_guard_t guard(lock);
+      success = true;
+      condition.notify_all();
+    }
+    lock_t lock;
+    condition_t condition;
+    bool success;
+  };
+
+  struct handler_t {
+    using config_type = config_t;
+    using connection_context = context_t;
+    using byte_slice_t = epee::byte_slice;
+    using socket_t = epee::net_utils::i_service_endpoint;
+
+    handler_t(socket_t *socket, config_t &config, context_t &context):
+      socket(socket),
+      config(config),
+      context(context)
+    {}
+    void after_init_connection()
+    {
+      unique_lock_t guard(lock);
+      if (not context.m_is_income) {
+        guard.unlock();
+        socket->do_send(byte_slice_t{"."});
+      }
+    }
+    void handle_qued_callback()
+    {
+    }
+    bool handle_recv(const char *data, size_t bytes_transferred)
+    {
+      unique_lock_t guard(lock);
+      if (not context.m_is_income) {
+        if (context.m_recv_cnt == 1024) {
+          guard.unlock();
+          socket->do_send(byte_slice_t{"."});
+        }
+      }
+      else {
+        if (context.m_recv_cnt == 1) {
+          for(size_t i = 0; i < 1024; ++i) {
+            guard.unlock();
+            socket->do_send(byte_slice_t{"."});
+            guard.lock();
+          }
+        }
+        else if(context.m_recv_cnt == 2) {
+          guard.unlock();
+          socket->close();
+        }
+      }
+      return true;
+    }
+    void release_protocol()
+    {
+      unique_lock_t guard(lock);
+      if(not context.m_is_income
+        and context.m_recv_cnt == 1024
+        and context.m_send_cnt == 2
+      ) {
+        guard.unlock();
+        config.notify_success();
+      }
+    }
+
+    lock_t lock;
+    socket_t *socket;
+    config_t &config;
+    context_t &context;
+  };
+
+  using server_t = epee::net_utils::boosted_tcp_server<handler_t>;
+  using endpoint_t = boost::asio::ip::tcp::endpoint;
+
+  endpoint_t endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 5262);
+  server_t server(epee::net_utils::e_connection_type_P2P);
+  server.init_server(
+    endpoint.port(),
+    endpoint.address().to_string(),
+    {},
+    {},
+    {},
+    true,
+    epee::net_utils::ssl_support_t::e_ssl_support_disabled
+  );
+  server.run_server(2, {});
+  server.async_call(
+    [&]{
+      context_t context;
+      ASSERT_TRUE(
+        server.connect(
+          endpoint.address().to_string(),
+          std::to_string(endpoint.port()),
+          5,
+          context,
+          "0.0.0.0",
+          epee::net_utils::ssl_support_t::e_ssl_support_disabled
+        )
+      );
+    }
+  );
+  {
+    unique_lock_t guard(server.get_config_object().lock);
+    EXPECT_TRUE(
+      server.get_config_object().condition.wait_for(
+        guard,
+        std::chrono::seconds(5),
+        [&] { return server.get_config_object().success; }
+      )
+    );
+  }
+
+  server.send_stop_signal();
+  server.timed_wait_server_stop(5 * 1000);
+  server.deinit_server();
+}
