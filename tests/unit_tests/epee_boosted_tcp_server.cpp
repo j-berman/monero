@@ -462,3 +462,50 @@ TEST(test_epee_connection, test_lifetime)
   server.timed_wait_server_stop(5 * 1000);
   server.deinit_server();
 }
+
+TEST(test_epee_connection, ssl_handshake)
+{
+  using io_context_t = boost::asio::io_service;
+  using work_t = boost::asio::io_service::work;
+  using work_ptr = std::shared_ptr<work_t>;
+  using workers_t = std::vector<std::thread>;
+  using socket_t = boost::asio::ip::tcp::socket;
+  using ssl_socket_t = boost::asio::ssl::stream<socket_t>;
+  using ssl_socket_ptr = std::unique_ptr<ssl_socket_t>;
+  using ssl_options_t = epee::net_utils::ssl_options_t;
+  io_context_t io_context;
+  work_ptr work(std::make_shared<work_t>(io_context));
+  workers_t workers;
+  auto constexpr N = 2;
+  while (workers.size() < N) {
+    workers.emplace_back([&io_context]{
+      io_context.run();
+    });
+  }
+  ssl_options_t ssl_options{{}};
+  auto ssl_context = ssl_options.create_context();
+  for (size_t i = 0; i < N * N * N; ++i) {
+    ssl_socket_ptr ssl_socket(new ssl_socket_t(io_context, ssl_context));
+    ssl_socket->next_layer().open(boost::asio::ip::tcp::v4());
+    for (size_t i = 0; i < N; ++i) {
+      io_context.post([]{
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      });
+    }
+    EXPECT_EQ(
+      ssl_options.handshake(
+        *ssl_socket,
+        ssl_socket_t::server,
+        {},
+        {},
+        std::chrono::milliseconds(0)
+      ),
+      false
+    );
+    ssl_socket->next_layer().close();
+    ssl_socket.reset();
+  }
+  work.reset();
+  for (;workers.size(); workers.pop_back())
+    workers.back().join();
+}
