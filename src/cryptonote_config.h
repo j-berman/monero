@@ -254,11 +254,8 @@ namespace config
   const unsigned char HASH_KEY_MM_SLOT = 'm';
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS_SEED[] = "multisig_tx_privkeys_seed";
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS[] = "multisig_tx_privkeys";
-  const constexpr char HASH_KEY_CONCISE_GROOTLE_TRANSCRIPT[] = "concise_grootle_transcript";
-  const constexpr char HASH_KEY_GROOTLE_Hi[] = "grootle_Hi";
   const constexpr char HASH_KEY_SERAPHIS_U[] = "seraphis_U";
   const constexpr char HASH_KEY_SERAPHIS_X[] = "seraphis_X";
-  const constexpr char HASH_KEY_SP_COMPOSITION_PROOF_TRANSCRIPT[] = "seraphis_composition_proof_transcript";
   const constexpr char HASH_KEY_SERAPHIS_SQUASHED_ENOTE[] = "seraphis_squashed_enote";
   const constexpr char HASH_KEY_MULTISIG_BINONCE_MERGE_FACTOR[] = "multisig_binonce_merge_factor";
   const constexpr char HASH_KEY_JAMTIS_GENERATEADDRESS_SECRET[] = "jamtis_generate_address_secret";
