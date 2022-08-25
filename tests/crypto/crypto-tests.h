@@ -36,9 +36,6 @@
 extern "C" {
 #endif
 
-#include <stdbool.h>
-#include <stdint.h>
-
 void setup_random(void);
 
 #if defined(__cplusplus)

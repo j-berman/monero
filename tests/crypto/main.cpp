@@ -66,6 +66,10 @@ int main(int argc, char *argv[]) {
   size_t test = 0;
   bool error = false;
   setup_random();
+  if (argc != 2) {
+    cerr << "invalid arguments" << endl;
+    return 1;
+  }
   input.open(argv[1], ios_base::in);
   for (;;) {
     ++test;
@@ -274,14 +278,13 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else {
-      goto error;
+      throw ios_base::failure("Unknown function: " + cmd);
     }
     continue;
 error:
     cerr << "Wrong result on test " << test << endl;
     error = true;
-    break;
   }
   return error ? 1 : 0;
-  CATCH_ENTRY_L0("main", 0);
+  CATCH_ENTRY_L0("main", 1);
 }
