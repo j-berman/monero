@@ -30,4 +30,3 @@
 
 #include "crypto/hash.c"
 #include "crypto/keccak.c"
-#include "crypto/siphash.c"

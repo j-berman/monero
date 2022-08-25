@@ -30,7 +30,6 @@ set(crypto_sources
   aesb.c
   blake256.c
   blake2b.c
-  blowfish.c
   chacha.c
   crypto-ops-data.c
   crypto-ops.c
@@ -47,12 +46,10 @@ set(crypto_sources
   keccak.c
   oaes_lib.c
   random.c
-  siphash.c
   skein.c
   slow-hash.c
   rx-slow-hash.c
   CryptonightR_JIT.c
-  tiny_aes.c
   tree-hash.c
   twofish.c)
 

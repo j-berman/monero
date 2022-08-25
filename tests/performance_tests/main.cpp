@@ -71,7 +71,6 @@
 #include "seraphis_tx.h"
 #include "grootle.h"
 #include "view_scan.h"
-#include "blowfish.h"
 
 namespace po = boost::program_options;
 
@@ -136,10 +135,6 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE0(filter, p_client_scan, test_remote_scanner_client_scan_sp);
   p_client_scan.mode = ScannerClientModes::ONE_OWNED;
   TEST_PERFORMANCE0(filter, p_client_scan, test_remote_scanner_client_scan_sp);
-
-  // test blowfish performance for single blocks
-  TEST_PERFORMANCE0(filter, p, test_blowfish_address_id);
-  TEST_PERFORMANCE0(filter, p, test_blowfish_context_init);
 
   // test done, save results
   if (p.core_params.td.get())

@@ -36,9 +36,6 @@
 //local headers
 extern "C"
 {
-//#include "crypto/blowfish.h"
-//#include "crypto/oaes_lib.h"
-//#include "crypto/tiny_aes.h"
 #include "crypto/twofish.h"
 }
 #include "jamtis_support_types.h"
@@ -78,14 +75,6 @@ public:
 //member variables
 private:
     Twofish_key m_twofish_key;
-
-    //AES_ctx m_aes_context;
-
-    //oaes_ctx *m_aes_context;
-
-    //BLOWFISH_CTX m_blowfish_context;
-
-    //unsigned char m_siphash_key[16];
 };
 
 /// try to get j from an address tag representation (fails if MAC != 0)

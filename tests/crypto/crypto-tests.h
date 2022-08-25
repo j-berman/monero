@@ -40,14 +40,6 @@ extern "C" {
 #include <stdint.h>
 
 void setup_random(void);
-int siphash_test(void);
-bool check_blowfish_block(uint8_t *key,
-    unsigned int key_length,
-    uint32_t L_enc,
-    uint32_t R_enc,
-    uint32_t L_expected,
-    uint32_t R_expected);
-bool blowfish_test(void);
 
 #if defined(__cplusplus)
 }
