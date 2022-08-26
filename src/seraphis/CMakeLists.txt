@@ -81,6 +81,8 @@ set(seraphis_sources
 
 monero_find_all_headers(seraphis_headers, "${CMAKE_CURRENT_SOURCE_DIR}")
 
+include_directories(${MX25519_INCLUDE})
+
 monero_add_library(seraphis
   ${seraphis_sources}
   ${seraphis_headers})
@@ -102,5 +104,4 @@ target_include_directories(seraphis
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
   PRIVATE
-    ${Boost_INCLUDE_DIRS}
-    ${MX25519_INCLUDE})
+    ${Boost_INCLUDE_DIRS})
