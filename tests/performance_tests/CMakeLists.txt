@@ -61,8 +61,6 @@ set(performance_tests_headers
   seraphis_tx.h
   view_scan.h)
 
-include_directories(${MX25519_INCLUDE})
-
 monero_add_minimal_executable(performance_tests
   ${performance_tests_sources}
   ${performance_tests_headers})
@@ -73,7 +71,6 @@ target_link_libraries(performance_tests
     common
     cncrypto
     epee
-    mx25519
     randomx
     ringct
     seraphis

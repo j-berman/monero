@@ -94,7 +94,7 @@ x25519_secret_key x25519_eight()
     return X25519_EIGHT;
 }
 //-------------------------------------------------------------------------------------------------------------------
-x25519_secret_key x25519_privkey_gen()
+x25519_secret_key x25519_secret_key_gen()
 {
     x25519_secret_key privkey;
     crypto::rand(32, privkey.data);
@@ -106,30 +106,30 @@ x25519_secret_key x25519_privkey_gen()
 //-------------------------------------------------------------------------------------------------------------------
 x25519_pubkey x25519_pubkey_gen()
 {
-    const x25519_secret_key privkey{x25519_privkey_gen()};
+    const x25519_secret_key privkey{x25519_secret_key_gen()};
     x25519_pubkey pubkey;
     x25519_scmul_base(privkey, pubkey);
 
     return pubkey;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool x25519_privkey_is_canonical(const x25519_privkey &test_privkey)
+bool x25519_scalar_is_canonical(const x25519_scalar &test_privkey)
 {
     //todo: is this constant time?
     return (test_privkey.data[0] & 7) == 0 &&
         (test_privkey.data[31] & 128) == 0;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void x25519_scmul_base(const x25519_privkey &privkey, x25519_pubkey &result_out)
+void x25519_scmul_base(const x25519_scalar &scalar, x25519_pubkey &result_out)
 {
     static const mx25519_impl* impl{mx25519_select_impl(mx25519_type::MX25519_TYPE_AUTO)};
-    mx25519_scmul_base(impl, &result_out, &privkey);
+    mx25519_scmul_base(impl, &result_out, &scalar);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void x25519_scmul_key(const x25519_privkey &privkey, const x25519_pubkey &pubkey, x25519_pubkey &result_out)
+void x25519_scmul_key(const x25519_scalar &scalar, const x25519_pubkey &pubkey, x25519_pubkey &result_out)
 {
     static const mx25519_impl* impl{mx25519_select_impl(mx25519_type::MX25519_TYPE_AUTO)};
-    mx25519_scmul_key(impl, &result_out, &privkey, &pubkey);
+    mx25519_scmul_key(impl, &result_out, &scalar, &pubkey);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void x25519_invmul_key(std::vector<x25519_secret_key> privkeys_to_invert,

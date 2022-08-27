@@ -63,19 +63,19 @@ struct x25519_pubkey : public mx25519_pubkey
     x25519_pubkey(const mx25519_pubkey &other) { memcpy(data, other.data, 32); }
     x25519_pubkey& operator=(const mx25519_pubkey &other) { *this = x25519_pubkey{other}; return *this; }
 };
-struct x25519_privkey : public  mx25519_privkey
+struct x25519_scalar : public  mx25519_privkey
 {
-    x25519_privkey() = default;
-    x25519_privkey(const mx25519_privkey &other) { memcpy(data, other.data, 32); }
-    x25519_privkey& operator=(const mx25519_privkey &other) { *this = x25519_privkey{other}; return *this; }
+    x25519_scalar() = default;
+    x25519_scalar(const mx25519_privkey &other) { memcpy(data, other.data, 32); }
+    x25519_scalar& operator=(const mx25519_privkey &other) { *this = x25519_scalar{other}; return *this; }
 };
-struct x25519_secret_key : public epee::mlocked<tools::scrubbed<x25519_privkey>> {};
+struct x25519_secret_key : public epee::mlocked<tools::scrubbed<x25519_scalar>> {};
 
-}
+} //namespace sp
 
 /// upgrade x25519 keys
 CRYPTO_MAKE_HASHABLE(sp, x25519_pubkey)
-CRYPTO_MAKE_HASHABLE_CONSTANT_TIME(sp, x25519_privkey)
+CRYPTO_MAKE_HASHABLE_CONSTANT_TIME(sp, x25519_scalar)
 CRYPTO_MAKE_HASHABLE_CONSTANT_TIME(sp, x25519_secret_key)
 
 namespace sp
@@ -113,34 +113,34 @@ rct::key minus_one();
 */
 x25519_secret_key x25519_eight();
 /**
-* brief: x25519_privkey_gen - generate a random x25519 privkey
+* brief: x25519_secret_key_gen - generate a random x25519 privkey
 * return: random canonical x25519 privkey
 */
-x25519_secret_key x25519_privkey_gen();
+x25519_secret_key x25519_secret_key_gen();
 /**
 * brief: x25519_pubkey_gen - generate a random x25519 pubkey
 * return: random x25519 pubkey
 */
 x25519_pubkey x25519_pubkey_gen();
 /**
-* brief: x25519_privkey_is_canonical - check that an X25519 privkey is canonical
+* brief: x25519_scalar_is_canonical - check that an X25519 privkey is canonical
 *   2^255 > xkey >= 8 (i.e. last bit and first three bits not set)
 * result: true if input key is canonical
 */
-bool x25519_privkey_is_canonical(const x25519_privkey &test_privkey);
+bool x25519_scalar_is_canonical(const x25519_scalar &test_privkey);
 /**
 * brief: x25519_scmul_base - compute privkey * xG
 * param: privkey - scalar to multiply
 * result: privkey * xG
 */
-void x25519_scmul_base(const x25519_privkey &privkey, x25519_pubkey &result_out);
+void x25519_scmul_base(const x25519_scalar &privkey, x25519_pubkey &result_out);
 /**
 * brief: x25519_scmul_key - compute privkey * pubkey
 * param: privkey - scalar to multiply
 * param: pubkey - public key to multiple against
 * result: privkey * pubkey
 */
-void x25519_scmul_key(const x25519_privkey &privkey, const x25519_pubkey &pubkey, x25519_pubkey &result_out);
+void x25519_scmul_key(const x25519_scalar &privkey, const x25519_pubkey &pubkey, x25519_pubkey &result_out);
 /**
 * brief: x25519_invmul_key - compute (1/({privkey1 * privkey2 * ...})) * initial_pubkey
 * param: privkeys_to_invert - {privkey1, privkey2, ...}

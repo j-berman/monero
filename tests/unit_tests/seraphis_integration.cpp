@@ -106,7 +106,7 @@ static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amou
     payment_proposal_out = JamtisPaymentProposalV1{
             .m_destination = destination,
             .m_amount = outlay_amount,
-            .m_enote_ephemeral_privkey = x25519_privkey_gen(),
+            .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
             .m_partial_memo = partial_memo_for_destination
         };
 }

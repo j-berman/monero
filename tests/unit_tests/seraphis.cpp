@@ -88,7 +88,7 @@ static void make_secret_key(crypto::secret_key &skey_out)
 //-------------------------------------------------------------------------------------------------------------------
 static void make_secret_key(sp::x25519_secret_key &skey_out)
 {
-    skey_out = sp::x25519_privkey_gen();
+    skey_out = sp::x25519_secret_key_gen();
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -557,7 +557,7 @@ TEST(seraphis, information_recovery_enote_v1_plain)
 
     // make a plain enote paying to address
     const rct::xmr_amount amount{crypto::rand_idx(static_cast<rct::xmr_amount>(-1))};
-    const x25519_secret_key enote_privkey{x25519_privkey_gen()};
+    const x25519_secret_key enote_privkey{x25519_secret_key_gen()};
 
     JamtisPaymentProposalV1 payment_proposal{user_address, amount, enote_privkey};
     SpOutputProposalV1 output_proposal;
@@ -590,7 +590,7 @@ TEST(seraphis, information_recovery_enote_v1_selfsend)
 
     // make a self-spend enote paying to address
     rct::xmr_amount amount{crypto::rand_idx(static_cast<rct::xmr_amount>(-1))};
-    x25519_secret_key enote_privkey{x25519_privkey_gen()};
+    x25519_secret_key enote_privkey{x25519_secret_key_gen()};
 
     JamtisPaymentProposalSelfSendV1 payment_proposal_selfspend{user_address,
         amount,
@@ -604,7 +604,7 @@ TEST(seraphis, information_recovery_enote_v1_selfsend)
 
     // make a change enote paying to address
     amount = crypto::rand_idx(static_cast<rct::xmr_amount>(-1));
-    enote_privkey = x25519_privkey_gen();
+    enote_privkey = x25519_secret_key_gen();
 
     JamtisPaymentProposalSelfSendV1 payment_proposal_change{user_address,
         amount,

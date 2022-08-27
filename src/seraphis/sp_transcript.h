@@ -182,10 +182,10 @@ public:
         append_label(label);
         append_buffer(key_image_buffer.data, sizeof(key_image_buffer));
     }
-    void append(const boost::string_ref label, const x25519_privkey &x25519_privkey_buffer)
+    void append(const boost::string_ref label, const x25519_scalar &x25519_scalar_buffer)
     {
         append_label(label);
-        append_buffer(x25519_privkey_buffer.data, sizeof(x25519_privkey_buffer));
+        append_buffer(x25519_scalar_buffer.data, sizeof(x25519_scalar_buffer));
     }
     void append(const boost::string_ref label, const x25519_pubkey &x25519_pubkey_buffer)
     {

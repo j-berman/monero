@@ -66,7 +66,7 @@ void JamtisPaymentProposalV1::get_enote_ephemeral_pubkey(x25519_pubkey &enote_ep
     // sanity checks
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(m_enote_ephemeral_privkey.data),
         "jamtis payment proposal: invalid enote ephemeral privkey (zero).");
-    CHECK_AND_ASSERT_THROW_MES(x25519_privkey_is_canonical(m_enote_ephemeral_privkey),
+    CHECK_AND_ASSERT_THROW_MES(x25519_scalar_is_canonical(m_enote_ephemeral_privkey),
         "jamtis payment proposal: invalid enote ephemeral privkey (not canonical).");
 
     // enote ephemeral pubkey: xK_e = xr xK_3
@@ -79,7 +79,7 @@ void JamtisPaymentProposalV1::get_output_proposal_v1(const rct::key &input_conte
     // 1. sanity checks
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(m_enote_ephemeral_privkey.data),
         "jamtis payment proposal: invalid enote ephemeral privkey (zero).");
-    CHECK_AND_ASSERT_THROW_MES(x25519_privkey_is_canonical(m_enote_ephemeral_privkey),
+    CHECK_AND_ASSERT_THROW_MES(x25519_scalar_is_canonical(m_enote_ephemeral_privkey),
         "jamtis payment proposal: invalid enote ephemeral privkey (not canonical).");
 
     // 2. enote ephemeral pubkey: xK_e = xr xK_3
@@ -136,7 +136,7 @@ void JamtisPaymentProposalV1::gen(const rct::xmr_amount amount, const std::size_
 {
     m_destination.gen();
     m_amount = amount;
-    m_enote_ephemeral_privkey = x25519_privkey_gen();
+    m_enote_ephemeral_privkey = x25519_secret_key_gen();
 
     std::vector<ExtraFieldElement> memo_elements;
     memo_elements.resize(num_random_memo_elements);
@@ -150,7 +150,7 @@ void JamtisPaymentProposalSelfSendV1::get_enote_ephemeral_pubkey(x25519_pubkey &
     // sanity checks
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(m_enote_ephemeral_privkey.data),
         "jamtis payment proposal self-send: invalid enote ephemeral privkey (zero).");
-    CHECK_AND_ASSERT_THROW_MES(x25519_privkey_is_canonical(m_enote_ephemeral_privkey),
+    CHECK_AND_ASSERT_THROW_MES(x25519_scalar_is_canonical(m_enote_ephemeral_privkey),
         "jamtis payment proposal self-send: invalid enote ephemeral privkey (not canonical).");
 
     // enote ephemeral pubkey: xK_e = xr xK_3
@@ -164,7 +164,7 @@ void JamtisPaymentProposalSelfSendV1::get_output_proposal_v1(const crypto::secre
     // 1. sanity checks
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(m_enote_ephemeral_privkey.data),
         "jamtis payment proposal self-send: invalid enote ephemeral privkey (zero).");
-    CHECK_AND_ASSERT_THROW_MES(x25519_privkey_is_canonical(m_enote_ephemeral_privkey),
+    CHECK_AND_ASSERT_THROW_MES(x25519_scalar_is_canonical(m_enote_ephemeral_privkey),
         "jamtis payment proposal self-send: invalid enote ephemeral privkey (not canonical).");
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(viewbalance_privkey)),
         "jamtis payment proposal self-send: invalid view-balance privkey (zero).");
@@ -241,7 +241,7 @@ void JamtisPaymentProposalSelfSendV1::gen(const rct::xmr_amount amount,
     m_destination.gen();
     m_amount = amount;
     m_type = type;
-    m_enote_ephemeral_privkey = x25519_privkey_gen();
+    m_enote_ephemeral_privkey = x25519_secret_key_gen();
 
     std::vector<ExtraFieldElement> memo_elements;
     memo_elements.resize(num_random_memo_elements);

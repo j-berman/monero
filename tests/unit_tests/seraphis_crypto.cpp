@@ -251,13 +251,13 @@ TEST(seraphis_crypto, multiexp_utility)
 TEST(seraphis_crypto, x25519_sample_tests)
 {
     // 1. x25519 private keys are byte buffers like rct::key
-    sp::x25519_privkey test1;
+    sp::x25519_scalar test1;
     const rct::key testrct{rct::skGen()};
     memcpy(test1.data, testrct.bytes, 32);
     ASSERT_TRUE(memcmp(test1.data, testrct.bytes, 32) == 0);
 
     // 2. x * G == x * G
-    sp::x25519_privkey test2_privkey;
+    sp::x25519_scalar test2_privkey;
     crypto::rand(32, test2_privkey.data);
 
     sp::x25519_pubkey test2_key_port1;
@@ -280,12 +280,12 @@ TEST(seraphis_crypto, x25519_sample_tests)
     // 3. derive canonical x25519 scalar: H_n_x25519[k](x)
     for (int i{0}; i < 1000; ++i)
     {
-        sp::x25519_privkey test3_privkey;
+        sp::x25519_scalar test3_scalar;
         const rct::key test3_derivation_key{rct::skGen()};
         std::string test3_data{};
 
-        sp::sp_derive_x25519_key(test3_derivation_key.bytes, test3_data, test3_privkey.data);
-        ASSERT_TRUE(sp::x25519_privkey_is_canonical(test3_privkey));
+        sp::sp_derive_x25519_key(test3_derivation_key.bytes, test3_data, test3_scalar.data);
+        ASSERT_TRUE(sp::x25519_scalar_is_canonical(test3_scalar));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------

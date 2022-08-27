@@ -105,7 +105,7 @@ static void make_additional_output_normal_dummy_v1(jamtis::JamtisPaymentProposal
     // make random payment proposal for a 'normal' dummy output
     dummy_proposal_out.m_destination.gen();
     dummy_proposal_out.m_amount = 0;
-    dummy_proposal_out.m_enote_ephemeral_privkey = x25519_privkey_gen();
+    dummy_proposal_out.m_enote_ephemeral_privkey = x25519_secret_key_gen();
     dummy_proposal_out.m_partial_memo = TxExtra{};
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ static void make_additional_output_normal_self_send_v1(const jamtis::JamtisSelfS
     selfsend_proposal_out.m_destination = destination;
     selfsend_proposal_out.m_amount = amount;
     selfsend_proposal_out.m_type = self_send_type;
-    selfsend_proposal_out.m_enote_ephemeral_privkey = x25519_privkey_gen();
+    selfsend_proposal_out.m_enote_ephemeral_privkey = x25519_secret_key_gen();
     selfsend_proposal_out.m_partial_memo = TxExtra{};
 }
 //-------------------------------------------------------------------------------------------------------------------

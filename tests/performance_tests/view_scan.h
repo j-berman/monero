@@ -200,7 +200,7 @@ public:
             user_address);
 
         // make enote paying to address
-        const sp::x25519_secret_key enote_privkey{sp::x25519_privkey_gen()};
+        const sp::x25519_secret_key enote_privkey{sp::x25519_secret_key_gen()};
         const sp::jamtis::JamtisPaymentProposalV1 payment_proposal{user_address, rct::xmr_amount{0}, enote_privkey};
         sp::SpOutputProposalV1 output_proposal;
         payment_proposal.get_output_proposal_v1(rct::zero(), output_proposal);
@@ -285,7 +285,7 @@ public:
         m_cipher_context = std::make_shared<sp::jamtis::jamtis_address_tag_cipher_context>(rct::sk2rct(m_keys.s_ct));
 
         // make enote paying to address
-        const sp::x25519_secret_key enote_privkey{sp::x25519_privkey_gen()};
+        const sp::x25519_secret_key enote_privkey{sp::x25519_secret_key_gen()};
         const sp::jamtis::JamtisPaymentProposalV1 payment_proposal{user_address, rct::xmr_amount{0}, enote_privkey};
         sp::SpOutputProposalV1 output_proposal;
         payment_proposal.get_output_proposal_v1(rct::zero(), output_proposal);

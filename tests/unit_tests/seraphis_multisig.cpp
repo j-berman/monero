@@ -343,7 +343,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         payment_proposal_temp = JamtisPaymentProposalV1{
                 .m_destination = user_address,
                 .m_amount = in_amount,
-                .m_enote_ephemeral_privkey = x25519_privkey_gen(),
+                .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
                 .m_partial_memo = TxExtra{}
             };
         payment_proposal_temp.get_output_proposal_v1(rct::zero(), output_proposal_temp);
@@ -415,7 +415,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                     .m_destination = user_address,
                     .m_amount = out_amount,
                     .m_type = JamtisSelfSendType::SELF_SPEND,
-                    .m_enote_ephemeral_privkey = x25519_privkey_gen(),
+                    .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
                     .m_partial_memo = TxExtra{}
                 }
             );
