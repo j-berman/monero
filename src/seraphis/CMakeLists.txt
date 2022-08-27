@@ -93,7 +93,7 @@ target_link_libraries(seraphis
     device
     epee
     multisig
-    mx25519
+    mx25519_static
     ringct
   PRIVATE
     ${EXTRA_LIBRARIES})
@@ -104,3 +104,7 @@ target_include_directories(seraphis
   PRIVATE
     ${Boost_INCLUDE_DIRS}
     ${MX25519_INCLUDE})
+
+target_compile_definitions(seraphis
+  PRIVATE
+    MX25519_STATIC)
