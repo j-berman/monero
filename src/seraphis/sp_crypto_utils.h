@@ -123,24 +123,24 @@ x25519_secret_key x25519_secret_key_gen();
 */
 x25519_pubkey x25519_pubkey_gen();
 /**
-* brief: x25519_scalar_is_canonical - check that an X25519 privkey is canonical
-*   2^255 > xkey >= 8 (i.e. last bit and first three bits not set)
-* result: true if input key is canonical
+* brief: x25519_scalar_is_canonical - check that an X25519 scalar is canonical
+*   2^255 > scalar >= 8 (i.e. last bit and first three bits not set)
+* result: true if input scalar is canonical
 */
-bool x25519_scalar_is_canonical(const x25519_scalar &test_privkey);
+bool x25519_scalar_is_canonical(const x25519_scalar &test_scalar);
 /**
-* brief: x25519_scmul_base - compute privkey * xG
-* param: privkey - scalar to multiply
-* result: privkey * xG
+* brief: x25519_scmul_base - compute scalar * xG
+* param: scalar - scalar to multiply
+* result: scalar * xG
 */
-void x25519_scmul_base(const x25519_scalar &privkey, x25519_pubkey &result_out);
+void x25519_scmul_base(const x25519_scalar &scalar, x25519_pubkey &result_out);
 /**
-* brief: x25519_scmul_key - compute privkey * pubkey
-* param: privkey - scalar to multiply
+* brief: x25519_scmul_key - compute scalar * pubkey
+* param: scalar - scalar to multiply
 * param: pubkey - public key to multiple against
-* result: privkey * pubkey
+* result: scalar * pubkey
 */
-void x25519_scmul_key(const x25519_scalar &privkey, const x25519_pubkey &pubkey, x25519_pubkey &result_out);
+void x25519_scmul_key(const x25519_scalar &scalar, const x25519_pubkey &pubkey, x25519_pubkey &result_out);
 /**
 * brief: x25519_invmul_key - compute (1/({privkey1 * privkey2 * ...})) * initial_pubkey
 * param: privkeys_to_invert - {privkey1, privkey2, ...}

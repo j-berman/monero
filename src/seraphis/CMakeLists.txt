@@ -104,7 +104,3 @@ target_include_directories(seraphis
   PRIVATE
     ${Boost_INCLUDE_DIRS}
     ${MX25519_INCLUDE})
-
-target_compile_definitions(seraphis
-  PRIVATE
-    MX25519_STATIC)
