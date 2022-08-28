@@ -35,9 +35,9 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "ringct/rctTypes.h"
 #include "seraphis_config_temp.h"
-#include "sp_crypto_utils.h"
 #include "wipeable_string.h"
 
 //third party headers
@@ -182,12 +182,12 @@ public:
         append_label(label);
         append_buffer(key_image_buffer.data, sizeof(key_image_buffer));
     }
-    void append(const boost::string_ref label, const x25519_scalar &x25519_scalar_buffer)
+    void append(const boost::string_ref label, const crypto::x25519_scalar &x25519_scalar_buffer)
     {
         append_label(label);
         append_buffer(x25519_scalar_buffer.data, sizeof(x25519_scalar_buffer));
     }
-    void append(const boost::string_ref label, const x25519_pubkey &x25519_pubkey_buffer)
+    void append(const boost::string_ref label, const crypto::x25519_pubkey &x25519_pubkey_buffer)
     {
         append_label(label);
         append_buffer(x25519_pubkey_buffer.data, sizeof(x25519_pubkey_buffer));

@@ -39,8 +39,8 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 
 //third party headers
 
@@ -62,13 +62,13 @@ struct jamtis_mock_keys
 {
     crypto::secret_key k_m;   //master
     crypto::secret_key k_vb;  //view-balance
-    x25519_secret_key xk_ua;  //unlock-amounts
-    x25519_secret_key xk_fr;  //find-received
+    crypto::x25519_secret_key xk_ua;  //unlock-amounts
+    crypto::x25519_secret_key xk_fr;  //find-received
     crypto::secret_key s_ga;  //generate-address
     crypto::secret_key s_ct;  //cipher-tag
     rct::key K_1_base;        //wallet spend base = k_vb X + k_m U
-    x25519_pubkey xK_ua;     //unlock-amounts pubkey = xk_ua xG
-    x25519_pubkey xK_fr;     //find-received pubkey = xk_fr xk_ua xG
+    crypto::x25519_pubkey xK_ua;     //unlock-amounts pubkey = xk_ua xG
+    crypto::x25519_pubkey xK_fr;     //find-received pubkey = xk_fr xk_ua xG
 };
 
 /**
@@ -78,7 +78,7 @@ struct jamtis_mock_keys
 * outparam: xk_unlock_amounts_out - xk_ua
 */
 void make_jamtis_unlockamounts_key(const crypto::secret_key &k_view_balance,
-    x25519_secret_key &xk_unlock_amounts_out);
+    crypto::x25519_secret_key &xk_unlock_amounts_out);
 /**
 * brief: make_jamtis_findreceived_key - find-received key, for finding enotes received by the wallet
 *   - use to compute view tags and nominal spend keys
@@ -87,7 +87,7 @@ void make_jamtis_unlockamounts_key(const crypto::secret_key &k_view_balance,
 * outparam: xk_find_received_out - xk_fr
 */
 void make_jamtis_findreceived_key(const crypto::secret_key &k_view_balance,
-    x25519_secret_key &xk_find_received_out);
+    crypto::x25519_secret_key &xk_find_received_out);
 /**
 * brief: make_jamtis_generateaddress_secret - generate-address secret, for generating addresses
 *   s_ga = H_32[k_vb]()

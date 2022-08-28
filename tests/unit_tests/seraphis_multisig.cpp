@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "crypto/generators.h"
 #include "multisig/account_generator_era.h"
 #include "multisig/multisig_account.h"
@@ -89,8 +90,8 @@ static void make_multisig_jamtis_mock_keys(const multisig::multisig_account &acc
     make_jamtis_ciphertag_secret(keys_out.s_ga, keys_out.s_ct);
     keys_out.K_1_base = rct::pk2rct(account.get_multisig_pubkey());
     extend_seraphis_spendkey(keys_out.k_vb, keys_out.K_1_base);
-    x25519_scmul_base(keys_out.xk_ua, keys_out.xK_ua);
-    x25519_scmul_key(keys_out.xk_fr, keys_out.xK_ua, keys_out.xK_fr);
+    crypto::x25519_scmul_base(keys_out.xk_ua, keys_out.xK_ua);
+    crypto::x25519_scmul_key(keys_out.xk_fr, keys_out.xK_ua, keys_out.xK_fr);
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -334,7 +335,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     SpOutputProposalV1 output_proposal_temp;
 
     std::vector<SpEnoteV1> input_enotes;
-    std::vector<x25519_pubkey> input_enote_ephemeral_pubkeys;
+    std::vector<crypto::x25519_pubkey> input_enote_ephemeral_pubkeys;
     input_enotes.reserve(in_amounts.size());
     input_enote_ephemeral_pubkeys.reserve(in_amounts.size());
 
@@ -343,7 +344,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         payment_proposal_temp = JamtisPaymentProposalV1{
                 .m_destination = user_address,
                 .m_amount = in_amount,
-                .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
+                .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
                 .m_partial_memo = TxExtra{}
             };
         payment_proposal_temp.get_output_proposal_v1(rct::zero(), output_proposal_temp);
@@ -415,7 +416,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                     .m_destination = user_address,
                     .m_amount = out_amount,
                     .m_type = JamtisSelfSendType::SELF_SPEND,
-                    .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
+                    .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
                     .m_partial_memo = TxExtra{}
                 }
             );

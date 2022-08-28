@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_address_tag_utils.h"
 #include "jamtis_address_utils.h"
 #include "jamtis_core_utils.h"
@@ -43,7 +44,6 @@
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 #include "tx_builder_types.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
@@ -61,7 +61,7 @@ namespace sp
 namespace jamtis
 {
 //-------------------------------------------------------------------------------------------------------------------
-void JamtisPaymentProposalV1::get_enote_ephemeral_pubkey(x25519_pubkey &enote_ephemeral_pubkey_out) const
+void JamtisPaymentProposalV1::get_enote_ephemeral_pubkey(crypto::x25519_pubkey &enote_ephemeral_pubkey_out) const
 {
     // sanity checks
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(m_enote_ephemeral_privkey.data),
@@ -86,10 +86,10 @@ void JamtisPaymentProposalV1::get_output_proposal_v1(const rct::key &input_conte
     this->get_enote_ephemeral_pubkey(output_proposal_out.m_enote_ephemeral_pubkey);
 
     // 3. derived key: xK_d = xr * xK_2
-    x25519_pubkey xK_d;
+    crypto::x25519_pubkey xK_d;
     auto xKd_wiper = epee::misc_utils::create_scope_leave_handler([&]{ memwipe(&xK_d, sizeof(xK_d)); });
 
-    x25519_scmul_key(m_enote_ephemeral_privkey, m_destination.m_addr_K2, xK_d);
+    crypto::x25519_scmul_key(m_enote_ephemeral_privkey, m_destination.m_addr_K2, xK_d);
 
     // 4. sender-receiver shared secret: q = H_32(xK_d, xK_e, input_context)
     rct::key q;
@@ -97,8 +97,10 @@ void JamtisPaymentProposalV1::get_output_proposal_v1(const rct::key &input_conte
     make_jamtis_sender_receiver_secret_plain(xK_d, output_proposal_out.m_enote_ephemeral_pubkey, input_context, q);
 
     // 5. enote amount baked key: xr xG
-    x25519_pubkey amount_baked_key;
-    auto bk_wiper = epee::misc_utils::create_scope_leave_handler([&]{ memwipe(&amount_baked_key, sizeof(x25519_pubkey)); });
+    crypto::x25519_pubkey amount_baked_key;
+    auto bk_wiper = epee::misc_utils::create_scope_leave_handler(
+            [&]{ memwipe(&amount_baked_key, sizeof(crypto::x25519_pubkey)); }
+        );
     make_jamtis_amount_baked_key_plain_sender(m_enote_ephemeral_privkey, amount_baked_key);
 
     // 6. amount blinding factor: y = H_n(q, xr xG)
@@ -136,7 +138,7 @@ void JamtisPaymentProposalV1::gen(const rct::xmr_amount amount, const std::size_
 {
     m_destination.gen();
     m_amount = amount;
-    m_enote_ephemeral_privkey = x25519_secret_key_gen();
+    m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen();
 
     std::vector<ExtraFieldElement> memo_elements;
     memo_elements.resize(num_random_memo_elements);
@@ -145,7 +147,7 @@ void JamtisPaymentProposalV1::gen(const rct::xmr_amount amount, const std::size_
     make_tx_extra(std::move(memo_elements), m_partial_memo);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void JamtisPaymentProposalSelfSendV1::get_enote_ephemeral_pubkey(x25519_pubkey &enote_ephemeral_pubkey_out) const
+void JamtisPaymentProposalSelfSendV1::get_enote_ephemeral_pubkey(crypto::x25519_pubkey &enote_ephemeral_pubkey_out) const
 {
     // sanity checks
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(m_enote_ephemeral_privkey.data),
@@ -224,8 +226,8 @@ void JamtisPaymentProposalSelfSendV1::get_output_proposal_v1(const crypto::secre
         encrypt_address_tag(q, output_proposal_out.m_core.m_onetime_address, raw_address_tag);
 
     // 10. derived key: xK_d = xr * xK_2
-    x25519_pubkey xK_d;
-    x25519_scmul_key(m_enote_ephemeral_privkey, m_destination.m_addr_K2, xK_d);
+    crypto::x25519_pubkey xK_d;
+    crypto::x25519_scmul_key(m_enote_ephemeral_privkey, m_destination.m_addr_K2, xK_d);
 
     // 11. view tag: view_tag = H_1(xK_d, Ko)
     make_jamtis_view_tag(xK_d, output_proposal_out.m_core.m_onetime_address, output_proposal_out.m_view_tag);
@@ -241,7 +243,7 @@ void JamtisPaymentProposalSelfSendV1::gen(const rct::xmr_amount amount,
     m_destination.gen();
     m_amount = amount;
     m_type = type;
-    m_enote_ephemeral_privkey = x25519_secret_key_gen();
+    m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen();
 
     std::vector<ExtraFieldElement> memo_elements;
     memo_elements.resize(num_random_memo_elements);

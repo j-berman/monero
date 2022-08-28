@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "cryptonote_config.h"
 #include "ringct/rctOps.h"
 #include "seraphis_config_temp.h"
@@ -55,7 +56,7 @@ namespace jamtis
 {
 //-------------------------------------------------------------------------------------------------------------------
 void make_jamtis_unlockamounts_key(const crypto::secret_key &k_view_balance,
-    x25519_secret_key &xk_unlock_amounts_out)
+    crypto::x25519_secret_key &xk_unlock_amounts_out)
 {
     // xk_ua = H_n_x25519[k_vb]()
     SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_UNLOCKAMOUNTS_KEY, 0};
@@ -63,7 +64,7 @@ void make_jamtis_unlockamounts_key(const crypto::secret_key &k_view_balance,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_jamtis_findreceived_key(const crypto::secret_key &k_view_balance,
-    x25519_secret_key &xk_find_received_out)
+    crypto::x25519_secret_key &xk_find_received_out)
 {
     // xk_fr = H_n_x25519[k_vb]()
     SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_FINDRECEIVED_KEY, 0};

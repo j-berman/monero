@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 extern "C"
 {
 #include "crypto/crypto-ops.h"
@@ -251,27 +252,27 @@ TEST(seraphis_crypto, multiexp_utility)
 TEST(seraphis_crypto, x25519_sample_tests)
 {
     // 1. x25519 private keys are byte buffers like rct::key
-    sp::x25519_scalar test1;
+    crypto::x25519_scalar test1;
     const rct::key testrct{rct::skGen()};
     memcpy(test1.data, testrct.bytes, 32);
     ASSERT_TRUE(memcmp(test1.data, testrct.bytes, 32) == 0);
 
     // 2. x * G == x * G
-    sp::x25519_scalar test2_privkey;
+    crypto::x25519_scalar test2_privkey;
     crypto::rand(32, test2_privkey.data);
 
-    sp::x25519_pubkey test2_key_port1;
-    sp::x25519_pubkey test2_key_port2;
-    sp::x25519_pubkey test2_key_auto1;
-    sp::x25519_pubkey test2_key_auto2;
+    crypto::x25519_pubkey test2_key_port1;
+    crypto::x25519_pubkey test2_key_port2;
+    crypto::x25519_pubkey test2_key_auto1;
+    crypto::x25519_pubkey test2_key_auto2;
 
-    sp::x25519_scmul_base(test2_privkey, test2_key_port1);
-    sp::x25519_scmul_base(test2_privkey, test2_key_auto1);
+    crypto::x25519_scmul_base(test2_privkey, test2_key_port1);
+    crypto::x25519_scmul_base(test2_privkey, test2_key_auto1);
 
-    const sp::x25519_pubkey generator_G{crypto::get_x25519_G()};
+    const crypto::x25519_pubkey generator_G{crypto::get_x25519_G()};
 
-    sp::x25519_scmul_key(test2_privkey, generator_G, test2_key_port2);
-    sp::x25519_scmul_key(test2_privkey, generator_G, test2_key_auto2);
+    crypto::x25519_scmul_key(test2_privkey, generator_G, test2_key_port2);
+    crypto::x25519_scmul_key(test2_privkey, generator_G, test2_key_auto2);
 
     ASSERT_TRUE(memcmp(&test2_key_port1, &test2_key_auto1, 32) == 0);
     ASSERT_TRUE(memcmp(&test2_key_port1, &test2_key_port2, 32) == 0);
@@ -280,12 +281,12 @@ TEST(seraphis_crypto, x25519_sample_tests)
     // 3. derive canonical x25519 scalar: H_n_x25519[k](x)
     for (int i{0}; i < 1000; ++i)
     {
-        sp::x25519_scalar test3_scalar;
+        crypto::x25519_scalar test3_scalar;
         const rct::key test3_derivation_key{rct::skGen()};
         std::string test3_data{};
 
         sp::sp_derive_x25519_key(test3_derivation_key.bytes, test3_data, test3_scalar.data);
-        ASSERT_TRUE(sp::x25519_scalar_is_canonical(test3_scalar));
+        ASSERT_TRUE(crypto::x25519_scalar_is_canonical(test3_scalar));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------

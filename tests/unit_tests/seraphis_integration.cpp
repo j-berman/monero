@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "misc_language.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
@@ -106,7 +107,7 @@ static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amou
     payment_proposal_out = JamtisPaymentProposalV1{
             .m_destination = destination,
             .m_amount = outlay_amount,
-            .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
+            .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
             .m_partial_memo = partial_memo_for_destination
         };
 }

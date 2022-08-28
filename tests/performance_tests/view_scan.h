@@ -29,6 +29,7 @@
 #pragma once
 
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "device/device.hpp"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
@@ -200,7 +201,7 @@ public:
             user_address);
 
         // make enote paying to address
-        const sp::x25519_secret_key enote_privkey{sp::x25519_secret_key_gen()};
+        const crypto::x25519_secret_key enote_privkey{crypto::x25519_secret_key_gen()};
         const sp::jamtis::JamtisPaymentProposalV1 payment_proposal{user_address, rct::xmr_amount{0}, enote_privkey};
         sp::SpOutputProposalV1 output_proposal;
         payment_proposal.get_output_proposal_v1(rct::zero(), output_proposal);
@@ -231,7 +232,7 @@ private:
     sp::jamtis::jamtis_mock_keys m_keys;
 
     sp::SpEnoteV1 m_enote;
-    sp::x25519_pubkey m_enote_ephemeral_pubkey;
+    crypto::x25519_pubkey m_enote_ephemeral_pubkey;
 
     bool m_test_view_tag_check;
 };
@@ -285,7 +286,7 @@ public:
         m_cipher_context = std::make_shared<sp::jamtis::jamtis_address_tag_cipher_context>(rct::sk2rct(m_keys.s_ct));
 
         // make enote paying to address
-        const sp::x25519_secret_key enote_privkey{sp::x25519_secret_key_gen()};
+        const crypto::x25519_secret_key enote_privkey{crypto::x25519_secret_key_gen()};
         const sp::jamtis::JamtisPaymentProposalV1 payment_proposal{user_address, rct::xmr_amount{0}, enote_privkey};
         sp::SpOutputProposalV1 output_proposal;
         payment_proposal.get_output_proposal_v1(rct::zero(), output_proposal);

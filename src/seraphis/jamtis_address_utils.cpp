@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "cryptonote_config.h"
 #include "seraphis_config_temp.h"
 #include "jamtis_address_tag_utils.h"
@@ -40,7 +41,6 @@
 #include "jamtis_support_types.h"
 #include "ringct/rctOps.h"
 #include "sp_core_enote_utils.h"
-#include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
 #include "sp_transcript.h"
 
@@ -69,7 +69,7 @@ void make_jamtis_spendkey_extension(const crypto::secret_key &s_generate_address
 //-------------------------------------------------------------------------------------------------------------------
 void make_jamtis_address_privkey(const crypto::secret_key &s_generate_address,
     const address_index_t j,
-    x25519_secret_key &address_privkey_out)
+    crypto::x25519_secret_key &address_privkey_out)
 {
     // xk^j_a = H_n_x25519[s_ga](j)
     SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_ADDRESS_PRIVKEY, ADDRESS_INDEX_BYTES};

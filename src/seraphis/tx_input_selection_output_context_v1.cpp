@@ -33,11 +33,11 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_payment_proposal.h"
 #include "jamtis_support_types.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 #include "tx_builders_outputs.h"
 
 //third party headers
@@ -60,8 +60,8 @@ static bool ephemeral_pubkeys_are_unique(const std::vector<jamtis::JamtisPayment
     const std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &selfsend_payment_proposals)
 {
     // record all as 8*K_e to remove torsion elements if they exist
-    std::unordered_set<x25519_pubkey> enote_ephemeral_pubkeys;
-    x25519_pubkey temp_enote_ephemeral_pubkey;
+    std::unordered_set<crypto::x25519_pubkey> enote_ephemeral_pubkeys;
+    crypto::x25519_pubkey temp_enote_ephemeral_pubkey;
 
     for (const jamtis::JamtisPaymentProposalV1 &normal_proposal : normal_payment_proposals)
     {

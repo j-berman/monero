@@ -33,9 +33,9 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_core_utils.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_scanning_utils.h"
 #include "tx_enote_store_mocks.h"
@@ -304,8 +304,8 @@ std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::get_top_block_heigh
 }
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterLedgerMockIntermediate::EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     SpEnoteStoreMockPaymentValidatorV1 &enote_store) :
         m_wallet_spend_pubkey{wallet_spend_pubkey},
@@ -367,8 +367,8 @@ std::uint64_t EnoteStoreUpdaterLedgerMockIntermediate::get_top_block_height() co
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterNonLedgerMockIntermediate::EnoteStoreUpdaterNonLedgerMockIntermediate(
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     SpEnoteStoreMockPaymentValidatorV1 &enote_store) :
         m_wallet_spend_pubkey{wallet_spend_pubkey},

@@ -35,6 +35,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "jamtis_support_types.h"
 #include "legacy_enote_types.h"
@@ -135,7 +136,7 @@ struct SpBasicEnoteRecordV1 final
     /// original enote
     SpEnoteV1 m_enote;
     /// the enote's ephemeral pubkey
-    x25519_pubkey m_enote_ephemeral_pubkey;
+    crypto::x25519_pubkey m_enote_ephemeral_pubkey;
     /// context of the tx input(s) associated with this enote
     rct::key m_input_context;
     /// t'_addr: nominal address tag
@@ -151,7 +152,7 @@ struct SpIntermediateEnoteRecordV1 final
     /// original enote
     SpEnoteV1 m_enote;
     /// the enote's ephemeral pubkey
-    x25519_pubkey m_enote_ephemeral_pubkey;
+    crypto::x25519_pubkey m_enote_ephemeral_pubkey;
     /// context of the tx input(s) associated with this enote
     rct::key m_input_context;
     /// a: amount
@@ -171,7 +172,7 @@ struct SpEnoteRecordV1 final
     /// original enote
     SpEnoteV1 m_enote;
     /// the enote's ephemeral pubkey
-    x25519_pubkey m_enote_ephemeral_pubkey;
+    crypto::x25519_pubkey m_enote_ephemeral_pubkey;
     /// context of the tx input(s) associated with this enote
     rct::key m_input_context;
     /// k_a: enote view privkey

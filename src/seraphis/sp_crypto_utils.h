@@ -34,15 +34,7 @@
 #pragma once
 
 //local headers
-extern "C"
-{
-#include "crypto/crypto-ops.h"
-#include "mx25519.h"
-}
 #include "crypto/crypto.h"
-#include "crypto/generic-ops.h"
-#include "memwipe.h"
-#include "mlocker.h"
 #include "ringct/rctTypes.h"
 
 //third party headers
@@ -52,31 +44,6 @@ extern "C"
 
 //forward declarations
 
-
-namespace sp
-{
-
-/// wrap x25519 implementation so MAKE_HASHABLE() macros work properly
-struct x25519_pubkey : public mx25519_pubkey
-{
-    x25519_pubkey() = default;
-    x25519_pubkey(const mx25519_pubkey &other) { memcpy(data, other.data, 32); }
-    x25519_pubkey& operator=(const mx25519_pubkey &other) { *this = x25519_pubkey{other}; return *this; }
-};
-struct x25519_scalar : public  mx25519_privkey
-{
-    x25519_scalar() = default;
-    x25519_scalar(const mx25519_privkey &other) { memcpy(data, other.data, 32); }
-    x25519_scalar& operator=(const mx25519_privkey &other) { *this = x25519_scalar{other}; return *this; }
-};
-struct x25519_secret_key : public epee::mlocked<tools::scrubbed<x25519_scalar>> {};
-
-} //namespace sp
-
-/// upgrade x25519 keys
-CRYPTO_MAKE_HASHABLE(sp, x25519_pubkey)
-CRYPTO_MAKE_HASHABLE_CONSTANT_TIME(sp, x25519_scalar)
-CRYPTO_MAKE_HASHABLE_CONSTANT_TIME(sp, x25519_secret_key)
 
 namespace sp
 {
@@ -107,49 +74,6 @@ static inline const rct::key& sortable2rct(const sortable_key &sortable)
 * return: -1 mod q
 */
 rct::key minus_one();
-/**
-* brief: x25519_eight - scalar 8
-* return: scalar 8
-*/
-x25519_secret_key x25519_eight();
-/**
-* brief: x25519_secret_key_gen - generate a random x25519 privkey
-* return: random canonical x25519 privkey
-*/
-x25519_secret_key x25519_secret_key_gen();
-/**
-* brief: x25519_pubkey_gen - generate a random x25519 pubkey
-* return: random x25519 pubkey
-*/
-x25519_pubkey x25519_pubkey_gen();
-/**
-* brief: x25519_scalar_is_canonical - check that an X25519 scalar is canonical
-*   2^255 > scalar >= 8 (i.e. last bit and first three bits not set)
-* result: true if input scalar is canonical
-*/
-bool x25519_scalar_is_canonical(const x25519_scalar &test_scalar);
-/**
-* brief: x25519_scmul_base - compute scalar * xG
-* param: scalar - scalar to multiply
-* result: scalar * xG
-*/
-void x25519_scmul_base(const x25519_scalar &scalar, x25519_pubkey &result_out);
-/**
-* brief: x25519_scmul_key - compute scalar * pubkey
-* param: scalar - scalar to multiply
-* param: pubkey - public key to multiple against
-* result: scalar * pubkey
-*/
-void x25519_scmul_key(const x25519_scalar &scalar, const x25519_pubkey &pubkey, x25519_pubkey &result_out);
-/**
-* brief: x25519_invmul_key - compute (1/({privkey1 * privkey2 * ...})) * initial_pubkey
-* param: privkeys_to_invert - {privkey1, privkey2, ...}
-* param: initial_pubkey - base key for inversion
-* result: (1/({privkey1 * privkey2 * ...})) * initial_pubkey
-*/
-void x25519_invmul_key(std::vector<x25519_secret_key> privkeys_to_invert,
-    const x25519_pubkey &initial_pubkey,
-    x25519_pubkey &result_out);
 /**
 * brief: invert - invert a nonzero scalar
 * param: x - scalar to invert

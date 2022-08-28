@@ -35,10 +35,10 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_destination.h"
 #include "jamtis_support_types.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 #include "tx_builder_types.h"
 #include "tx_extra.h"
 
@@ -67,7 +67,7 @@ struct JamtisPaymentProposalV1 final
     rct::xmr_amount m_amount;
 
     /// enote ephemeral privkey: xr
-    x25519_secret_key m_enote_ephemeral_privkey;
+    crypto::x25519_secret_key m_enote_ephemeral_privkey;
 
     /// memo elements to add to the tx memo
     TxExtra m_partial_memo;
@@ -76,7 +76,7 @@ struct JamtisPaymentProposalV1 final
     * brief: get_enote_ephemeral_pubkey - get this proposal's enote ephemeral pubkey sK_e
     * outparam: enote_ephemeral_pubkey_out -
     */
-    void get_enote_ephemeral_pubkey(x25519_pubkey &enote_ephemeral_pubkey_out) const;
+    void get_enote_ephemeral_pubkey(crypto::x25519_pubkey &enote_ephemeral_pubkey_out) const;
     /**
     * brief: get_output_proposal_v1 - convert this proposal to a concrete output proposal
     * param: input_context -
@@ -106,7 +106,7 @@ struct JamtisPaymentProposalSelfSendV1 final
     /// self-send type
     JamtisSelfSendType m_type;
     /// enote ephemeral privkey: xr
-    x25519_secret_key m_enote_ephemeral_privkey;
+    crypto::x25519_secret_key m_enote_ephemeral_privkey;
 
     /// memo elements to add to the tx memo
     TxExtra m_partial_memo;
@@ -115,7 +115,7 @@ struct JamtisPaymentProposalSelfSendV1 final
     * brief: get_enote_ephemeral_pubkey - get this proposal's enote ephemeral pubkey xK_e
     * outparam: enote_ephemeral_pubkey_out -
     */
-    void get_enote_ephemeral_pubkey(x25519_pubkey &enote_ephemeral_pubkey_out) const;
+    void get_enote_ephemeral_pubkey(crypto::x25519_pubkey &enote_ephemeral_pubkey_out) const;
     /**
     * brief: get_output_proposal_v1 - convert this proposal to a concrete output proposal
     * param: viewbalance_privkey -

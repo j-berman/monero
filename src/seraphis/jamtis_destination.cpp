@@ -33,13 +33,13 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_address_tag_utils.h"
 #include "jamtis_address_utils.h"
 #include "jamtis_core_utils.h"
 #include "jamtis_support_types.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 
 //third party headers
 
@@ -56,14 +56,14 @@ namespace jamtis
 void JamtisDestinationV1::gen()
 {
     m_addr_K1 = rct::pkGen();
-    m_addr_K2 = x25519_pubkey_gen();
-    m_addr_K3 = x25519_pubkey_gen();
+    m_addr_K2 = crypto::x25519_pubkey_gen();
+    m_addr_K3 = crypto::x25519_pubkey_gen();
     crypto::rand(sizeof(address_tag_t), m_addr_tag.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
-    const x25519_pubkey &unlockamounts_pubkey,
-    const x25519_pubkey &findreceived_pubkey,
+    const crypto::x25519_pubkey &unlockamounts_pubkey,
+    const crypto::x25519_pubkey &findreceived_pubkey,
     const crypto::secret_key &s_generate_address,
     const address_index_t j,
     JamtisDestinationV1 &destination_out)
@@ -72,7 +72,7 @@ void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
     make_jamtis_address_spend_key(wallet_spend_pubkey, s_generate_address, j, destination_out.m_addr_K1);
 
     // xK_2 = xk^j_a xK_fr
-    x25519_secret_key address_privkey;
+    crypto::x25519_secret_key address_privkey;
     make_jamtis_address_privkey(s_generate_address, j, address_privkey);  //xk^j_a
 
     x25519_scmul_key(address_privkey, findreceived_pubkey, destination_out.m_addr_K2);
@@ -89,8 +89,8 @@ void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_jamtis_index_from_destination_v1(const JamtisDestinationV1 &destination,
     const rct::key &wallet_spend_pubkey,
-    const x25519_pubkey &unlockamounts_pubkey,
-    const x25519_pubkey &findreceived_pubkey,
+    const crypto::x25519_pubkey &unlockamounts_pubkey,
+    const crypto::x25519_pubkey &findreceived_pubkey,
     const crypto::secret_key &s_generate_address,
     address_index_t &j_out)
 {

@@ -35,10 +35,10 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "ringct/rctTypes.h"
 #include "jamtis_payment_proposal.h"
 #include "sp_core_types.h"
-#include "sp_crypto_utils.h"
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
@@ -96,7 +96,7 @@ struct SpOutputProposalV1 final
     SpOutputProposal m_core;
 
     /// xK_e: enote ephemeral pubkey
-    x25519_pubkey m_enote_ephemeral_pubkey;
+    crypto::x25519_pubkey m_enote_ephemeral_pubkey;
     /// enc_a
     rct::xmr_amount m_encoded_amount;
     /// addr_tag_enc

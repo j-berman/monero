@@ -33,11 +33,11 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_enote_utils.h"
 #include "misc_log_ex.h"
 #include "ringct/rctTypes.h"
 #include "sp_core_enote_utils.h"
-#include "sp_crypto_utils.h"
 #include "tx_component_types.h"
 #include "tx_enote_scanning.h"
 #include "tx_enote_scanning_utils.h"
@@ -63,7 +63,7 @@ bool MockOffchainContext::key_image_exists_v1(const crypto::key_image &key_image
     return key_image_exists_v1_impl(key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool MockOffchainContext::try_get_offchain_chunk_sp(const x25519_secret_key &xk_find_received,
+bool MockOffchainContext::try_get_offchain_chunk_sp(const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkNonLedgerV1 &chunk_out) const
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
@@ -113,7 +113,7 @@ bool MockOffchainContext::key_image_exists_v1_impl(const crypto::key_image &key_
     return m_sp_key_images.find(key_image) != m_sp_key_images.end();
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool MockOffchainContext::try_get_offchain_chunk_sp_impl(const x25519_secret_key &xk_find_received,
+bool MockOffchainContext::try_get_offchain_chunk_sp_impl(const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkNonLedgerV1 &chunk_out) const
 {
     // find-received scan each tx in the unconfirmed chache

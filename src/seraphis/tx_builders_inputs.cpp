@@ -34,6 +34,7 @@
 //local headers
 #include "common/varint.h"
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 extern "C"
 {
 #include "crypto/crypto-ops.h"
@@ -284,7 +285,7 @@ void make_v1_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_make_v1_input_proposal_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,

@@ -45,12 +45,12 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_payment_proposal.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctTypes.h"
 #include "sp_core_types.h"
-#include "sp_crypto_utils.h"
 #include "tx_builder_types.h"
 #include "tx_builder_types_multisig.h"
 #include "tx_component_types.h"
@@ -87,7 +87,7 @@ void check_v1_multisig_public_input_proposal_semantics_v1(const SpMultisigPublic
 * outparam: proposal_out -
 */
 void make_v1_multisig_public_input_proposal_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const crypto::secret_key &address_mask,
     const crypto::secret_key &commitment_mask,

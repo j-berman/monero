@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "device/device.hpp"
 #include "jamtis_core_utils.h"
@@ -300,7 +301,7 @@ bool try_find_legacy_enotes_in_tx(const rct::key &legacy_base_spend_pubkey,
     return found_an_enote;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_find_sp_enotes_in_tx(const x25519_secret_key &xk_find_received,
+bool try_find_sp_enotes_in_tx(const crypto::x25519_secret_key &xk_find_received,
     const std::uint64_t block_height,
     const std::uint64_t block_timestamp,
     const rct::key &transaction_id,
@@ -316,7 +317,7 @@ bool try_find_sp_enotes_in_tx(const x25519_secret_key &xk_find_received,
 
     // scan each enote in the tx
     std::size_t ephemeral_pubkey_index{0};
-    x25519_pubkey temp_DH_derivation;
+    crypto::x25519_pubkey temp_DH_derivation;
     SpContextualBasicEnoteRecordV1 temp_contextual_record{};
     bool found_an_enote{false};
 
@@ -327,7 +328,7 @@ bool try_find_sp_enotes_in_tx(const x25519_secret_key &xk_find_received,
         if (enote_index < tx_supplement.m_output_enote_ephemeral_pubkeys.size())
         {
             ephemeral_pubkey_index = enote_index;
-            x25519_scmul_key(xk_find_received,
+            crypto::x25519_scmul_key(xk_find_received,
                 tx_supplement.m_output_enote_ephemeral_pubkeys[ephemeral_pubkey_index],
                 temp_DH_derivation);
         }
@@ -448,8 +449,8 @@ void process_chunk_intermediate_legacy(const rct::key &legacy_base_spend_pubkey,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void process_chunk_intermediate_sp(const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     const jamtis::jamtis_address_tag_cipher_context &cipher_context,
     const std::unordered_map<rct::key, std::list<ContextualBasicRecordVariant>> &chunk_basic_records_per_tx,
@@ -554,8 +555,8 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
 //-------------------------------------------------------------------------------------------------------------------
 void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     const jamtis::jamtis_address_tag_cipher_context &cipher_context,
     const std::function<bool(const crypto::key_image&)> &check_key_image_is_known_func,

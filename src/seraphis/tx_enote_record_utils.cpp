@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 extern "C"
 {
 #include "crypto/crypto-ops.h"
@@ -95,9 +96,9 @@ static void make_seraphis_key_image_helper(const rct::key &wallet_spend_pubkey,
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_get_basic_record_info_v1_helper(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
-    const x25519_pubkey &derivation,
+    const crypto::x25519_pubkey &derivation,
     jamtis::address_tag_t &nominal_address_tag_out,
     rct::key &nominal_sender_receiver_secret_out)
 {
@@ -120,15 +121,15 @@ static bool try_get_basic_record_info_v1_helper(const SpEnoteV1 &enote,
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_get_basic_record_info_v1_helper(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_find_received,
     jamtis::address_tag_t &nominal_address_tag_out,
     rct::key &nominal_sender_receiver_secret_out)
 {
     // xK_d = xk_fr * xK_e
-    x25519_pubkey derivation;
-    x25519_scmul_key(xk_find_received, enote_ephemeral_pubkey, derivation);
+    crypto::x25519_pubkey derivation;
+    crypto::x25519_scmul_key(xk_find_received, enote_ephemeral_pubkey, derivation);
 
     return try_get_basic_record_info_v1_helper(enote,
         enote_ephemeral_pubkey,
@@ -140,10 +141,10 @@ static bool try_get_basic_record_info_v1_helper(const SpEnoteV1 &enote,
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_handle_basic_record_info_v1_helper(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const jamtis::address_tag_t &nominal_address_tag,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_find_received,
     const jamtis::jamtis_address_tag_cipher_context &cipher_context,
     jamtis::address_index_t &nominal_address_index_out,
     rct::key &nominal_sender_receiver_secret_out)
@@ -153,8 +154,8 @@ static bool try_handle_basic_record_info_v1_helper(const SpEnoteV1 &enote,
         return false;
 
     // xK_d = xk_fr * xK_e
-    x25519_pubkey derivation;
-    x25519_scmul_key(xk_find_received, enote_ephemeral_pubkey, derivation);
+    crypto::x25519_pubkey derivation;
+    crypto::x25519_scmul_key(xk_find_received, enote_ephemeral_pubkey, derivation);
 
     // q' (jamtis plain variants)
     return jamtis::try_get_jamtis_sender_receiver_secret_plain(derivation,
@@ -167,11 +168,11 @@ static bool try_handle_basic_record_info_v1_helper(const SpEnoteV1 &enote,
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_get_intermediate_record_info_v1_helper(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const jamtis::address_index_t &nominal_address_index,
     const rct::key &nominal_sender_receiver_secret,
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::secret_key &s_generate_address,
     rct::xmr_amount &amount_out,
     crypto::secret_key &amount_blinding_factor_out)
@@ -193,10 +194,10 @@ static bool try_get_intermediate_record_info_v1_helper(const SpEnoteV1 &enote,
         return false;
 
     // make amount commitment baked key
-    x25519_secret_key address_privkey;
+    crypto::x25519_secret_key address_privkey;
     jamtis::make_jamtis_address_privkey(s_generate_address, nominal_address_index, address_privkey);
 
-    x25519_pubkey amount_baked_key;
+    crypto::x25519_pubkey amount_baked_key;
     jamtis::make_jamtis_amount_baked_key_plain_recipient(address_privkey,
         xk_unlock_amounts,
         enote_ephemeral_pubkey,
@@ -240,12 +241,12 @@ static void get_final_record_info_v1_helper(const rct::key &sender_receiver_secr
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_get_intermediate_enote_record_v1_finalize(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const jamtis::address_index_t &nominal_address_index,
     const rct::key &nominal_sender_receiver_secret,
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::secret_key &s_generate_address,
     SpIntermediateEnoteRecordV1 &record_out)
 {
@@ -274,13 +275,13 @@ static bool try_get_intermediate_enote_record_v1_finalize(const SpEnoteV1 &enote
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_get_enote_record_v1_plain_finalize(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const jamtis::address_index_t &nominal_address_index,
     const rct::key &nominal_sender_receiver_secret,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    const x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::secret_key &s_generate_address,
     SpEnoteRecordV1 &record_out)
 {
@@ -320,9 +321,9 @@ static bool try_get_enote_record_v1_plain_finalize(const SpEnoteV1 &enote,
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_basic_enote_record_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
-    const x25519_pubkey &sender_receiver_DH_derivation,
+    const crypto::x25519_pubkey &sender_receiver_DH_derivation,
     SpBasicEnoteRecordV1 &basic_record_out)
 {
     // get basic record
@@ -346,26 +347,26 @@ bool try_get_basic_enote_record_v1(const SpEnoteV1 &enote,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_basic_enote_record_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_find_received,
     SpBasicEnoteRecordV1 &basic_record_out)
 {
     // compute DH derivation then get basic record
 
     // sender-receiver DH derivation
-    x25519_pubkey derivation;
-    x25519_scmul_key(xk_find_received, enote_ephemeral_pubkey, derivation);
+    crypto::x25519_pubkey derivation;
+    crypto::x25519_scmul_key(xk_find_received, enote_ephemeral_pubkey, derivation);
 
     return try_get_basic_enote_record_v1(enote, enote_ephemeral_pubkey, input_context, derivation, basic_record_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_intermediate_enote_record_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     const jamtis::jamtis_address_tag_cipher_context &cipher_context,
     SpIntermediateEnoteRecordV1 &record_out)
@@ -401,11 +402,11 @@ bool try_get_intermediate_enote_record_v1(const SpEnoteV1 &enote,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_intermediate_enote_record_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     SpIntermediateEnoteRecordV1 &record_out)
 {
@@ -428,8 +429,8 @@ bool try_get_intermediate_enote_record_v1(const SpEnoteV1 &enote,
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_intermediate_enote_record_v1(const SpBasicEnoteRecordV1 &basic_record,
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     const jamtis::jamtis_address_tag_cipher_context &cipher_context,
     SpIntermediateEnoteRecordV1 &record_out)
@@ -461,8 +462,8 @@ bool try_get_intermediate_enote_record_v1(const SpBasicEnoteRecordV1 &basic_reco
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_intermediate_enote_record_v1(const SpBasicEnoteRecordV1 &basic_record,
     const rct::key &wallet_spend_pubkey,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     SpIntermediateEnoteRecordV1 &record_out)
 {
@@ -482,15 +483,15 @@ bool try_get_intermediate_enote_record_v1(const SpBasicEnoteRecordV1 &basic_reco
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_enote_record_v1_plain(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpEnoteRecordV1 &record_out)
 {
     // try to process basic info then get intermediate record
-    x25519_secret_key xk_unlock_amounts;
-    x25519_secret_key xk_find_received;
+    crypto::x25519_secret_key xk_unlock_amounts;
+    crypto::x25519_secret_key xk_find_received;
     crypto::secret_key s_generate_address;
     crypto::secret_key s_cipher_tag;
     jamtis::make_jamtis_unlockamounts_key(k_view_balance, xk_unlock_amounts);
@@ -531,8 +532,8 @@ bool try_get_enote_record_v1_plain(const SpEnoteV1 &enote,
 bool try_get_enote_record_v1_plain(const SpBasicEnoteRecordV1 &basic_record,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    const x25519_secret_key &xk_unlock_amounts,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_unlock_amounts,
+    const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     const jamtis::jamtis_address_tag_cipher_context &cipher_context,
     SpEnoteRecordV1 &record_out)
@@ -569,8 +570,8 @@ bool try_get_enote_record_v1_plain(const SpBasicEnoteRecordV1 &basic_record,
     SpEnoteRecordV1 &record_out)
 {
     // make secrets then get enote record
-    x25519_secret_key xk_unlock_amounts;
-    x25519_secret_key xk_find_received;
+    crypto::x25519_secret_key xk_unlock_amounts;
+    crypto::x25519_secret_key xk_find_received;
     crypto::secret_key s_generate_address;
     crypto::secret_key s_cipher_tag;
     jamtis::make_jamtis_unlockamounts_key(k_view_balance, xk_unlock_amounts);
@@ -605,7 +606,7 @@ bool try_get_enote_record_v1_plain(const SpIntermediateEnoteRecordV1 &intermedia
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_enote_record_v1_selfsend_for_type(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
@@ -677,7 +678,7 @@ bool try_get_enote_record_v1_selfsend_for_type(const SpEnoteV1 &enote,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_enote_record_v1_selfsend(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
@@ -704,7 +705,7 @@ bool try_get_enote_record_v1_selfsend(const SpEnoteV1 &enote,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_enote_record_v1_selfsend(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
@@ -724,7 +725,7 @@ bool try_get_enote_record_v1_selfsend(const SpEnoteV1 &enote,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_enote_record_v1(const SpEnoteV1 &enote,
-    const x25519_pubkey &enote_ephemeral_pubkey,
+    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,

@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "misc_language.h"
@@ -231,7 +232,7 @@ static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amou
     payment_proposal_out = JamtisPaymentProposalV1{
             .m_destination = destination,
             .m_amount = outlay_amount,
-            .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
+            .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
             .m_partial_memo = partial_memo_for_destination
         };
 }
@@ -572,7 +573,7 @@ TEST(seraphis_enote_scanning, trivial_ledger)
     const JamtisPaymentProposalV1 payment_proposal{
             .m_destination = user_address,
             .m_amount = enote_amount,
-            .m_enote_ephemeral_privkey = x25519_secret_key_gen(),
+            .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
             .m_partial_memo = mock_tx_supplement.m_tx_extra
         };
     SpOutputProposalV1 output_proposal;

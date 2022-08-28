@@ -35,9 +35,9 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_support_types.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 
 //third party headers
 
@@ -71,7 +71,7 @@ void make_jamtis_spendkey_extension(const crypto::secret_key &s_generate_address
 */
 void make_jamtis_address_privkey(const crypto::secret_key &s_generate_address,
     const address_index_t j,
-    x25519_secret_key &address_privkey_out);
+    crypto::x25519_secret_key &address_privkey_out);
 /**
 * brief: make_jamtis_address_spend_key - K_1
 *   - K_1 = k^j_x X + K_s

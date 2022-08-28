@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "device/device.hpp"
 #include "jamtis_enote_utils.h"
@@ -151,7 +152,7 @@ void MockLedgerContext::get_onchain_chunk_legacy(const std::uint64_t chunk_start
 //-------------------------------------------------------------------------------------------------------------------
 void MockLedgerContext::get_onchain_chunk_sp(const std::uint64_t chunk_start_height,
     const std::uint64_t chunk_max_size,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkLedgerV1 &chunk_out) const
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
@@ -159,7 +160,7 @@ void MockLedgerContext::get_onchain_chunk_sp(const std::uint64_t chunk_start_hei
     get_onchain_chunk_sp_impl(chunk_start_height, chunk_max_size, xk_find_received, chunk_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool MockLedgerContext::try_get_unconfirmed_chunk_sp(const x25519_secret_key &xk_find_received,
+bool MockLedgerContext::try_get_unconfirmed_chunk_sp(const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkNonLedgerV1 &chunk_out) const
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
@@ -412,7 +413,7 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
 //-------------------------------------------------------------------------------------------------------------------
 void MockLedgerContext::get_onchain_chunk_sp_impl(const std::uint64_t chunk_start_height,
     const std::uint64_t chunk_max_size,
-    const x25519_secret_key &xk_find_received,
+    const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkLedgerV1 &chunk_out) const
 {
     chunk_out.m_basic_records_per_tx.clear();
@@ -561,7 +562,7 @@ void MockLedgerContext::get_onchain_chunk_sp_impl(const std::uint64_t chunk_star
         );
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool MockLedgerContext::try_get_unconfirmed_chunk_sp_impl(const x25519_secret_key &xk_find_received,
+bool MockLedgerContext::try_get_unconfirmed_chunk_sp_impl(const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkNonLedgerV1 &chunk_out) const
 {
     // find-received scan each tx in the unconfirmed chache

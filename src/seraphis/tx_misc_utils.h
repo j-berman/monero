@@ -36,8 +36,8 @@
 //local headers
 #include "bulletproofs_plus2.h"
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 
 //third party headers
 
@@ -97,7 +97,7 @@ constexpr std::size_t ref_set_size_from_decomp(const std::size_t ref_set_decomp_
 * param: keys -
 * return: true if keys are unique
 */
-bool keys_are_unique(const std::vector<x25519_pubkey> &keys);
+bool keys_are_unique(const std::vector<crypto::x25519_pubkey> &keys);
 /**
 * brief: round_up_to_power_of_2 - next power of 2 >= the input number
 *   TODO: move to better file?

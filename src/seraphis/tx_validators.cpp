@@ -229,7 +229,7 @@ bool validate_sp_semantics_input_images_v1(const std::vector<SpEnoteImageV1> &in
 bool validate_sp_semantics_layout_v1(const std::vector<SpMembershipProofV1> &membership_proofs,
     const std::vector<SpEnoteImageV1> &input_images,
     const std::vector<SpEnoteV1> &outputs,
-    const std::vector<x25519_pubkey> &enote_ephemeral_pubkeys,
+    const std::vector<crypto::x25519_pubkey> &enote_ephemeral_pubkeys,
     const TxExtra &tx_extra)
 {
     // membership proof binned reference set bins should be sorted (ascending)

@@ -35,9 +35,9 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "crypto/x25519.h"
 #include "jamtis_address_tag_utils.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_store_mocks.h"
 #include "tx_enote_store_updater.h"
@@ -142,8 +142,8 @@ private:
     const crypto::secret_key &m_k_view_balance;
     SpEnoteStoreMockV1 &m_enote_store;
 
-    x25519_secret_key m_xk_unlock_amounts;
-    x25519_secret_key m_xk_find_received;
+    crypto::x25519_secret_key m_xk_unlock_amounts;
+    crypto::x25519_secret_key m_xk_find_received;
     crypto::secret_key m_s_generate_address;
     crypto::secret_key m_s_cipher_tag;
     std::unique_ptr<jamtis::jamtis_address_tag_cipher_context> m_cipher_context;
@@ -180,8 +180,8 @@ private:
     const crypto::secret_key &m_k_view_balance;
     SpEnoteStoreMockV1 &m_enote_store;
 
-    x25519_secret_key m_xk_unlock_amounts;
-    x25519_secret_key m_xk_find_received;
+    crypto::x25519_secret_key m_xk_unlock_amounts;
+    crypto::x25519_secret_key m_xk_find_received;
     crypto::secret_key m_s_generate_address;
     crypto::secret_key m_s_cipher_tag;
     std::unique_ptr<jamtis::jamtis_address_tag_cipher_context> m_cipher_context;
@@ -244,8 +244,8 @@ public:
 //constructors
     /// normal constructor
     EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &wallet_spend_pubkey,
-        const x25519_secret_key &xk_unlock_amounts,
-        const x25519_secret_key &xk_find_received,
+        const crypto::x25519_secret_key &xk_unlock_amounts,
+        const crypto::x25519_secret_key &xk_find_received,
         const crypto::secret_key &s_generate_address,
         SpEnoteStoreMockPaymentValidatorV1 &enote_store);
 
@@ -276,8 +276,8 @@ public:
 private:
     /// static data
     const rct::key &m_wallet_spend_pubkey;
-    const x25519_secret_key &m_xk_unlock_amounts;
-    const x25519_secret_key &m_xk_find_received;
+    const crypto::x25519_secret_key &m_xk_unlock_amounts;
+    const crypto::x25519_secret_key &m_xk_find_received;
     const crypto::secret_key &m_s_generate_address;
     SpEnoteStoreMockPaymentValidatorV1 &m_enote_store;
 
@@ -294,8 +294,8 @@ public:
 //constructors
     /// normal constructor
     EnoteStoreUpdaterNonLedgerMockIntermediate(const rct::key &wallet_spend_pubkey,
-        const x25519_secret_key &xk_unlock_amounts,
-        const x25519_secret_key &xk_find_received,
+        const crypto::x25519_secret_key &xk_unlock_amounts,
+        const crypto::x25519_secret_key &xk_find_received,
         const crypto::secret_key &s_generate_address,
         SpEnoteStoreMockPaymentValidatorV1 &enote_store);
 
@@ -313,8 +313,8 @@ public:
 private:
     /// static data
     const rct::key &m_wallet_spend_pubkey;
-    const x25519_secret_key &m_xk_unlock_amounts;
-    const x25519_secret_key &m_xk_find_received;
+    const crypto::x25519_secret_key &m_xk_unlock_amounts;
+    const crypto::x25519_secret_key &m_xk_find_received;
     const crypto::secret_key &m_s_generate_address;
     SpEnoteStoreMockPaymentValidatorV1 &m_enote_store;
 

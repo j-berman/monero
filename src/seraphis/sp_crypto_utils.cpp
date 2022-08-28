@@ -36,7 +36,6 @@
 extern "C"
 {
 #include "crypto/crypto-ops.h"
-#include "mx25519.h"
 }
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
@@ -62,15 +61,6 @@ static const rct::key ONE = rct::identity();
 static const rct::key MINUS_ONE = { {0xec, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9,
     0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10} };
 
-static const x25519_secret_key X25519_EIGHT{
-        []() -> x25519_secret_key
-        {
-            x25519_secret_key temp{};
-            temp.data[0] = { 8 };
-            return temp;
-        }()
-    };
-
 //-------------------------------------------------------------------------------------------------------------------
 // Helper function for scalar inversion
 // return: x*(y^2^n)
@@ -87,68 +77,6 @@ static rct::key sm(rct::key y, int n, const rct::key &x)
 rct::key minus_one()
 {
     return MINUS_ONE;
-}
-//-------------------------------------------------------------------------------------------------------------------
-x25519_secret_key x25519_eight()
-{
-    return X25519_EIGHT;
-}
-//-------------------------------------------------------------------------------------------------------------------
-x25519_secret_key x25519_secret_key_gen()
-{
-    x25519_secret_key privkey;
-    crypto::rand(32, privkey.data);
-    privkey.data[0] &= 255 - 7;
-    privkey.data[31] &= 127;
-
-    return privkey;
-}
-//-------------------------------------------------------------------------------------------------------------------
-x25519_pubkey x25519_pubkey_gen()
-{
-    const x25519_secret_key privkey{x25519_secret_key_gen()};
-    x25519_pubkey pubkey;
-    x25519_scmul_base(privkey, pubkey);
-
-    return pubkey;
-}
-//-------------------------------------------------------------------------------------------------------------------
-bool x25519_scalar_is_canonical(const x25519_scalar &test_privkey)
-{
-    //todo: is this constant time?
-    return (test_privkey.data[0] & 7) == 0 &&
-        (test_privkey.data[31] & 128) == 0;
-}
-//-------------------------------------------------------------------------------------------------------------------
-void x25519_scmul_base(const x25519_scalar &scalar, x25519_pubkey &result_out)
-{
-    static const mx25519_impl* impl{mx25519_select_impl(mx25519_type::MX25519_TYPE_AUTO)};
-    mx25519_scmul_base(impl, &result_out, &scalar);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void x25519_scmul_key(const x25519_scalar &scalar, const x25519_pubkey &pubkey, x25519_pubkey &result_out)
-{
-    static const mx25519_impl* impl{mx25519_select_impl(mx25519_type::MX25519_TYPE_AUTO)};
-    mx25519_scmul_key(impl, &result_out, &scalar, &pubkey);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void x25519_invmul_key(std::vector<x25519_secret_key> privkeys_to_invert,
-    const x25519_pubkey &initial_pubkey,
-    x25519_pubkey &result_out)
-{
-    // 1. (1/({privkey1 * privkey2 * ...}))
-    // note: mx25519_invkey() will error if the resulting X25519 scalar is >= 2^255, so we 'search' for a valid solution
-    x25519_secret_key inverted_xkey;
-    result_out = initial_pubkey;
-
-    while (mx25519_invkey(&inverted_xkey, privkeys_to_invert.data(), privkeys_to_invert.size()) != 0)
-    {
-        privkeys_to_invert.emplace_back(X25519_EIGHT);  //add 8 to keys to invert
-        x25519_scmul_key(X25519_EIGHT, result_out, result_out);  //xK = 8 * xK
-    }
-
-    // 2. (1/([8*8*...*8] * {privkey1 * privkey2 * ...})) * [8*8*...*8] * xK
-    x25519_scmul_key(inverted_xkey, result_out, result_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 rct::key invert(const rct::key &x)
