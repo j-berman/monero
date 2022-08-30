@@ -37,6 +37,7 @@ extern "C"
 }
 #include "cryptonote_config.h"
 #include "hash.h"
+#include "x25519.h"
 
 #include <cassert>
 #include <cstddef>
@@ -75,7 +76,7 @@ static ge_cached H_cached;
 static ge_cached U_cached;
 static ge_cached X_cached;
 //X25519 generator: x = 9
-static const mx25519_pubkey mx25519_G{ .data = { 9 } };
+static const x25519_pubkey x25519_G{ mx25519_pubkey{ .data = { 9 } } };
 
 // misc
 static std::once_flag init_gens_once_flag;
@@ -268,9 +269,9 @@ ge_cached get_X_cached()
     return X_cached;
 }
 //-------------------------------------------------------------------------------------------------------------------
-mx25519_pubkey get_x25519_G()
+x25519_pubkey get_x25519_G()
 {
-    return mx25519_G;
+    return x25519_G;
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace crypto

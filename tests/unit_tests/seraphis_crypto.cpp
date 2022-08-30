@@ -82,6 +82,42 @@ static void make_fake_sp_masked_address(crypto::secret_key &mask,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+template <std::size_t Sz>
+static void bitshift_array_right(const std::size_t bits, unsigned char (&arr)[Sz])
+{
+    ASSERT_TRUE(bits <= 8);
+    static_assert(Sz > 0, "");
+
+    unsigned char bits_for_next{0};
+    unsigned char saved_bits{0};
+    for (int i{Sz - 1}; i >= 0; --i)
+    {
+        bits_for_next = arr[i] & ((unsigned char)255 >> (8 - bits));
+        arr[i] >>= bits;
+        arr[i] |= saved_bits << (8 - bits);
+        saved_bits = bits_for_next;
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+template <std::size_t Sz>
+static void bitshift_array_left(const std::size_t bits, unsigned char (&arr)[Sz])
+{
+    ASSERT_TRUE(bits <= 8);
+    static_assert(Sz > 0, "");
+
+    unsigned char bits_for_next{0};
+    unsigned char saved_bits{0};
+    for (std::size_t i{0}; i <= Sz - 1; ++i)
+    {
+        bits_for_next = arr[i] & ((unsigned char)255 << (8 - bits));
+        arr[i] <<= bits;
+        arr[i] |= saved_bits >> (8 - bits);
+        saved_bits = bits_for_next;
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis_crypto, composition_proof)
 {
     rct::key K;
@@ -288,5 +324,63 @@ TEST(seraphis_crypto, x25519_sample_tests)
         sp::sp_derive_x25519_key(test3_derivation_key.bytes, test3_data, test3_scalar.data);
         ASSERT_TRUE(crypto::x25519_scalar_is_canonical(test3_scalar));
     }
+}
+//-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_crypto, x25519_invmul_key_test)
+{
+    rct::key temp{};
+    temp.bytes[0] = 255;
+    temp.bytes[1] = 255;
+    temp.bytes[2] = 255;
+    rct::key temp2{temp};
+    bitshift_array_left(3, temp2.bytes);
+    bitshift_array_right(3, temp2.bytes);
+    ASSERT_TRUE(temp == temp2);
+
+    // 1. make a scalar x >= 2^255 and x % 64 == 0
+    crypto::x25519_scalar x{};
+    x.data[0] = 255 - 63;
+    x.data[31] = 128;
+
+    // 2. 1/x
+    // note: x25519 scalars are stored mul8 via bit shift, so we do (1/(8*reduce_32(x)) << 3)
+    rct::key x_inv;
+    memcpy(x_inv.bytes, x.data, 32);
+    sc_reduce32(x_inv.bytes);  //mod l
+    sc_mul(x_inv.bytes, rct::EIGHT.bytes, x_inv.bytes);  //8*x
+    x_inv = sp::invert(x_inv);  //1/(8*x)
+    bitshift_array_left(3, x_inv.bytes);  //1/(8*x) << 3
+
+    rct::key x_recovered;
+    memcpy(x_recovered.bytes, x_inv.bytes, 32);
+    sc_reduce32(x_recovered.bytes);  //mod l
+    sc_mul(x_recovered.bytes, rct::EIGHT.bytes, x_recovered.bytes);  //8*(1/x)
+    x_recovered = sp::invert(x_recovered);  //1/(8*(1/x))
+    bitshift_array_left(3, x_recovered.bytes);  //1/(8*(1/x)) << 3
+
+    ASSERT_TRUE(memcmp(x.data, x_recovered.bytes, 32) == 0);  //can recover x by reversing the inversion
+
+    crypto::x25519_scalar x_inv_copy;
+    memcpy(x_inv_copy.data, x_inv.bytes, 32);
+    ASSERT_TRUE(crypto::x25519_scalar_is_canonical(x_inv_copy));  //make sure result is canonical 
+
+    // 3. P = 1/ (1/x) * G
+    // note: 1/ (1/x) = x, which is invalid and should cause mx25519_invkey() to return an error, but then
+    //       x25519_invkey_mul() handles that case
+    crypto::x25519_pubkey P;
+    crypto::x25519_invmul_key({x_inv_copy}, crypto::get_x25519_G(), P);
+
+    // 4. expect: P == 8 * [(x >> 3) * G]  (the last bit of any scalar is ignored, so we first make x smaller by 8
+    //    then mul8 [can't do div2, mul2 because the first 3 bits of any scalar are ignored so mul2 isn't possible])
+    crypto::x25519_scalar x_shifted{x};
+    bitshift_array_right(3, x_shifted.data);  //x >> 3
+
+    crypto::x25519_pubkey P_reproduced;
+    crypto::x25519_scmul_base(x_shifted, P_reproduced);  //(x >> 3) * G
+
+    const crypto::x25519_scalar eight{crypto::x25519_eight()};
+    crypto::x25519_scmul_key(eight, P_reproduced, P_reproduced);  //8 * [(x >> 3) * G]
+
+    ASSERT_TRUE(P == P_reproduced);  //P == 8 * [(x >> 3) * G]
 }
 //-------------------------------------------------------------------------------------------------------------------

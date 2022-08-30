@@ -32,9 +32,9 @@
 extern "C"
 {
 #include "crypto-ops.h"
-#include "mx25519.h"
 }
 #include "crypto.h"
+#include "x25519.h"
 
 namespace crypto
 {
@@ -52,6 +52,6 @@ ge_cached get_H_cached();
 ge_cached get_U_cached();
 ge_cached get_X_cached();
 
-mx25519_pubkey get_x25519_G();
+x25519_pubkey get_x25519_G();
 
 } //namespace crypto
