@@ -50,17 +50,10 @@ namespace crypto
 {
 
 /// File-scope data
-static const x25519_secret_key X25519_EIGHT{
-        []() -> x25519_secret_key
-        {
-            x25519_secret_key temp{};
-            temp.data[0] = { 8 };
-            return temp;
-        }()
-    };
+static const x25519_scalar X25519_EIGHT{ mx25519_privkey{ .data = { 8 } } };
 
 //-------------------------------------------------------------------------------------------------------------------
-x25519_secret_key x25519_eight()
+x25519_scalar x25519_eight()
 {
     return X25519_EIGHT;
 }
@@ -84,11 +77,11 @@ x25519_pubkey x25519_pubkey_gen()
     return pubkey;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool x25519_scalar_is_canonical(const x25519_scalar &test_privkey)
+bool x25519_scalar_is_canonical(const x25519_scalar &test_scalar)
 {
     //todo: is this constant time?
-    return (test_privkey.data[0] & 7) == 0 &&
-        (test_privkey.data[31] & 128) == 0;
+    return (test_scalar.data[0] & 7) == 0 &&
+        (test_scalar.data[31] & 128) == 0;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void x25519_scmul_base(const x25519_scalar &scalar, x25519_pubkey &result_out)

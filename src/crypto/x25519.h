@@ -67,13 +67,18 @@ struct x25519_scalar : public  mx25519_privkey
     x25519_scalar(const mx25519_privkey &other) { memcpy(data, other.data, 32); }
     x25519_scalar& operator=(const mx25519_privkey &other) { *this = x25519_scalar{other}; return *this; }
 };
-struct x25519_secret_key : public epee::mlocked<tools::scrubbed<x25519_scalar>> {};
+struct x25519_secret_key : public epee::mlocked<tools::scrubbed<x25519_scalar>>
+{
+    x25519_secret_key() = default;
+    x25519_secret_key(const x25519_scalar &other) { memcpy(data, other.data, 32); }
+    x25519_secret_key& operator=(const x25519_scalar &other) { *this = x25519_secret_key{other}; return *this; }
+};
 
 /**
 * brief: x25519_eight - scalar 8
 * return: scalar 8
 */
-x25519_secret_key x25519_eight();
+x25519_scalar x25519_eight();
 /**
 * brief: x25519_secret_key_gen - generate a random x25519 privkey
 * return: random canonical x25519 privkey
