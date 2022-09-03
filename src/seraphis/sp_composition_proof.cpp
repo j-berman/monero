@@ -211,7 +211,7 @@ SpCompositionProof sp_composition_prove(const rct::key &message,
 
     CHECK_AND_ASSERT_THROW_MES(K == temp_K, "Bad proof key (K doesn't match privkeys)!");
 
-    const rct::key &U_gen{rct::pk2rct(crypto::get_U())};
+    const rct::key U_gen{rct::pk2rct(crypto::get_U())};
 
     SpCompositionProof proof;
 

@@ -44,6 +44,8 @@ namespace config
 
   const constexpr char SERAPHIS_FS_TRANSCRIPT_PREFIX[] = "sp_FS_transcript";
 
+  const constexpr char HASH_KEY_LEGACY_ENOTE_IDENTIFIER[] = "legacy_enote_identifier";
+
   const constexpr char HASH_KEY_SERAPHIS_GENERATOR_FACTORY[] = "sp_generator_factory";
   const constexpr char HASH_KEY_SERAPHIS_SQUASHED_ENOTE[] = "sp_squashed_enote";
   const constexpr char HASH_KEY_SERAPHIS_IMAGE_PROOF_MESSAGE_V1[] = "sp_image_proof_message_v1";

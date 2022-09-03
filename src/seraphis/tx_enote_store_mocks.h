@@ -206,7 +206,7 @@ protected:
     ///       which should only cause problems for users if the associated tx memos are different (very unlikely scenario)
     std::unordered_map<rct::key, std::unordered_set<rct::key>> m_tracked_legacy_onetime_address_duplicates;
     /// all legacy onetime addresses attached to known legacy enotes, mapped to key images
-    /// note: might not include all entries in 'legacy key images in sp selfsends' if some corresponding enotes are unknown
+    /// note: might not include all entries in 'm_legacy_key_images_in_sp_selfsends' if some corresponding enotes are unknown
     std::unordered_map<crypto::key_image, rct::key> m_legacy_key_images;
 
     /// refresh height

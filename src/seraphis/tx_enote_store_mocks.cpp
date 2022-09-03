@@ -33,6 +33,7 @@
 
 //local headers
 #include "cryptonote_config.h"
+#include "legacy_enote_utils.h"
 #include "misc_log_ex.h"
 #include "tx_contextual_enote_record_types.h"
 #include "tx_contextual_enote_record_utils.h"
@@ -152,9 +153,10 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualIntermediateEnoteRecor
     }
 
     // 2. else add the intermediate record or update an existing record's origin context
-    const rct::key new_record_identifier{
-            rct::cn_fast_hash({new_record.m_record.m_enote.onetime_address(), rct::d2h(new_record.m_record.m_amount)})
-        };
+    rct::key new_record_identifier;
+    get_legacy_enote_identifier(new_record.m_record.m_enote.onetime_address(),
+        new_record.m_record.m_amount,
+        new_record_identifier);
 
     if (m_mapped_legacy_intermediate_contextual_enote_records.find(new_record_identifier) ==
         m_mapped_legacy_intermediate_contextual_enote_records.end())
@@ -176,9 +178,10 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualIntermediateEnoteRecor
 //-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::add_record(const LegacyContextualEnoteRecordV1 &new_record)
 {
-    const rct::key new_record_identifier{
-            rct::cn_fast_hash({new_record.m_record.m_enote.onetime_address(), rct::d2h(new_record.m_record.m_amount)})
-        };
+    rct::key new_record_identifier;
+    get_legacy_enote_identifier(new_record.m_record.m_enote.onetime_address(),
+        new_record.m_record.m_amount,
+        new_record_identifier);
 
     // 1. add the record or update an existing record's contexts
     if (m_mapped_legacy_contextual_enote_records.find(new_record_identifier) ==

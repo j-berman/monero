@@ -53,6 +53,17 @@ namespace sp
 {
 
 /**
+* brief: get_legacy_enote_identifier - identifier for legacy enotes (for handling enotes with duplicate onetime addresses)
+*   identifier = H32(Ko, a)
+*   note: any legacy enote with identical Ko and a are assumed to be interchangeable
+* param: onetime_address - Ko
+* param: amount - a
+* outparam: identifier_out - H32(Ko, a)
+*/
+void get_legacy_enote_identifier(const rct::key &onetime_address,
+    const rct::xmr_amount amount,
+    rct::key &identifier_out);
+/**
 * brief: make_legacy_enote_v1 - make a v1 legacy enote sending to an address or subaddress
 * param: destination_spendkey - [address: K^s = k^s G] [subaddress: K^{s,i} = (Hn(k^v, i) + k^s) G]
 * param: destination_viewkey - [address: K^v = k^v G] [subaddress: K^{v,i} = k^v*(Hn(k^v, i) + k^s) G]

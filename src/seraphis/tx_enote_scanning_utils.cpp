@@ -38,6 +38,7 @@
 #include "device/device.hpp"
 #include "jamtis_core_utils.h"
 #include "legacy_core_utils.h"
+#include "legacy_enote_utils.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "sp_crypto_utils.h"
@@ -73,9 +74,10 @@ static void process_chunk_new_intermediate_record_update_legacy(const LegacyInte
     std::unordered_map<rct::key, LegacyContextualIntermediateEnoteRecordV1> &found_enote_records_inout)
 {
     // 1. add new legacy record to found enotes (or refresh if already there)
-    const rct::key new_record_identifier{
-            rct::cn_fast_hash({new_enote_record.m_enote.onetime_address(), rct::d2h(new_enote_record.m_amount)})
-        };
+    rct::key new_record_identifier;
+    get_legacy_enote_identifier(new_enote_record.m_enote.onetime_address(),
+        new_enote_record.m_amount,
+        new_record_identifier);
 
     found_enote_records_inout[new_record_identifier].m_record = new_enote_record;
 
@@ -107,9 +109,10 @@ static void process_chunk_new_record_update_legacy(const LegacyEnoteRecord &new_
     std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images_inout)
 {
     // 1. add new legacy record to found enotes (or refresh if already there)
-    const rct::key new_record_identifier{
-            rct::cn_fast_hash({new_enote_record.m_enote.onetime_address(), rct::d2h(new_enote_record.m_amount)})
-        };
+    rct::key new_record_identifier;
+    get_legacy_enote_identifier(new_enote_record.m_enote.onetime_address(),
+        new_enote_record.m_amount,
+        new_record_identifier);
 
     found_enote_records_inout[new_record_identifier].m_record = new_enote_record;
 

@@ -35,6 +35,9 @@
 #include "legacy_core_utils.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "seraphis_config_temp.h"
+#include "sp_hash_functions.h"
+#include "sp_transcript.h"
 
 //third party headers
 
@@ -46,6 +49,18 @@
 
 namespace sp
 {
+//-------------------------------------------------------------------------------------------------------------------
+void get_legacy_enote_identifier(const rct::key &onetime_address,
+    const rct::xmr_amount amount,
+    rct::key &identifier_out)
+{
+    // identifier = H32(Ko, a)
+    SpKDFTranscript transcript{config::HASH_KEY_LEGACY_ENOTE_IDENTIFIER, sizeof(onetime_address) + sizeof(amount)};
+    transcript.append("Ko", onetime_address);
+    transcript.append("a", amount);
+
+    sp_hash_to_32(transcript, identifier_out.bytes);
+}
 //-------------------------------------------------------------------------------------------------------------------
 void make_legacy_enote_v1(const rct::key &destination_spendkey,
     const rct::key &destination_viewkey,
