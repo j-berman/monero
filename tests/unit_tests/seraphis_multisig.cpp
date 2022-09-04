@@ -52,6 +52,7 @@
 #include "seraphis/tx_builders_outputs.h"
 #include "seraphis/tx_component_types.h"
 #include "seraphis/tx_contextual_enote_record_types.h"
+#include "seraphis/tx_contextual_enote_record_utils.h"
 #include "seraphis/tx_discretized_fee.h"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils.h"
@@ -430,7 +431,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     const sp::FeeCalculatorMockTrivial tx_fee_calculator;  //trivial fee calculator so we can use specified input fee
 
     rct::xmr_amount reported_final_fee;
-    std::list<SpContextualEnoteRecordV1> contextual_inputs;
+    std::list<ContextualRecordVariant> contextual_inputs;
     ASSERT_TRUE(try_get_input_set_v1(output_set_context,
         max_inputs,
         input_selector,
@@ -440,11 +441,20 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         contextual_inputs));
     ASSERT_TRUE(fee == reported_final_fee);
 
-    // - convert inputs to input proposals (inputs to spend)
+    // - separate into legacy and seraphis inputs
+    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
+    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
+
+    split_contextual_enote_record_variants(contextual_inputs, legacy_contextual_inputs, sp_contextual_inputs);
+    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
+
+    // - convert legacy inputs to legacy multisig input proposals (inputs to spend) (TODO)
+
+    // - convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
     std::vector<SpMultisigPublicInputProposalV1> public_input_proposals;
     public_input_proposals.reserve(input_enote_records.size());
 
-    for (const SpContextualEnoteRecordV1 &contextual_input : contextual_inputs)
+    for (const SpContextualEnoteRecordV1 &contextual_input : sp_contextual_inputs)
     {
         public_input_proposals.emplace_back();
         ASSERT_NO_THROW(make_v1_multisig_public_input_proposal_v1(contextual_input.m_record,

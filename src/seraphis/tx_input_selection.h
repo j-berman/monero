@@ -68,9 +68,9 @@ public:
 //member functions
     /// select an available input
     virtual bool try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
-        const std::list<SpContextualEnoteRecordV1> &already_added_inputs,
-        const std::list<SpContextualEnoteRecordV1> &already_excluded_inputs,
-        SpContextualEnoteRecordV1 &selected_input_out) const = 0;
+        const std::list<ContextualRecordVariant> &already_added_inputs,
+        const std::list<ContextualRecordVariant> &already_excluded_inputs,
+        ContextualRecordVariant &selected_input_out) const = 0;
 };
 
 //todo
@@ -88,6 +88,6 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     rct::xmr_amount &final_fee_out,
-    std::list<SpContextualEnoteRecordV1> &contextual_enote_records_out);
+    std::list<ContextualRecordVariant> &contextual_enote_records_out);
 
 } //namespace sp

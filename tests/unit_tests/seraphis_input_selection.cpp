@@ -30,6 +30,7 @@
 #include "misc_log_ex.h"
 #include "ringct/rctTypes.h"
 #include "seraphis/tx_contextual_enote_record_types.h"
+#include "seraphis/tx_contextual_enote_record_utils.h"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_store_mocks.h"
 #include "seraphis/tx_fee_calculator.h"
@@ -95,7 +96,7 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
 
     // try to get an input set
     rct::xmr_amount final_fee;
-    std::list<sp::SpContextualEnoteRecordV1> inputs_selected;
+    std::list<sp::ContextualRecordVariant> inputs_selected;
     const bool result{
             sp::try_get_input_set_v1(output_set_context,
                 max_inputs_allowed,
@@ -121,7 +122,7 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
 
     std::size_t input_index{0};
     boost::multiprecision::uint128_t total_input_amount{0};
-    for (const sp::SpContextualEnoteRecordV1 &input_selected : inputs_selected)
+    for (const sp::ContextualRecordVariant &input_selected : inputs_selected)
     {
         CHECK_AND_ASSERT_THROW_MES(input_selected.get_amount() == input_amounts_expected[input_index],
             "selected inputs expected amount mismatch");

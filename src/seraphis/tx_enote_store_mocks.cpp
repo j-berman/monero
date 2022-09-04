@@ -359,58 +359,6 @@ void SpEnoteStoreMockV1::import_legacy_key_image(const crypto::key_image &legacy
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpEnoteStoreMockV1::update_with_new_blocks_from_ledger(const ScanUpdateMode scan_update_mode,
-    const std::uint64_t first_new_block,
-    const rct::key &alignment_block_id,
-    const std::vector<rct::key> &new_block_ids)
-{
-    // 1. set new block ids in range [first_new_block, end of chain]
-    CHECK_AND_ASSERT_THROW_MES(first_new_block >= m_refresh_height,
-        "enote store ledger records update (mock): first new block is below the refresh height.");
-    CHECK_AND_ASSERT_THROW_MES(first_new_block - m_refresh_height <= m_block_ids.size(),
-        "enote store ledger records update (mock): new blocks don't line up with existing blocks.");
-    if (first_new_block > m_refresh_height)
-    {
-        CHECK_AND_ASSERT_THROW_MES(alignment_block_id == m_block_ids[first_new_block - m_refresh_height - 1],
-            "enote store ledger records update (mock): alignment block id doesn't align with recorded block ids.");
-    }
-
-    // KLUDGE: assume if scan mode is legacy and there are no new block ids that there was not a reorg (in reality there
-    //         could be a reorg that pops blocks into the legacy-supporting chain)
-    // - reason: legacy scanning will terminate at the last legacy-supporting block, but seraphis scanning will continue
-    //           past that point; a legacy scan with no new blocks (blocks that don't match known blocks) will therefore
-    //           look like a reorg that pops blocks even if it just ran into the end of available legacy-supporting blocks,
-    //           and if the kludge isn't used then all seraphis-only block ids past that point will get popped by this code
-    // - general rule: always do a seraphis scan after any legacy scan to mitigate issues with the enote store caused by
-    //                 ledger reorgs of any kind (ideal reorg handling for the legacy/seraphis boundary is an annoying
-    //                 design problem that's probably not worth the effort to solve)
-    if (new_block_ids.size() > 0 ||
-        scan_update_mode == ScanUpdateMode::SERAPHIS)
-    {
-        m_block_ids.resize(first_new_block - m_refresh_height);  //crop old blocks
-        m_block_ids.insert(m_block_ids.end(), new_block_ids.begin(), new_block_ids.end());
-    }
-
-    // 2. update scanning height for this scan mode
-    switch (scan_update_mode)
-    {
-        case (ScanUpdateMode::LEGACY_FULL) :
-            this->set_last_legacy_fullscan_height(first_new_block + new_block_ids.size() - 1);
-            break;
-
-        case (ScanUpdateMode::LEGACY_INTERMEDIATE) :
-            this->set_last_legacy_partialscan_height(first_new_block + new_block_ids.size() - 1);
-            break;
-
-        case (ScanUpdateMode::SERAPHIS) :
-            this->set_last_sp_scanned_height(first_new_block + new_block_ids.size() - 1);
-            break;
-
-        default :
-            CHECK_AND_ASSERT_THROW_MES(false, "enote store new blocks update (mock): unknown scan mode.");
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::handle_legacy_key_images_from_sp_selfsends(
     const std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &legacy_key_images_in_sp_selfsends)
 {
@@ -700,58 +648,41 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
                     )
                 continue;
 
-            // collect all amounts for enotes with the current mapped_contextual_record's onetime address
-            //   that are found in intermediate contextual records with one of the requested origin statuses
-            std::map<rct::xmr_amount, rct::key> eligible_amounts;
-
+            // ignore enotes that share onetime addresses with other enotes but don't have the highest amount among them
             CHECK_AND_ASSERT_THROW_MES(m_tracked_legacy_onetime_address_duplicates
                         .find(current_contextual_record.m_record.m_enote.onetime_address()) !=
                     m_tracked_legacy_onetime_address_duplicates.end(),
                 "enote store balance check (mock): tracked legacy duplicates is missing a onetime address (bug).");
-            const auto &duplicate_onetime_address_identifiers =
-                m_tracked_legacy_onetime_address_duplicates.at(
+
+            if (!legacy_enote_has_highest_amount_amoung_duplicates(mapped_contextual_record.first,
+                    current_contextual_record.m_record.m_amount,
+                    origin_statuses,
+                    m_tracked_legacy_onetime_address_duplicates.at(
                         current_contextual_record.m_record.m_enote.onetime_address()
-                    );
+                    ),
+                    [this](const rct::key &identifier)
+                        -> const SpEnoteOriginStatus&
+                    {
+                        CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_intermediate_contextual_enote_records.find(
+                                identifier) != m_mapped_legacy_intermediate_contextual_enote_records.end(),
+                            "enote store balance check (mock): tracked legacy duplicates has an entry that doesn't line up "
+                            "1:1 with the legacy intermediate map even though it should (bug).");
 
-            for (const rct::key &candidate_identifier : duplicate_onetime_address_identifiers)
-            {
-                CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_intermediate_contextual_enote_records.find(
-                            candidate_identifier) !=
-                        m_mapped_legacy_intermediate_contextual_enote_records.end(),
-                    "enote store balance check (mock): tracked legacy duplicates has an entry that doesn't line up "
-                    "1:1 with the legacy intermediate map even though it should (bug).");
-
-                // only include enotes with requested origin statuses
-                if (origin_statuses.find(m_mapped_legacy_intermediate_contextual_enote_records
-                            .at(candidate_identifier)
+                        return m_mapped_legacy_intermediate_contextual_enote_records
+                            .at(identifier)
                             .m_origin_context
-                            .m_origin_status) ==
-                        origin_statuses.end())
-                    continue;
+                            .m_origin_status;
+                    },
+                    [this](const rct::key &identifier)
+                        -> rct::xmr_amount
+                    {
+                        CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_intermediate_contextual_enote_records.find(
+                                identifier) != m_mapped_legacy_intermediate_contextual_enote_records.end(),
+                            "enote store balance check (mock): tracked legacy duplicates has an entry that doesn't line up "
+                            "1:1 with the legacy intermediate map even though it should (bug).");
 
-                // only record the identifier of the first enote with a given amount (among enotes with duplicate onetime
-                //   addresses)
-                const rct::xmr_amount amount{
-                        m_mapped_legacy_intermediate_contextual_enote_records
-                            .at(candidate_identifier)
-                            .m_record
-                            .m_amount
-                    };
-                if (eligible_amounts.find(amount) != eligible_amounts.end())
-                    continue;
-
-                eligible_amounts[amount] = candidate_identifier;
-            }
-
-            // we should have found the current mapped_contextual_record's amount
-            CHECK_AND_ASSERT_THROW_MES(
-                    eligible_amounts.find(current_contextual_record.m_record.m_amount) !=
-                    eligible_amounts.end(),
-                "enote store balance check (mock): could not find an intermediate record's amount (bug).");
-
-            // skip if the current mapped_contextual_record's amount is not the highest amount in the collected eligible
-            //   amounts and the first one with that amount
-            if (!(eligible_amounts.rbegin()->second == mapped_contextual_record.first))
+                        return m_mapped_legacy_intermediate_contextual_enote_records.at(identifier).m_record.m_amount;
+                    }))
                 continue;
 
             // update balance
@@ -786,58 +717,41 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
                     )
                 continue;
 
-            // collect all amounts for enotes with the current mapped_contextual_record's onetime address
-            //   that are found in full contextual records with one of the requested origin statuses
-            std::map<rct::xmr_amount, rct::key> eligible_amounts;
-
+            // ignore enotes that share onetime addresses with other enotes but don't have the highest amount among them
             CHECK_AND_ASSERT_THROW_MES(m_tracked_legacy_onetime_address_duplicates
                         .find(current_contextual_record.m_record.m_enote.onetime_address()) !=
                     m_tracked_legacy_onetime_address_duplicates.end(),
                 "enote store balance check (mock): tracked legacy duplicates is missing a onetime address (bug).");
-            const auto &duplicate_onetime_address_identifiers =
-                m_tracked_legacy_onetime_address_duplicates.at(
+
+            if (!legacy_enote_has_highest_amount_amoung_duplicates(mapped_contextual_record.first,
+                    current_contextual_record.m_record.m_amount,
+                    origin_statuses,
+                    m_tracked_legacy_onetime_address_duplicates.at(
                         current_contextual_record.m_record.m_enote.onetime_address()
-                    );
+                    ),
+                    [this](const rct::key &identifier)
+                        -> const SpEnoteOriginStatus&
+                    {
+                        CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_contextual_enote_records.find(identifier) !=
+                                m_mapped_legacy_contextual_enote_records.end(),
+                            "enote store balance check (mock): tracked legacy duplicates has an entry that doesn't line up "
+                            "1:1 with the legacy map even though it should (bug).");
 
-            for (const rct::key &candidate_identifier : duplicate_onetime_address_identifiers)
-            {
-                CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_contextual_enote_records.find(
-                            candidate_identifier) !=
-                        m_mapped_legacy_contextual_enote_records.end(),
-                    "enote store balance check (mock): tracked legacy duplicates has an entry that doesn't line up "
-                    "1:1 with the legacy enote map even though it should (bug).");
-
-                // only include enotes with requested origin statuses
-                if (origin_statuses.find(m_mapped_legacy_contextual_enote_records
-                            .at(candidate_identifier)
+                        return m_mapped_legacy_contextual_enote_records
+                            .at(identifier)
                             .m_origin_context
-                            .m_origin_status) ==
-                        origin_statuses.end())
-                    continue;
+                            .m_origin_status;
+                    },
+                    [this](const rct::key &identifier)
+                        -> rct::xmr_amount
+                    {
+                        CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_contextual_enote_records.find(identifier) != 
+                                m_mapped_legacy_contextual_enote_records.end(),
+                            "enote store balance check (mock): tracked legacy duplicates has an entry that doesn't line up "
+                            "1:1 with the legacy map even though it should (bug).");
 
-                // only record the identifier of the first enote with a given amount (among enotes with duplicate onetime
-                //   addresses)
-                const rct::xmr_amount amount{
-                        m_mapped_legacy_contextual_enote_records
-                            .at(candidate_identifier)
-                            .m_record
-                            .m_amount
-                    };
-                if (eligible_amounts.find(amount) != eligible_amounts.end())
-                    continue;
-
-                eligible_amounts[amount] = candidate_identifier;
-            }
-
-            // we should have found the current mapped_contextual_record's amount
-            CHECK_AND_ASSERT_THROW_MES(
-                    eligible_amounts.find(current_contextual_record.m_record.m_amount) !=
-                    eligible_amounts.end(),
-                "enote store balance check (mock): could not find a legacy record's amount (bug).");
-
-            // skip if the current mapped_contextual_record's amount is not the highest amount in the collected eligible
-            //   amounts and the first one with that amount
-            if (!(eligible_amounts.rbegin()->second == mapped_contextual_record.first))
+                        return m_mapped_legacy_contextual_enote_records.at(identifier).m_record.m_amount;
+                    }))
                 continue;
 
             // update balance
@@ -876,6 +790,58 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
     }
 
     return balance;
+}
+//-------------------------------------------------------------------------------------------------------------------
+void SpEnoteStoreMockV1::update_with_new_blocks_from_ledger(const ScanUpdateMode scan_update_mode,
+    const std::uint64_t first_new_block,
+    const rct::key &alignment_block_id,
+    const std::vector<rct::key> &new_block_ids)
+{
+    // 1. set new block ids in range [first_new_block, end of chain]
+    CHECK_AND_ASSERT_THROW_MES(first_new_block >= m_refresh_height,
+        "enote store ledger records update (mock): first new block is below the refresh height.");
+    CHECK_AND_ASSERT_THROW_MES(first_new_block - m_refresh_height <= m_block_ids.size(),
+        "enote store ledger records update (mock): new blocks don't line up with existing blocks.");
+    if (first_new_block > m_refresh_height)
+    {
+        CHECK_AND_ASSERT_THROW_MES(alignment_block_id == m_block_ids[first_new_block - m_refresh_height - 1],
+            "enote store ledger records update (mock): alignment block id doesn't align with recorded block ids.");
+    }
+
+    // KLUDGE: assume if scan mode is legacy and there are no new block ids that there was not a reorg (in reality there
+    //         could be a reorg that pops blocks into the legacy-supporting chain)
+    // - reason: legacy scanning will terminate at the last legacy-supporting block, but seraphis scanning will continue
+    //           past that point; a legacy scan with no new blocks (blocks that don't match known blocks) will therefore
+    //           look like a reorg that pops blocks even if it just ran into the end of available legacy-supporting blocks,
+    //           and if the kludge isn't used then all seraphis-only block ids past that point will get popped by this code
+    // - general rule: always do a seraphis scan after any legacy scan to mitigate issues with the enote store caused by
+    //                 ledger reorgs of any kind (ideal reorg handling for the legacy/seraphis boundary is an annoying
+    //                 design problem that's probably not worth the effort to solve)
+    if (new_block_ids.size() > 0 ||
+        scan_update_mode == ScanUpdateMode::SERAPHIS)
+    {
+        m_block_ids.resize(first_new_block - m_refresh_height);  //crop old blocks
+        m_block_ids.insert(m_block_ids.end(), new_block_ids.begin(), new_block_ids.end());
+    }
+
+    // 2. update scanning height for this scan mode
+    switch (scan_update_mode)
+    {
+        case (ScanUpdateMode::LEGACY_FULL) :
+            this->set_last_legacy_fullscan_height(first_new_block + new_block_ids.size() - 1);
+            break;
+
+        case (ScanUpdateMode::LEGACY_INTERMEDIATE) :
+            this->set_last_legacy_partialscan_height(first_new_block + new_block_ids.size() - 1);
+            break;
+
+        case (ScanUpdateMode::SERAPHIS) :
+            this->set_last_sp_scanned_height(first_new_block + new_block_ids.size() - 1);
+            break;
+
+        default :
+            CHECK_AND_ASSERT_THROW_MES(false, "enote store new blocks update (mock): unknown scan mode.");
+    }
 }
 //-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::clean_legacy_maps_for_ledger_update(const std::uint64_t first_new_block,

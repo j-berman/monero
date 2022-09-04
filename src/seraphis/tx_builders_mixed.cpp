@@ -51,6 +51,7 @@
 #include "tx_builders_inputs.h"
 #include "tx_builders_outputs.h"
 #include "tx_component_types.h"
+#include "tx_contextual_enote_record_utils.h"
 #include "tx_input_selection_output_context_v1.h"
 #include "tx_misc_utils.h"
 #include "tx_validation_context_mock.h"
@@ -438,7 +439,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
         };
 
     rct::xmr_amount reported_final_fee;
-    std::list<SpContextualEnoteRecordV1> contextual_inputs;
+    std::list<ContextualRecordVariant> contextual_inputs;
     if (!try_get_input_set_v1(output_set_context,
             max_inputs,
             local_user_input_selector,
@@ -448,13 +449,22 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
             contextual_inputs))
         return false;
 
-    // handle inputs
+    // separate into legacy and seraphis inputs
+    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
+    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
+
+    split_contextual_enote_record_variants(contextual_inputs, legacy_contextual_inputs, sp_contextual_inputs);
+    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
+
+    // handle legacy inputs (TODO)
+
+    // handle seraphis inputs
     input_ledger_mappings_out.clear();
 
     std::vector<SpInputProposalV1> input_proposals;
-    input_proposals.reserve(contextual_inputs.size());
+    input_proposals.reserve(sp_contextual_inputs.size());
 
-    for (const SpContextualEnoteRecordV1 &contextual_input : contextual_inputs)
+    for (const SpContextualEnoteRecordV1 &contextual_input : sp_contextual_inputs)
     {
         // save input indices for making membership proofs
         input_ledger_mappings_out[contextual_input.m_record.m_key_image] = 
@@ -487,7 +497,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
         selfsend_payment_proposals);
 
     CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.get_fee(fee_per_tx_weight,
-                contextual_inputs.size(),
+                legacy_contextual_inputs.size() + sp_contextual_inputs.size(),
                 normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
             reported_final_fee,
         "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");

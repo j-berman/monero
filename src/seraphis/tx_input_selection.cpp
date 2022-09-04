@@ -55,22 +55,22 @@ namespace sp
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static boost::multiprecision::uint128_t compute_total_amount(
-    const std::list<SpContextualEnoteRecordV1> &contextual_enote_records)
+    const std::list<ContextualRecordVariant> &contextual_enote_records)
 {
     boost::multiprecision::uint128_t amount_sum{0};
 
-    for (const SpContextualEnoteRecordV1 &contextual_enote_record : contextual_enote_records)
+    for (const ContextualRecordVariant &contextual_enote_record : contextual_enote_records)
         amount_sum += contextual_enote_record.get_amount();
 
     return amount_sum;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void sort_contextual_enote_records_descending(std::list<SpContextualEnoteRecordV1> &contextual_enote_records_inout)
+static void sort_contextual_enote_records_descending(std::list<ContextualRecordVariant> &contextual_enote_records_inout)
 {
     // sort: largest amount first, smallest amount last
     contextual_enote_records_inout.sort(
-            [](const SpContextualEnoteRecordV1 &record1, const SpContextualEnoteRecordV1 &record2) -> bool
+            [](const ContextualRecordVariant &record1, const ContextualRecordVariant &record2) -> bool
             {
                 return record1.get_amount() > record2.get_amount();
             }
@@ -78,8 +78,8 @@ static void sort_contextual_enote_records_descending(std::list<SpContextualEnote
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static bool try_update_added_inputs_replace_excluded_v1(std::list<SpContextualEnoteRecordV1> &added_inputs_inout,
-    std::list<SpContextualEnoteRecordV1> &excluded_inputs_inout)
+static bool try_update_added_inputs_replace_excluded_v1(std::list<ContextualRecordVariant> &added_inputs_inout,
+    std::list<ContextualRecordVariant> &excluded_inputs_inout)
 {
     // make sure all the inputs are sorted
     sort_contextual_enote_records_descending(added_inputs_inout);
@@ -103,8 +103,8 @@ static bool try_update_added_inputs_add_excluded_v1(const std::size_t max_inputs
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     const std::size_t num_outputs,
-    std::list<SpContextualEnoteRecordV1> &added_inputs_inout,
-    std::list<SpContextualEnoteRecordV1> &excluded_inputs_inout)
+    std::list<ContextualRecordVariant> &added_inputs_inout,
+    std::list<ContextualRecordVariant> &excluded_inputs_inout)
 {
     // expect the inputs to not be full here
     if (added_inputs_inout.size() >= max_inputs_allowed)
@@ -143,8 +143,8 @@ static bool try_update_added_inputs_selection_v1(const boost::multiprecision::ui
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     const std::size_t num_outputs,
-    std::list<SpContextualEnoteRecordV1> &added_inputs_inout,
-    std::list<SpContextualEnoteRecordV1> &excluded_inputs_inout)
+    std::list<ContextualRecordVariant> &added_inputs_inout,
+    std::list<ContextualRecordVariant> &excluded_inputs_inout)
 {
     // make sure the added inputs are sorted
     sort_contextual_enote_records_descending(added_inputs_inout);
@@ -177,7 +177,7 @@ static bool try_update_added_inputs_selection_v1(const boost::multiprecision::ui
     }
 
     // try to get a new input from the selector
-    SpContextualEnoteRecordV1 requested_input;
+    ContextualRecordVariant requested_input;
 
     while (input_selector.try_select_input_v1(selection_amount,
         added_inputs_inout,
@@ -212,8 +212,8 @@ static bool try_update_added_inputs_range_v1(const std::size_t max_inputs_allowe
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     const std::size_t num_outputs,
-    std::list<SpContextualEnoteRecordV1> &added_inputs_inout,
-    std::list<SpContextualEnoteRecordV1> &excluded_inputs_inout)
+    std::list<ContextualRecordVariant> &added_inputs_inout,
+    std::list<ContextualRecordVariant> &excluded_inputs_inout)
 {
     // expect the added inputs list is not full
     if (added_inputs_inout.size() >= max_inputs_allowed)
@@ -268,13 +268,13 @@ static bool try_select_inputs_v1(const boost::multiprecision::uint128_t output_a
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     const std::size_t num_outputs,
-    std::list<SpContextualEnoteRecordV1> &contextual_enote_records_out)
+    std::list<ContextualRecordVariant> &contextual_enote_records_out)
 {
     CHECK_AND_ASSERT_THROW_MES(max_inputs_allowed > 0, "selecting an input set: zero inputs were allowed.");
 
     // update the input set until the output amount + fee is satisfied (or updating fails)
-    std::list<SpContextualEnoteRecordV1> added_inputs;
-    std::list<SpContextualEnoteRecordV1> excluded_inputs;
+    std::list<ContextualRecordVariant> added_inputs;
+    std::list<ContextualRecordVariant> excluded_inputs;
 
     while (true)
     {
@@ -339,7 +339,7 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     rct::xmr_amount &final_fee_out,
-    std::list<SpContextualEnoteRecordV1> &contextual_enote_records_out)
+    std::list<ContextualRecordVariant> &contextual_enote_records_out)
 {
     // 1. select inputs to cover requested output amount (assume 0 change)
     const boost::multiprecision::uint128_t output_amount{output_set_context.get_total_amount()};

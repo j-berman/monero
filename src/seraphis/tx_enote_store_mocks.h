@@ -82,6 +82,8 @@ protected:
 ///
 class SpEnoteStoreMockV1 final
 {
+    // note: in practice it may be better to embed the main input selection logic within the enote store to avoid the
+    //       messiness of a friend class
     friend class InputSelectorMockV1;
 
     enum class ScanUpdateMode
@@ -117,12 +119,6 @@ public:
     /// PRECONDITION1: the legacy key image was computed from/for the input onetime address
     /// PRECONDITION2: the onetime address is already known by the enote store (e.g. from intermediate legacy scanning)
     void import_legacy_key_image(const crypto::key_image &legacy_key_image, const rct::key &onetime_address);
-
-    /// update the store with a set of new block ids from the ledger
-    void update_with_new_blocks_from_ledger(const ScanUpdateMode scan_update_mode,
-    const std::uint64_t first_new_block,
-        const rct::key &alignment_block_id,
-        const std::vector<rct::key> &new_block_ids);
 
     /// cache legacy key images obtained from seraphis selfsends (i.e. ALL legacy key images spent by user in seraphis txs)
     void handle_legacy_key_images_from_sp_selfsends(
@@ -182,6 +178,11 @@ public:
         const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions = {}) const;
 
 private:
+    /// update the store with a set of new block ids from the ledger
+    void update_with_new_blocks_from_ledger(const ScanUpdateMode scan_update_mode,
+    const std::uint64_t first_new_block,
+        const rct::key &alignment_block_id,
+        const std::vector<rct::key> &new_block_ids);
     /// clean up legacy state to prepare for adding fresh legacy enotes and key images
     void clean_legacy_maps_for_ledger_update(const std::uint64_t first_new_block,
         const std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images);

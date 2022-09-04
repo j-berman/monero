@@ -178,6 +178,42 @@ const SpEnoteOriginContextV1& ContextualBasicRecordVariant::origin_context() con
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
+rct::xmr_amount ContextualRecordVariant::get_amount() const
+{
+    if (is_type<LegacyContextualEnoteRecordV1>())
+        return get_contextual_record<LegacyContextualEnoteRecordV1>().get_amount();
+    else if (is_type<SpContextualEnoteRecordV1>())
+        return get_contextual_record<SpContextualEnoteRecordV1>().get_amount();
+    else
+        return 0;
+}
+//-------------------------------------------------------------------------------------------------------------------
+const SpEnoteOriginContextV1& ContextualRecordVariant::origin_context() const
+{
+    if (is_type<LegacyContextualEnoteRecordV1>())
+        return get_contextual_record<LegacyContextualEnoteRecordV1>().m_origin_context;
+    else if (is_type<SpContextualEnoteRecordV1>())
+        return get_contextual_record<SpContextualEnoteRecordV1>().m_origin_context;
+    else
+    {
+        static const SpEnoteOriginContextV1 temp{};
+        return temp;
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+const SpEnoteSpentContextV1& ContextualRecordVariant::spent_context() const
+{
+    if (is_type<LegacyContextualEnoteRecordV1>())
+        return get_contextual_record<LegacyContextualEnoteRecordV1>().m_spent_context;
+    else if (is_type<SpContextualEnoteRecordV1>())
+        return get_contextual_record<SpContextualEnoteRecordV1>().m_spent_context;
+    else
+    {
+        static const SpEnoteSpentContextV1 temp{};
+        return temp;
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
 bool SpContextualKeyImageSetV1::has_key_image(const crypto::key_image &test_key_image) const
 {
     return std::find(m_legacy_key_images.begin(), m_legacy_key_images.end(), test_key_image) !=

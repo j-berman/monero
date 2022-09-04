@@ -33,17 +33,81 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "ringct/rctTypes.h"
 #include "tx_contextual_enote_record_types.h"
 
 //third party headers
 
 //standard headers
+#include <functional>
+#include <list>
+#include <map>
+#include <unordered_set>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
 
 namespace sp
 {
+//-------------------------------------------------------------------------------------------------------------------
+bool legacy_enote_has_highest_amount_amoung_duplicates(const rct::key &searched_for_record_identifier,
+    const rct::xmr_amount &searched_for_record_amount,
+    const std::unordered_set<SpEnoteOriginStatus> &requested_origin_statuses,
+    const std::unordered_set<rct::key> &duplicate_onetime_address_identifiers,
+    const std::function<const SpEnoteOriginStatus&(const rct::key&)> &get_record_origin_status_for_identifier_func,
+    const std::function<rct::xmr_amount(const rct::key&)> &get_record_amount_for_identifier_func)
+{
+    std::map<rct::xmr_amount, rct::key> eligible_amounts;
+
+    for (const rct::key &candidate_identifier : duplicate_onetime_address_identifiers)
+    {
+        // only include enotes with requested origin statuses
+        if (requested_origin_statuses.find(get_record_origin_status_for_identifier_func(candidate_identifier)) ==
+                requested_origin_statuses.end())
+            continue;
+
+        // record this identifier
+        const rct::xmr_amount amount{get_record_amount_for_identifier_func(candidate_identifier)};
+        CHECK_AND_ASSERT_THROW_MES(eligible_amounts.find(amount) == eligible_amounts.end(),
+            "legacy enote duplicate onetime address amount search: found the same amount multiple times (legacy enote "
+            "identifiers are a hash of the amount, so there should not be multiple identifiers with the same amount, "
+            "assuming all identifiers correspond to the same onetime address as they should here).");
+
+        eligible_amounts[amount] = candidate_identifier;
+    }
+
+    // we should have found the searched-for record's amount
+    CHECK_AND_ASSERT_THROW_MES(eligible_amounts.find(searched_for_record_amount) != eligible_amounts.end(),
+        "legacy enote duplicate onetime address amount search: could not find the searched-for record's amount.");
+
+    // success if the highest eligible amount is attached to the searched-for identifier
+    return eligible_amounts.rbegin()->second == searched_for_record_identifier;
+}
+//-------------------------------------------------------------------------------------------------------------------
+void split_contextual_enote_record_variants(const std::list<ContextualRecordVariant> &contextual_record_variants,
+    std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_records_out,
+    std::list<SpContextualEnoteRecordV1> &sp_contextual_records_out)
+{
+    legacy_contextual_records_out.clear();
+    sp_contextual_records_out.clear();
+
+    for (const ContextualRecordVariant &contextual_enote_record : contextual_record_variants)
+    {
+        if (contextual_enote_record.is_type<LegacyContextualEnoteRecordV1>())
+        {
+            legacy_contextual_records_out.emplace_back(
+                    contextual_enote_record.get_contextual_record<LegacyContextualEnoteRecordV1>()
+                );
+        }
+
+        if (contextual_enote_record.is_type<SpContextualEnoteRecordV1>())
+        {
+            sp_contextual_records_out.emplace_back(
+                    contextual_enote_record.get_contextual_record<SpContextualEnoteRecordV1>()
+                );
+        }
+    }
+}
 //-------------------------------------------------------------------------------------------------------------------
 bool try_update_enote_origin_context_v1(const SpEnoteOriginContextV1 &fresh_origin_context,
     SpEnoteOriginContextV1 &current_origin_context_inout)

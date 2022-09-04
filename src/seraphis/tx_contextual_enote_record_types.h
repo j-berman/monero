@@ -305,6 +305,35 @@ struct ContextualBasicRecordVariant final
     }
 };
 
+struct ContextualRecordVariant final
+{
+    /// variant of all contextual enote records
+    boost::variant<LegacyContextualEnoteRecordV1, SpContextualEnoteRecordV1> m_record;
+
+    /// constructors
+    ContextualRecordVariant() = default;
+    template <typename T>
+    ContextualRecordVariant(const T &record) : m_record{record} {}
+
+    /// get the record's amount
+    rct::xmr_amount get_amount() const;
+    /// get the record's origin context
+    const SpEnoteOriginContextV1& origin_context() const;
+    /// get the record's spent context
+    const SpEnoteSpentContextV1& spent_context() const;
+
+    /// interact with the variant
+    template <typename T>
+    bool is_type() const { return boost::get<T>(&m_record) != nullptr; }
+
+    template <typename T>
+    const T& get_contextual_record() const
+    {
+        static const T empty{};
+        return is_type<T>() ? boost::get<T>(m_record) : empty;
+    }
+};
+
 ////
 // SpContextualKeyImageSetV1
 // - info about the tx where a set of key images was found

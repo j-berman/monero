@@ -34,17 +34,34 @@
 #pragma once
 
 //local headers
+#include "ringct/rctTypes.h"
 #include "tx_contextual_enote_record_types.h"
 
 //third party headers
 
 //standard headers
+#include <functional>
+#include <list>
+#include <unordered_set>
 
 //forward declarations
 
 
 namespace sp
 {
+
+//todo
+bool legacy_enote_has_highest_amount_amoung_duplicates(const rct::key &searched_for_record_identifier,
+    const rct::xmr_amount &searched_for_record_amount,
+    const std::unordered_set<SpEnoteOriginStatus> &requested_origin_statuses,
+    const std::unordered_set<rct::key> &duplicate_onetime_address_identifiers,
+    const std::function<const SpEnoteOriginStatus&(const rct::key&)> &get_record_origin_status_for_identifier_func,
+    const std::function<rct::xmr_amount(const rct::key&)> &get_record_amount_for_identifier_func);
+
+//todo
+void split_contextual_enote_record_variants(const std::list<ContextualRecordVariant> &contextual_record_variants,
+    std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_records_out,
+    std::list<SpContextualEnoteRecordV1> &sp_contextual_records_out);
 
 //todo
 bool try_update_enote_origin_context_v1(const SpEnoteOriginContextV1 &fresh_origin_context,
