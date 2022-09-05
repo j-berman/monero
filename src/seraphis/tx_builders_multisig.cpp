@@ -52,10 +52,12 @@
 #include "tx_builders_mixed.h"
 #include "tx_builders_outputs.h"
 #include "tx_component_types.h"
+#include "tx_contextual_enote_record_utils.h"
 #include "tx_discretized_fee.h"
-#include "tx_misc_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
+#include "tx_input_selection_output_context_v1.h"
+#include "tx_misc_utils.h"
 
 //third party headers
 #include <boost/math/special_functions/binomial.hpp>
@@ -448,54 +450,6 @@ void make_v1_multisig_public_input_proposal_v1(const SpEnoteRecordV1 &enote_reco
         proposal_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void finalize_multisig_output_proposals_v1(const std::vector<SpMultisigPublicInputProposalV1> &public_input_proposals,
-    const DiscretizedFee &tx_fee,
-    const jamtis::JamtisDestinationV1 &change_destination,
-    const jamtis::JamtisDestinationV1 &dummy_destination,
-    const rct::key &wallet_spend_pubkey,
-    const crypto::secret_key &k_view_balance,
-    std::vector<jamtis::JamtisPaymentProposalV1> &normal_payment_proposals_inout,
-    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &selfsend_payment_proposals_inout)
-{
-    /// prepare to finalize the output set
-
-    // 1. collect total input amount
-    boost::multiprecision::uint128_t total_input_amount{0};
-    SpInputProposalV1 input_proposal_temp;
-
-    for (const SpMultisigPublicInputProposalV1 &public_input_proposal : public_input_proposals)
-    {
-        public_input_proposal.get_input_proposal_v1(wallet_spend_pubkey, k_view_balance, input_proposal_temp);
-        total_input_amount += input_proposal_temp.get_amount();
-    }
-
-    // 2. extract raw transaction fee
-    rct::xmr_amount raw_transaction_fee;
-    CHECK_AND_ASSERT_THROW_MES(try_get_fee_value(tx_fee, raw_transaction_fee),
-        "finalize multisig output proposals: could not get tx fee from discretized fee.");
-
-
-    /// finalize the output proposal set
-    const std::size_t num_outputs_prefinalize{
-            normal_payment_proposals_inout.size() + selfsend_payment_proposals_inout.size()
-        };
-
-    finalize_v1_output_proposal_set_v1(total_input_amount,
-        raw_transaction_fee,
-        change_destination,
-        dummy_destination,
-        k_view_balance,
-        normal_payment_proposals_inout,
-        selfsend_payment_proposals_inout);
-
-    const std::size_t num_outputs_postfinalize{
-            normal_payment_proposals_inout.size() + selfsend_payment_proposals_inout.size()
-        };
-
-    CHECK_AND_ASSERT_THROW_MES(num_outputs_postfinalize - num_outputs_prefinalize <= 1,
-        "finalize multisig output proposals: finalizing output proposals added more than 1 proposal (bug).");
-}
-//-------------------------------------------------------------------------------------------------------------------
 void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::string &expected_version_string,
     const std::uint32_t threshold,
@@ -564,7 +518,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
-    TxExtra partial_memo,
+    std::vector<ExtraFieldElement> additional_memo_elements,
     const DiscretizedFee &tx_fee,
     std::string version_string,
     std::vector<SpMultisigPublicInputProposalV1> public_input_proposals,
@@ -582,18 +536,13 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
         public_input_proposal.get_input_proposal_v1(wallet_spend_pubkey, k_view_balance, plain_input_proposals.back());
     }
 
-    // extract memo field elements
-    std::vector<ExtraFieldElement> additional_memo_elements;
-    CHECK_AND_ASSERT_THROW_MES(try_get_extra_field_elements(partial_memo, additional_memo_elements),
-        "make multisig tx proposal: could not parse partial memo.");
-
     // make a temporary normal tx proposal
     SpTxProposalV1 tx_proposal;
     make_v1_tx_proposal_v1(normal_payment_proposals,
         selfsend_payment_proposals,
         tx_fee,
         std::move(plain_input_proposals),
-        std::move(additional_memo_elements),
+        additional_memo_elements,
         tx_proposal);
 
     // get proposal prefix
@@ -620,10 +569,124 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     proposal_out.m_input_proposals = std::move(public_input_proposals);
     proposal_out.m_normal_payment_proposals = std::move(normal_payment_proposals);
     proposal_out.m_selfsend_payment_proposals = std::move(selfsend_payment_proposals);
-    proposal_out.m_partial_memo = std::move(partial_memo);
+    make_tx_extra(std::move(additional_memo_elements), proposal_out.m_partial_memo);
     proposal_out.m_tx_fee = tx_fee;
     proposal_out.m_aggregate_signer_set_filter = aggregate_signer_set_filter;
     proposal_out.m_version_string = std::move(version_string);
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
+    const jamtis::JamtisDestinationV1 &dummy_address,
+    const InputSelectorV1 &local_user_input_selector,
+    const FeeCalculator &tx_fee_calculator,
+    const rct::xmr_amount fee_per_tx_weight,
+    const std::size_t max_inputs,
+    const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
+    std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
+    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
+    TxExtra partial_memo_for_tx,
+    const rct::key &wallet_spend_pubkey,
+    const crypto::secret_key &k_view_balance,
+    SpMultisigTxProposalV1 &multisig_tx_proposal_out,
+    std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out)
+{
+    // 1. try to select inputs for the tx
+    const OutputSetContextForInputSelectionV1 output_set_context{
+            normal_payment_proposals,
+            selfsend_payment_proposals
+        };
+
+    rct::xmr_amount reported_final_fee;
+    std::list<ContextualRecordVariant> contextual_inputs;
+    if (!try_get_input_set_v1(output_set_context,
+            max_inputs,
+            local_user_input_selector,
+            fee_per_tx_weight,
+            tx_fee_calculator,
+            reported_final_fee,
+            contextual_inputs))
+        return false;
+
+    // 2. separate into legacy and seraphis inputs
+    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
+    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
+
+    split_contextual_enote_record_variants(contextual_inputs, legacy_contextual_inputs, sp_contextual_inputs);
+    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
+
+    // a. convert legacy inputs to legacy multisig input proposals (inputs to spend) (TODO)
+
+    // b. convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
+    input_ledger_mappings_out.clear();
+
+    std::vector<SpMultisigPublicInputProposalV1> public_input_proposals;
+    public_input_proposals.reserve(sp_contextual_inputs.size());
+
+    for (const SpContextualEnoteRecordV1 &contextual_input : sp_contextual_inputs)
+    {
+        // save input indices for making membership proofs
+        input_ledger_mappings_out[contextual_input.m_record.m_key_image] = 
+            contextual_input.m_origin_context.m_enote_ledger_index;
+
+        // convert inputs to input proposals
+        public_input_proposals.emplace_back();
+        make_v1_multisig_public_input_proposal_v1(contextual_input.m_record,
+            rct::rct2sk(rct::skGen()),
+            rct::rct2sk(rct::skGen()),
+            public_input_proposals.back());
+    }
+
+    // 4. get total input amount
+    boost::multiprecision::uint128_t total_input_amount{0};
+    SpInputProposalV1 input_proposal_temp;
+
+    for (const SpMultisigPublicInputProposalV1 &public_input_proposal : public_input_proposals)
+    {
+        public_input_proposal.get_input_proposal_v1(wallet_spend_pubkey, k_view_balance, input_proposal_temp);
+        total_input_amount += input_proposal_temp.get_amount();
+    }
+
+    // 5. finalize output set
+    const DiscretizedFee discretized_transaction_fee{reported_final_fee};
+    CHECK_AND_ASSERT_THROW_MES(discretized_transaction_fee == reported_final_fee,
+        "make tx proposal for transfer (v1): the input selector fee was not properly discretized (bug).");
+
+    finalize_v1_output_proposal_set_v1(total_input_amount,
+        reported_final_fee,
+        change_address,
+        dummy_address,
+        k_view_balance,
+        normal_payment_proposals,
+        selfsend_payment_proposals);
+
+    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.get_fee(fee_per_tx_weight,
+                legacy_contextual_inputs.size() + sp_contextual_inputs.size(),
+                normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
+            reported_final_fee,
+        "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");
+
+    // 6. get memo elements
+    std::vector<ExtraFieldElement> extra_field_elements;
+    CHECK_AND_ASSERT_THROW_MES(try_get_extra_field_elements(partial_memo_for_tx, extra_field_elements),
+        "make tx proposal for transfer (v1): unable to extract memo field elements for tx proposal.");
+
+    // 7. assemble into tx proposal
+    std::string version_string;
+    make_versioning_string(semantic_rules_version, version_string);
+
+    make_v1_multisig_tx_proposal_v1(std::move(normal_payment_proposals),
+        std::move(selfsend_payment_proposals),
+        std::move(extra_field_elements),
+        reported_final_fee,
+        version_string,
+        std::move(public_input_proposals),
+        aggregate_filter_of_requested_multisig_signers,
+        wallet_spend_pubkey,
+        k_view_balance,
+        multisig_tx_proposal_out);
+
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_multisig_input_init_set_semantics_v1(const SpMultisigInputInitSetV1 &input_init_set,

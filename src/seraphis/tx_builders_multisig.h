@@ -46,6 +46,7 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
+#include "jamtis_destination.h"
 #include "jamtis_payment_proposal.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_signer_set_filter.h"
@@ -57,6 +58,9 @@
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
 #include "tx_enote_record_types.h"
+#include "tx_fee_calculator.h"
+#include "tx_input_selection.h"
+#include "txtype_squashed_v1.h"
 
 //third party headers
 
@@ -97,25 +101,6 @@ void make_v1_multisig_public_input_proposal_v1(const SpEnoteRecordV1 &enote_reco
     const crypto::secret_key &commitment_mask,
     SpMultisigPublicInputProposalV1 &proposal_out);
 /**
-* brief: finalize_multisig_output_proposals_v1 - finalize output set for a multisig tx proposal (add change/dummy outputs)
-* param: public_input_proposals -
-* param: tx_fee -
-* param: change_destination -
-* param: dummy_destination -
-* param: wallet_spend_pubkey -
-* param: k_view_balance -
-* inoutparam: normal_payment_proposals_inout -
-* inoutparam: selfsend_payment_proposals_inout -
-*/
-void finalize_multisig_output_proposals_v1(const std::vector<SpMultisigPublicInputProposalV1> &public_input_proposals,
-    const DiscretizedFee &tx_fee,
-    const jamtis::JamtisDestinationV1 &change_destination,
-    const jamtis::JamtisDestinationV1 &dummy_destination,
-    const rct::key &wallet_spend_pubkey,
-    const crypto::secret_key &k_view_balance,
-    std::vector<jamtis::JamtisPaymentProposalV1> &normal_payment_proposals_inout,
-    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &selfsend_payment_proposals_inout);
-/**
 * brief: check_v1_multisig_tx_proposal_semantics_v1 - check semantics of a multisig tx proposal
 *   - throws if a check fails
 *   - not checked: input/output counts satisfy the desired tx semantic rules version
@@ -137,7 +122,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 * brief: make_v1_multisig_tx_proposal_v1 - make a multisig tx proposal
 * param: normal_payment_proposals -
 * param: selfsend_payment_proposals -
-* param: partial_memo -
+* param: additional_memo_elements -
 * param: tx_fee -
 * param: version_string -
 * param: full_input_proposals -
@@ -148,7 +133,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 */
 void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
-    TxExtra partial_memo,
+    std::vector<ExtraFieldElement> additional_memo_elements,
     const DiscretizedFee &tx_fee,
     std::string version_string,
     std::vector<SpMultisigPublicInputProposalV1> public_input_proposals,
@@ -156,6 +141,40 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out);
+/**
+* brief: try_make_v1_multisig_tx_proposal_for_transfer_v1 - try to select inputs then make a v1 multisig tx proposal for
+*   specified outlays
+* param: change_address -
+* param: dummy_address -
+* param: local_user_input_selector -
+* param: tx_fee_calculator -
+* param: fee_per_tx_weight -
+* param: max_inputs -
+* param: semantic_rules_version -
+* param: aggregate_filter_of_requested_multisig_signers -
+* param: normal_payment_proposals -
+* param: selfsend_payment_proposals -
+* param: partial_memo_for_tx -
+* param: wallet_spend_pubkey -
+* param: k_view_balance -
+* outparam: multisig_tx_proposal_out -
+* outparam: input_ledger_mappings_out -
+*/
+bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
+    const jamtis::JamtisDestinationV1 &dummy_address,
+    const InputSelectorV1 &local_user_input_selector,
+    const FeeCalculator &tx_fee_calculator,
+    const rct::xmr_amount fee_per_tx_weight,
+    const std::size_t max_inputs,
+    const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
+    std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
+    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
+    TxExtra partial_memo_for_tx,
+    const rct::key &wallet_spend_pubkey,
+    const crypto::secret_key &k_view_balance,
+    SpMultisigTxProposalV1 &multisig_tx_proposal_out,
+    std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out);
 /**
 * brief: check_v1_multisig_input_init_set_semantics_v1 - check semantics of a multisig input initializer set
 *   - throws if a check fails

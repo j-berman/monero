@@ -51,6 +51,13 @@ namespace sp
 {
 
 /**
+* brief: compute_bin_width - compute the width of a bin (number of ledger indices that the bin spans)
+*   - width = 2*radius + 1
+* param: bin_radius -
+* return: 2*radius + 1
+*/
+std::uint64_t compute_bin_width(const std::uint64_t bin_radius);
+/**
 * brief: check_bin_config_v1 - check that a reference set bin configuration is valid
 * param: reference_set_size -
 * param: bin_config -

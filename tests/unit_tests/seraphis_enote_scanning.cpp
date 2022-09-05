@@ -434,8 +434,7 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
     // 2. tx proposal
     SpTxProposalV1 tx_proposal;
     std::unordered_map<crypto::key_image, std::uint64_t> input_ledger_mappings;
-    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_tx_proposal_for_transfer_v1(local_user_keys.k_vb,
-        change_address,
+    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_tx_proposal_for_transfer_v1(change_address,
         dummy_address,
         local_user_input_selector,
         tx_fee_calculator,
@@ -444,6 +443,7 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
         std::move(normal_payment_proposals),
         std::vector<JamtisPaymentProposalSelfSendV1>{},
         TxExtra{},
+        local_user_keys.k_vb,
         tx_proposal,
         input_ledger_mappings)));
 

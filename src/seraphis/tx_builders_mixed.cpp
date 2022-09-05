@@ -419,8 +419,7 @@ void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_
     make_tx_extra(std::move(additional_memo_elements), tx_proposal_out.m_partial_memo);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_balance,
-    const jamtis::JamtisDestinationV1 &change_address,
+bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
     const jamtis::JamtisDestinationV1 &dummy_address,
     const InputSelectorV1 &local_user_input_selector,
     const FeeCalculator &tx_fee_calculator,
@@ -429,10 +428,11 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
+    const crypto::secret_key &k_view_balance,
     SpTxProposalV1 &tx_proposal_out,
     std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out)
 {
-    // try to select inputs for the tx
+    // 1. try to select inputs for the tx
     const OutputSetContextForInputSelectionV1 output_set_context{
             normal_payment_proposals,
             selfsend_payment_proposals
@@ -449,16 +449,16 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
             contextual_inputs))
         return false;
 
-    // separate into legacy and seraphis inputs
+    // 2. separate into legacy and seraphis inputs
     std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
     std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
 
     split_contextual_enote_record_variants(contextual_inputs, legacy_contextual_inputs, sp_contextual_inputs);
     CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
-    // handle legacy inputs (TODO)
+    // a. handle legacy inputs (TODO)
 
-    // handle seraphis inputs
+    // b. handle seraphis inputs
     input_ledger_mappings_out.clear();
 
     std::vector<SpInputProposalV1> input_proposals;
@@ -478,12 +478,12 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
             input_proposals.back());
     }
 
-    // get total input amount
+    //3.  get total input amount
     boost::multiprecision::uint128_t total_input_amount{0};
     for (const SpInputProposalV1 &input_proposal : input_proposals)
         total_input_amount += input_proposal.m_core.m_amount;
 
-    // finalize output set
+    // 4. finalize output set
     const DiscretizedFee discretized_transaction_fee{reported_final_fee};
     CHECK_AND_ASSERT_THROW_MES(discretized_transaction_fee == reported_final_fee,
         "make tx proposal for transfer (v1): the input selector fee was not properly discretized (bug).");
@@ -502,12 +502,12 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
             reported_final_fee,
         "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");
 
-    // get memo elements
+    // 5. get memo elements
     std::vector<ExtraFieldElement> extra_field_elements;
     CHECK_AND_ASSERT_THROW_MES(try_get_extra_field_elements(partial_memo_for_tx, extra_field_elements),
         "make tx proposal for transfer (v1): unable to extract memo field elements for tx proposal.");
 
-    // assemble into tx proposal
+    // 6. assemble into tx proposal
     make_v1_tx_proposal_v1(std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         discretized_transaction_fee,

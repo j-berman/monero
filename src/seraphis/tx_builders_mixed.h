@@ -144,7 +144,6 @@ void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_
     SpTxProposalV1 &tx_proposal_out);
 /**
 * brief: try_make_v1_tx_proposal_for_transfer_v1 - try to select inputs then make a v1 tx proposal for specified outlays
-* param: k_view_balance -
 * param: change_address -
 * param: dummy_address -
 * param: local_user_input_selector -
@@ -154,11 +153,11 @@ void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_
 * param: normal_payment_proposals -
 * param: selfsend_payment_proposals -
 * param: partial_memo_for_tx -
+* param: k_view_balance -
 * outparam: tx_proposal_out -
 * outparam: input_ledger_mappings_out -
 */
-bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_balance,
-    const jamtis::JamtisDestinationV1 &change_address,
+bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
     const jamtis::JamtisDestinationV1 &dummy_address,
     const InputSelectorV1 &local_user_input_selector,
     const FeeCalculator &tx_fee_calculator,
@@ -167,6 +166,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const crypto::secret_key &k_view_ba
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
+    const crypto::secret_key &k_view_balance,
     SpTxProposalV1 &tx_proposal_out,
     std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out);
 /**

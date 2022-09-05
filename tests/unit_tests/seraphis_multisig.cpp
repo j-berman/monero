@@ -44,6 +44,7 @@
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/sp_crypto_utils.h"
 #include "seraphis/tx_binned_reference_set.h"
+#include "seraphis/tx_binned_reference_set_utils.h"
 #include "seraphis/tx_builder_types.h"
 #include "seraphis/tx_builder_types_multisig.h"
 #include "seraphis/tx_builders_inputs.h"
@@ -54,9 +55,13 @@
 #include "seraphis/tx_contextual_enote_record_types.h"
 #include "seraphis/tx_contextual_enote_record_utils.h"
 #include "seraphis/tx_discretized_fee.h"
+#include "seraphis/tx_enote_finding_context_mocks.h"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils.h"
+#include "seraphis/tx_enote_scanning.h"
+#include "seraphis/tx_enote_scanning_context_simple.h"
 #include "seraphis/tx_enote_store_mocks.h"
+#include "seraphis/tx_enote_store_updater_mocks.h"
 #include "seraphis/tx_extra.h"
 #include "seraphis/tx_fee_calculator_mocks.h"
 #include "seraphis/tx_input_selection.h"
@@ -84,6 +89,7 @@ static void make_multisig_jamtis_mock_keys(const multisig::multisig_account &acc
     using namespace sp;
     using namespace jamtis;
 
+    keys_out.k_m = rct::rct2sk(rct::Z);
     keys_out.k_vb = account.get_common_privkey();
     make_jamtis_unlockamounts_key(keys_out.k_vb, keys_out.xk_ua);
     make_jamtis_findreceived_key(keys_out.k_vb, keys_out.xk_fr);
@@ -284,6 +290,76 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amount,
+    const sp::jamtis::JamtisDestinationV1 &destination,
+    const sp::TxExtra &partial_memo_for_destination,
+    sp::jamtis::JamtisPaymentProposalV1 &payment_proposal_out)
+{
+    using namespace sp;
+    using namespace jamtis;
+
+    payment_proposal_out = JamtisPaymentProposalV1{
+            .m_destination = destination,
+            .m_amount = outlay_amount,
+            .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
+            .m_partial_memo = partial_memo_for_destination
+        };
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void send_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
+    const sp::jamtis::JamtisDestinationV1 &user_address,
+    sp::MockLedgerContext &ledger_context_inout)
+{
+    using namespace sp;
+    using namespace jamtis;
+
+    // prepare mock coinbase enotes
+    std::vector<SpEnoteV1> coinbase_enotes;
+    SpTxSupplementV1 tx_supplement;
+    JamtisPaymentProposalV1 payment_proposal_temp;
+    const rct::key mock_input_context{rct::pkGen()};
+    coinbase_enotes.reserve(coinbase_amounts.size());
+    tx_supplement.m_output_enote_ephemeral_pubkeys.reserve(coinbase_amounts.size());
+
+    for (const rct::xmr_amount coinbase_amount : coinbase_amounts)
+    {
+        // make payment proposal
+        convert_outlay_to_payment_proposal(coinbase_amount, user_address, TxExtra{}, payment_proposal_temp);
+
+        // get output proposal
+        SpOutputProposalV1 output_proposal;
+        payment_proposal_temp.get_output_proposal_v1(mock_input_context, output_proposal);
+
+        // save enote and ephemeral pubkey
+        coinbase_enotes.emplace_back();
+        output_proposal.get_enote_v1(coinbase_enotes.back());
+        tx_supplement.m_output_enote_ephemeral_pubkeys.emplace_back(output_proposal.m_enote_ephemeral_pubkey);
+    }
+
+    // commit coinbase enotes as new block
+    ASSERT_NO_THROW(ledger_context_inout.commit_unconfirmed_txs_v1(mock_input_context,
+        std::move(tx_supplement),
+        std::move(coinbase_enotes)));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void refresh_user_enote_store(const sp::jamtis::jamtis_mock_keys &user_keys,
+    const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
+    const sp::MockLedgerContext &ledger_context,
+    sp::SpEnoteStoreMockV1 &user_enote_store_inout)
+{
+    using namespace sp;
+    using namespace jamtis;
+
+    const EnoteFindingContextLedgerMock enote_finding_context{ledger_context, user_keys.xk_fr};
+    EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
+    EnoteStoreUpdaterLedgerMock enote_store_updater{user_keys.K_1_base, user_keys.k_vb, user_enote_store_inout};
+
+    ASSERT_NO_THROW(refresh_enote_store_ledger(refresh_config, enote_scanning_context, enote_store_updater));
+}
+//-------------------------------------------------------------------------------------------------------------------
 // v1: SpTxSquashedV1
 //-------------------------------------------------------------------------------------------------------------------
 static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
@@ -304,6 +380,34 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     for (const std::uint32_t requested_signer : requested_signers)
         ASSERT_TRUE(requested_signer < num_signers);
 
+    // config
+    const std::size_t max_inputs{10000};
+    rct::xmr_amount specified_fee;
+    ASSERT_TRUE(try_get_fee_value(fee, specified_fee));
+    const std::size_t tx_fee_per_weight{specified_fee};
+    const std::size_t ref_set_decomp_m{2};
+    const std::size_t ref_set_decomp_n{2};
+    const std::size_t bin_radius{1};
+    const std::size_t num_bin_members{2};
+
+    const RefreshLedgerEnoteStoreConfig refresh_config{
+            .m_reorg_avoidance_depth = 1,
+            .m_max_chunk_size = 1,
+            .m_max_partialscan_attempts = 0
+        };
+
+    const SpBinnedReferenceSetConfigV1 bin_config{
+            .m_bin_radius = bin_radius,
+            .m_num_bin_members = num_bin_members
+        };
+
+
+    // global
+    MockLedgerContext ledger_context{0, 0};
+
+    std::string version_string;
+    make_versioning_string(semantic_rules_version, version_string);
+
 
     /// 1) setup multisig accounts
 
@@ -313,8 +417,11 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     ASSERT_TRUE(accounts.size() == num_signers);
 
     // b) get shared multisig wallet keys
-    jamtis_mock_keys keys;
-    ASSERT_NO_THROW(make_multisig_jamtis_mock_keys(accounts[0], keys));
+    jamtis_mock_keys shared_keys;
+    ASSERT_NO_THROW(make_multisig_jamtis_mock_keys(accounts[0], shared_keys));
+
+    // c) make an enote store for the multisig group
+    SpEnoteStoreMockV1 enote_store{0, 0, 0};
 
 
     /// 2) fund the multisig address
@@ -324,75 +431,36 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     j.gen();
     JamtisDestinationV1 user_address;
 
-    ASSERT_NO_THROW(make_jamtis_destination_v1(keys.K_1_base,
-        keys.xK_ua,
-        keys.xK_fr,
-        keys.s_ga,
+    ASSERT_NO_THROW(make_jamtis_destination_v1(shared_keys.K_1_base,
+        shared_keys.xK_ua,
+        shared_keys.xK_fr,
+        shared_keys.s_ga,
         j,
         user_address));
 
-    // b) make plain enotes paying to the address
-    JamtisPaymentProposalV1 payment_proposal_temp;
-    SpOutputProposalV1 output_proposal_temp;
+    // b) send coinbase enotes to the address, padded so there are enough for membership proofs
+    std::vector<rct::xmr_amount> in_amounts_padded{in_amounts};
 
-    std::vector<SpEnoteV1> input_enotes;
-    std::vector<crypto::x25519_pubkey> input_enote_ephemeral_pubkeys;
-    input_enotes.reserve(in_amounts.size());
-    input_enote_ephemeral_pubkeys.reserve(in_amounts.size());
+    if (in_amounts_padded.size() < compute_bin_width(bin_radius))
+        in_amounts_padded.resize(compute_bin_width(bin_radius), 0);
 
-    for (const rct::xmr_amount in_amount : in_amounts)
-    {
-        payment_proposal_temp = JamtisPaymentProposalV1{
-                .m_destination = user_address,
-                .m_amount = in_amount,
-                .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
-                .m_partial_memo = TxExtra{}
-            };
-        payment_proposal_temp.get_output_proposal_v1(rct::zero(), output_proposal_temp);
+    send_coinbase_amounts_to_user(in_amounts_padded, user_address, ledger_context);
 
-        input_enotes.emplace_back();
-        output_proposal_temp.get_enote_v1(input_enotes.back());
-        input_enote_ephemeral_pubkeys.emplace_back(output_proposal_temp.m_enote_ephemeral_pubkey);
-    }
+    // c) recover balance
+    refresh_user_enote_store(shared_keys, refresh_config, ledger_context, enote_store);
 
-    // c) extract info from the enotes 'sent' to the multisig address
-    std::vector<SpEnoteRecordV1> input_enote_records;
-    input_enote_records.resize(input_enotes.size());
-    SpEnoteStoreMockV1 enote_store{0, 0, 0};
+    // d) compute expected received amount
+    boost::multiprecision::uint128_t total_input_amount{0};
 
-    for (std::size_t input_index{0}; input_index < input_enotes.size(); ++input_index)
-    {
-        ASSERT_TRUE(try_get_enote_record_v1(input_enotes[input_index],
-            input_enote_ephemeral_pubkeys[input_index],
-            rct::zero(),
-            keys.K_1_base,
-            keys.k_vb,
-            input_enote_records[input_index]));
+    for (const rct::xmr_amount in_amount : in_amounts_padded)
+        total_input_amount += in_amount;
 
-        // double check information recovery
-        ASSERT_TRUE(input_enote_records[input_index].m_amount == in_amounts[input_index]);
-        ASSERT_TRUE(input_enote_records[input_index].m_address_index == j);
-        ASSERT_TRUE(input_enote_records[input_index].m_type == JamtisEnoteType::PLAIN);
-
-        // store the enote record
-        enote_store.add_record(
-                SpContextualEnoteRecordV1{
-                        .m_record = input_enote_records[input_index]
-                    }
-            );
-    }
+    // e) balance check
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == total_input_amount);
 
 
     /// 3) propose tx
-
-    // config
-    const std::size_t max_inputs{10000};
-    rct::xmr_amount specified_fee;
-    ASSERT_TRUE(try_get_fee_value(fee, specified_fee));
-    const std::size_t tx_fee_per_weight{specified_fee};
-    const std::size_t ref_set_decomp_m{2};
-    const std::size_t ref_set_decomp_n{2};
-    const std::size_t num_bin_members{2};
 
     // a) prepare outputs
 
@@ -423,65 +491,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
             );
     }
 
-    // b) select inputs to spend
-
-    // - select inputs
-    const sp::OutputSetContextForInputSelectionV1 output_set_context{normal_payment_proposals, selfsend_payment_proposals};
-    const sp::InputSelectorMockV1 input_selector{enote_store};
-    const sp::FeeCalculatorMockTrivial tx_fee_calculator;  //trivial fee calculator so we can use specified input fee
-
-    rct::xmr_amount reported_final_fee;
-    std::list<ContextualRecordVariant> contextual_inputs;
-    ASSERT_TRUE(try_get_input_set_v1(output_set_context,
-        max_inputs,
-        input_selector,
-        tx_fee_per_weight,
-        tx_fee_calculator,
-        reported_final_fee,
-        contextual_inputs));
-    ASSERT_TRUE(fee == reported_final_fee);
-
-    // - separate into legacy and seraphis inputs
-    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
-    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
-
-    split_contextual_enote_record_variants(contextual_inputs, legacy_contextual_inputs, sp_contextual_inputs);
-    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
-
-    // - convert legacy inputs to legacy multisig input proposals (inputs to spend) (TODO)
-
-    // - convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
-    std::vector<SpMultisigPublicInputProposalV1> public_input_proposals;
-    public_input_proposals.reserve(input_enote_records.size());
-
-    for (const SpContextualEnoteRecordV1 &contextual_input : sp_contextual_inputs)
-    {
-        public_input_proposals.emplace_back();
-        ASSERT_NO_THROW(make_v1_multisig_public_input_proposal_v1(contextual_input.m_record,
-            make_secret_key(),
-            make_secret_key(),
-            public_input_proposals.back()));
-    }
-
-    // c) finalize output set (add change/dummy outputs)
-
-    // - finalize the set
-    ASSERT_NO_THROW(finalize_multisig_output_proposals_v1(public_input_proposals,
-        fee,
-        user_address,
-        user_address,
-        keys.K_1_base,
-        keys.k_vb,
-        normal_payment_proposals,
-        selfsend_payment_proposals));
-
-    // - check fee after finalizing output proposal set (trivial fee calculator makes this meaningless here)
-    ASSERT_TRUE(tx_fee_calculator.get_fee(tx_fee_per_weight,
-            public_input_proposals.size(),
-            normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
-        reported_final_fee);
-
-    // d) set signers who are requested to participate
+    // b) set requested signers filter
     std::vector<crypto::public_key> requested_signers_ids;
     requested_signers_ids.reserve(requested_signers.size());
 
@@ -491,33 +501,41 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
             requested_signers_ids.emplace_back(accounts[signer_index].get_base_pubkey());
     }
 
-    multisig::signer_set_filter aggregate_filter;
-    ASSERT_NO_THROW(multisig::multisig_signers_to_filter(requested_signers_ids,
+    multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers;
+    multisig::multisig_signers_to_filter(requested_signers_ids,
         accounts[0].get_signers(),
-        aggregate_filter));
+        aggregate_filter_of_requested_multisig_signers);
 
-    // e) make multisig tx proposal
+    // b) make multisig tx proposal
+    const sp::InputSelectorMockV1 input_selector{enote_store};
+    const sp::FeeCalculatorMockTrivial tx_fee_calculator;  //trivial fee calculator so we can use specified input fee
+
     SpMultisigTxProposalV1 multisig_tx_proposal;
-    std::string version_string;
-    make_versioning_string(semantic_rules_version, version_string);
-
-    ASSERT_NO_THROW(make_v1_multisig_tx_proposal_v1(std::move(normal_payment_proposals),
+    std::unordered_map<crypto::key_image, std::uint64_t> input_ledger_mappings;
+    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_tx_proposal_for_transfer_v1(user_address,
+        user_address,
+        input_selector,
+        tx_fee_calculator,
+        tx_fee_per_weight,
+        max_inputs,
+        semantic_rules_version,
+        aggregate_filter_of_requested_multisig_signers,
+        std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         TxExtra{},
-        fee,
-        version_string,
-        std::move(public_input_proposals),
-        aggregate_filter,
-        keys.K_1_base,
-        keys.k_vb,
-        multisig_tx_proposal));
+        shared_keys.K_1_base,
+        shared_keys.k_vb,
+        multisig_tx_proposal,
+        input_ledger_mappings)));
+
+    ASSERT_TRUE(multisig_tx_proposal.m_tx_fee == fee);
 
 
     /// 4) get inits from all requested signers
     std::vector<SpMultisigNonceRecord> signer_nonce_records;
     std::vector<SpMultisigInputInitSetV1> input_inits;
     input_inits.reserve(accounts.size());
-    //signer_nonce_records.reserve(accounts.size());
+    //signer_nonce_records.reserve(accounts.size());  //nonce records are non-copyable, so .reserve() doesn't work
 
     for (std::size_t signer_index{0}; signer_index < accounts.size(); ++signer_index)
     {
@@ -531,8 +549,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 accounts[signer_index].get_signers(),
                 multisig_tx_proposal,
                 version_string,
-                keys.K_1_base,
-                keys.k_vb,
+                shared_keys.K_1_base,
+                shared_keys.k_vb,
                 signer_nonce_records.back(),
                 input_inits.back()));
         }
@@ -543,8 +561,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 accounts[signer_index].get_signers(),
                 multisig_tx_proposal,
                 version_string,
-                keys.K_1_base,
-                keys.k_vb,
+                shared_keys.K_1_base,
+                shared_keys.k_vb,
                 signer_nonce_records.back(),
                 input_inits.back()));
         }
@@ -588,37 +606,34 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     ASSERT_NO_THROW(
             ASSERT_TRUE(try_make_v1_partial_inputs_v1(multisig_tx_proposal,
                 accounts[0].get_signers(),
-                keys.K_1_base,
-                keys.k_vb,
+                shared_keys.K_1_base,
+                shared_keys.k_vb,
                 input_partial_sigs_per_signer,
                 partial_inputs))
         );
 
     // b) build partial tx
     SpTxProposalV1 tx_proposal;
-    multisig_tx_proposal.get_v1_tx_proposal_v1(keys.K_1_base, keys.k_vb, tx_proposal);
+    multisig_tx_proposal.get_v1_tx_proposal_v1(shared_keys.K_1_base, shared_keys.k_vb, tx_proposal);
 
     SpPartialTxV1 partial_tx;
     ASSERT_NO_THROW(make_v1_partial_tx_v1(tx_proposal,
         std::move(partial_inputs),
         version_string,
-        keys.K_1_base,
-        keys.k_vb,
+        shared_keys.K_1_base,
+        shared_keys.k_vb,
         partial_tx));
 
-    // c) add enotes owned by multisig address to the ledger and prepare membership ref sets (one step)
+    // c. prepare for membership proofs
     // note: use ring size 2^2 = 4 for speed
-    MockLedgerContext ledger_context{0, 0};
-
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps{
-            gen_mock_sp_membership_proof_preps_v1(partial_tx.m_input_enotes,
-                partial_tx.m_address_masks,
-                partial_tx.m_commitment_masks,
-                ref_set_decomp_m,
-                ref_set_decomp_n,
-                SpBinnedReferenceSetConfigV1{.m_bin_radius = 1, .m_num_bin_members = num_bin_members},
-                ledger_context)
-        };
+    std::vector<SpMembershipProofPrepV1> membership_proof_preps;
+    ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(input_ledger_mappings,
+        tx_proposal.m_input_proposals,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context,
+        membership_proof_preps));
 
     // d) make membership proofs
     std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs;
@@ -634,17 +649,34 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         semantic_rules_version,
         completed_tx));
 
+    // - sanity check fee (can't do this with the trivial fee calculator)
+    //ASSERT_TRUE(completed_tx.m_fee == tx_fee_calculator.get_fee(tx_fee_per_weight, completed_tx));
+
     // f) verify tx
     const TxValidationContextMock tx_validation_context{ledger_context};
 
     ASSERT_NO_THROW(ASSERT_TRUE(validate_tx(completed_tx, tx_validation_context)));
 
-    // - sanity check fee (trivial fee calculator makes this meaningless here)
-    //ASSERT_TRUE(completed_tx.m_fee == tx_fee_calculator.get_fee(tx_fee_per_weight, completed_tx));
+    // g) add tx to mock ledger
+    ASSERT_NO_THROW(ASSERT_TRUE(try_add_tx_to_ledger(completed_tx, ledger_context)));
 
 
-    /// 7) scan outputs for fund recovery
-    //todo
+    /// 7) scan outputs for post-tx balance check
+
+    // a) refresh enote store
+    refresh_user_enote_store(shared_keys, refresh_config, ledger_context, enote_store);
+
+    // b) compute expected spent amount
+    boost::multiprecision::uint128_t total_spent_amount{0};
+
+    for (const rct::xmr_amount out_amount : out_amounts_normal)
+        total_spent_amount += out_amount;
+
+    // c) balance check
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == total_input_amount - total_spent_amount - specified_fee);
+
+    //todo: legacy balance recovery
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
