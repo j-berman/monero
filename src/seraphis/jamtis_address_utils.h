@@ -53,13 +53,23 @@ namespace jamtis
 {
 
 /**
-* brief: make_jamtis_spendkey_extension - k^j_x
+* brief: make_jamtis_spendkey_extension_x - k^j_x
 *   - k^j_x = H_n[s_ga](j)
 * param: s_generate_address - s_ga
 * param: j - address index
 * outparam: extension_out - k^j_x
 */
-void make_jamtis_spendkey_extension(const crypto::secret_key &s_generate_address,
+void make_jamtis_spendkey_extension_x(const crypto::secret_key &s_generate_address,
+    const address_index_t j,
+    crypto::secret_key &extension_out);
+/**
+* brief: make_jamtis_spendkey_extension_u - k^j_u
+*   - k^j_u = H_n[s_ga](j)
+* param: s_generate_address - s_ga
+* param: j - address index
+* outparam: extension_out - k^j_u
+*/
+void make_jamtis_spendkey_extension_u(const crypto::secret_key &s_generate_address,
     const address_index_t j,
     crypto::secret_key &extension_out);
 /**
@@ -74,7 +84,7 @@ void make_jamtis_address_privkey(const crypto::secret_key &s_generate_address,
     crypto::x25519_secret_key &address_privkey_out);
 /**
 * brief: make_jamtis_address_spend_key - K_1
-*   - K_1 = k^j_x X + K_s
+*   - K_1 = k^j_x X + k^j_u U + K_s
 * param: wallet_spend_pubkey - K_s
 * param: s_generate_address - s_ga
 * param: j - address index
@@ -98,17 +108,21 @@ bool test_jamtis_nominal_spend_key(const rct::key &wallet_spend_pubkey,
     const rct::key &nominal_spend_key);
 /**
 * brief: make_seraphis_key_image_jamtis_style - KI
-*   - KI = (k_m/(H_n(q) + k^j_x + k_vb)) U
+*   - KI = ((H_n("..u..", q, C) + k^j_u + k_m)/(H_n("..x..", q, C) + k^j_x + k_vb)) U
 * param: wallet_spend_pubkey - K_s = k_vb X + k_m U
 * param: k_view_balance - k_vb
-* param: spendkey_extension - k^j_x
-* param: sender_extension - H_n(q)
+* param: spendkey_extension_x - k^j_x
+* param: spendkey_extension_u - k^j_x
+* param: sender_extension_x - H_n("..x..", q, C)
+* param: sender_extension_u - H_n("..x..", q, C)
 * outparam: key_image_out - KI
 */
 void make_seraphis_key_image_jamtis_style(const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    const crypto::secret_key &spendkey_extension,
-    const crypto::secret_key &sender_extension,
+    const crypto::secret_key &spendkey_extension_x,
+    const crypto::secret_key &spendkey_extension_u,
+    const crypto::secret_key &sender_extension_x,
+    const crypto::secret_key &sender_extension_u,
     crypto::key_image &key_image_out);
 
 } //namespace jamtis

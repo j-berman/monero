@@ -128,10 +128,13 @@ static void check_is_owned_with_intermediate_record(const sp::SpOutputProposalV1
     EXPECT_TRUE(enote_record.m_address_index == j_expected);
 
     // check key image
-    rct::key spendkey_base{keys.K_1_base};
-    sp::reduce_seraphis_spendkey(keys.k_vb, spendkey_base);
+    rct::key spendkey_U_component{keys.K_1_base};
+    sp::reduce_seraphis_spendkey_x(keys.k_vb, spendkey_U_component);
+    sp::extend_seraphis_spendkey_u(enote_record.m_enote_view_privkey_u, spendkey_U_component);
     crypto::key_image reproduced_key_image;
-    sp::make_seraphis_key_image(enote_record.m_enote_view_privkey, rct::rct2pk(spendkey_base), reproduced_key_image);
+    sp::make_seraphis_key_image(enote_record.m_enote_view_privkey_x,
+        rct::rct2pk(spendkey_U_component),
+        reproduced_key_image);
     EXPECT_TRUE(enote_record.m_key_image == reproduced_key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -161,10 +164,13 @@ static void check_is_owned(const sp::SpOutputProposalV1 &test_proposal,
     EXPECT_TRUE(enote_record.m_address_index == j_expected);
 
     // check key image
-    rct::key spendkey_base{keys.K_1_base};
-    sp::reduce_seraphis_spendkey(keys.k_vb, spendkey_base);
+    rct::key spendkey_U_component{keys.K_1_base};
+    sp::reduce_seraphis_spendkey_x(keys.k_vb, spendkey_U_component);
+    sp::extend_seraphis_spendkey_u(enote_record.m_enote_view_privkey_u, spendkey_U_component);
     crypto::key_image reproduced_key_image;
-    sp::make_seraphis_key_image(enote_record.m_enote_view_privkey, rct::rct2pk(spendkey_base), reproduced_key_image);
+    sp::make_seraphis_key_image(enote_record.m_enote_view_privkey_x,
+        rct::rct2pk(spendkey_U_component),
+        reproduced_key_image);
     EXPECT_TRUE(enote_record.m_key_image == reproduced_key_image);
 
     // for plain enotes, double-check ownership with an intermediate record
@@ -422,13 +428,13 @@ static bool test_info_recovery_addressindex(const sp::jamtis::address_index_t j)
 TEST(seraphis, information_recovery_keyimage)
 {
     // different methods for making key images all have same results
-    crypto::secret_key y, z, k_a_sender, k_a_recipient;
+    crypto::secret_key y, z, k_a_sender_x, k_a_recipient_x;
     rct::key zU, k_bU;
     crypto::key_image key_image1, key_image2, key_image3, key_image_jamtis;
 
     make_secret_key(y);
-    k_a_sender = y;
-    k_a_recipient = y;
+    k_a_sender_x = y;
+    k_a_recipient_x = y;
     sc_add(to_bytes(y), to_bytes(y), to_bytes(y));
     make_secret_key(z);
     sp::make_seraphis_spendbase(z, zU);
@@ -436,18 +442,20 @@ TEST(seraphis, information_recovery_keyimage)
 
     sp::make_seraphis_key_image(y, z, key_image1);  // y X + y X + z U -> (z/2y) U
     sp::make_seraphis_key_image(y, rct::rct2pk(zU), key_image2);
-    sp::make_seraphis_key_image(k_a_sender, k_a_recipient, rct::rct2pk(k_bU), key_image3);
+    sp::make_seraphis_key_image(k_a_sender_x, k_a_recipient_x, rct::rct2pk(k_bU), key_image3);
 
     rct::key wallet_spend_pubkey{k_bU};
     crypto::secret_key k_view_balance, spendkey_extension;
     sc_add(to_bytes(k_view_balance), to_bytes(y), to_bytes(y));  // k_vb = 2*(2*y)
     const rct::key MINUS_ONE{sp::minus_one()};
-    sc_mul(to_bytes(spendkey_extension), MINUS_ONE.bytes, to_bytes(k_a_sender));  // k^j_x = -y
-    sp::extend_seraphis_spendkey(k_view_balance, wallet_spend_pubkey);  // 4*y X + z U
+    sc_mul(to_bytes(spendkey_extension), MINUS_ONE.bytes, to_bytes(k_a_sender_x));  // k^j_x = -y
+    sp::extend_seraphis_spendkey_x(k_view_balance, wallet_spend_pubkey);  // 4*y X + z U
     sp::jamtis::make_seraphis_key_image_jamtis_style(wallet_spend_pubkey,
         k_view_balance,
         spendkey_extension,
+        rct::rct2sk(rct::zero()),
         spendkey_extension,
+        rct::rct2sk(rct::zero()),
         key_image_jamtis);  // -y X + -y X + (4*y X + z U) -> (z/2y) U
 
     EXPECT_TRUE(key_image1 == key_image2);

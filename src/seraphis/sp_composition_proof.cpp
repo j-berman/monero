@@ -203,10 +203,10 @@ SpCompositionProof sp_composition_prove(const rct::key &message,
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(z)), "Bad private key (z zero)!");
     CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(z)) == 0, "Bad private key (z)!");
 
-    // verify the input key matches the input private keys
+    // verify the input key matches the input private keys: K = x G + y X + z U
     rct::key temp_K;
     make_seraphis_spendbase(z, temp_K);
-    extend_seraphis_spendkey(y, temp_K);
+    extend_seraphis_spendkey_x(y, temp_K);
     mask_key(x, temp_K, temp_K);
 
     CHECK_AND_ASSERT_THROW_MES(K == temp_K, "Bad proof key (K doesn't match privkeys)!");

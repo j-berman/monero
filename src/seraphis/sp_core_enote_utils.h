@@ -84,19 +84,33 @@ void make_seraphis_key_image(const crypto::secret_key &k_a_sender,
 */
 void make_seraphis_spendbase(const crypto::secret_key &spendbase_privkey, rct::key &spendbase_pubkey_out);
 /**
-* brief: extend_seraphis_spendkey - extend/create a Seraphis spendkey (or onetime address)
-*   K = k_a_extender X + K_original
-* param: k_a_extender - extends the existing pubkey
-* inoutparam: spendkey_inout - [in: K_original] [out: k_a_extender X + K_original]
+* brief: extend_seraphis_spendkey_x - extend a Seraphis spendkey (or onetime address) on generator X
+*   K = k_extender_x X + K_original
+* param: k_extender_x - extends the existing pubkey
+* inoutparam: spendkey_inout - [in: K_original] [out: k_extender_x X + K_original]
 */
-void extend_seraphis_spendkey(const crypto::secret_key &k_a_extender, rct::key &spendkey_inout);
+void extend_seraphis_spendkey_x(const crypto::secret_key &k_extender_x, rct::key &spendkey_inout);
 /**
-* brief: reduce_seraphis_spendkey - remove private key material from a Seraphis spendkey (or onetime address)
-*   K = K_original - k_a_reducer X
-* param: k_a_reducer - material to remove from the existing pubkey
-* inoutparam: spendkey_inout - [in: K_original] [out: K_original - k_a_reducer X]
+* brief: extend_seraphis_spendkey_u - extend a Seraphis spendkey (or onetime address) on generator U
+*   K = k_extender_u U + K_original
+* param: k_extender_u - extends the existing pubkey
+* inoutparam: spendkey_inout - [in: K_original] [out: k_extender_u U + K_original]
 */
-void reduce_seraphis_spendkey(const crypto::secret_key &k_a_reducer, rct::key &spendkey_inout);
+void extend_seraphis_spendkey_u(const crypto::secret_key &k_extender_u, rct::key &spendkey_inout);
+/**
+* brief: reduce_seraphis_spendkey_x - remove private key material from a Seraphis spendkey (or onetime address) on generator X
+*   K = K_original - k_reducer_x X
+* param: k_reducer_x - material to remove from the existing pubkey
+* inoutparam: spendkey_inout - [in: K_original] [out: K_original - k_reducer_x X]
+*/
+void reduce_seraphis_spendkey_x(const crypto::secret_key &k_reducer_x, rct::key &spendkey_inout);
+/**
+* brief: reduce_seraphis_spendkey_u - remove private key material from a Seraphis spendkey (or onetime address) on generator U
+*   K = K_original - k_reducer_u U
+* param: k_reducer_u - material to remove from the existing pubkey
+* inoutparam: spendkey_inout - [in: K_original] [out: K_original - k_reducer_u U]
+*/
+void reduce_seraphis_spendkey_u(const crypto::secret_key &k_reducer_u, rct::key &spendkey_inout);
 /**
 * brief: make_seraphis_spendkey - create a Seraphis spendkey (or onetime address)
 *   K = k_a X + k_b U
@@ -136,7 +150,7 @@ void make_seraphis_squashed_enote_Q(const rct::key &onetime_address,
     const rct::key &amount_commitment,
     rct::key &Q_out);
 /**
-* brief: make_seraphis_enote_core - make a Seraphis ENote from a pre-made onetime address
+* brief: make_seraphis_enote_core - make a Seraphis enote from a pre-made onetime address
 * param: onetime_address -
 * param: amount_blinding_factor -
 * param: amount -
@@ -147,27 +161,31 @@ void make_seraphis_enote_core(const rct::key &onetime_address,
     const rct::xmr_amount amount,
     SpEnote &enote_core_out);
 /**
-* brief: make_seraphis_enote_core - make a Seraphis ENote by extending an existing address
-* param: extension_privkey -
+* brief: make_seraphis_enote_core - make a Seraphis enote by extending an existing address
+* param: extension_privkey_x -
+* param: extension_privkey_u -
 * param: initial_address -
 * param: amount_blinding_factor -
 * param: amount -
 * outparam: enote_core_out -
 */
-void make_seraphis_enote_core(const crypto::secret_key &extension_privkey,
+void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_x,
+    const crypto::secret_key &extension_privkey_u,
     const rct::key &initial_address,
     const crypto::secret_key &amount_blinding_factor,
     const rct::xmr_amount amount,
     SpEnote &enote_core_out);
 /**
-* brief: make_seraphis_enote_core - make a Seraphis ENote when all secrets are known
-* param: enote_view_privkey -
+* brief: make_seraphis_enote_core - make a Seraphis enote when all secrets are known
+* param: enote_view_privkey_x -
+* param: enote_view_privkey_u -
 * param: spendbase_privkey -
 * param: amount_blinding_factor -
 * param: amount -
 * outparam: enote_core_out -
 */
-void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey,
+void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_x,
+    const crypto::secret_key &enote_view_privkey_u,
     const crypto::secret_key &spendbase_privkey,
     const crypto::secret_key &amount_blinding_factor,
     const rct::xmr_amount amount,

@@ -96,7 +96,7 @@ static void make_multisig_jamtis_mock_keys(const multisig::multisig_account &acc
     make_jamtis_generateaddress_secret(keys_out.k_vb, keys_out.s_ga);
     make_jamtis_ciphertag_secret(keys_out.s_ga, keys_out.s_ct);
     keys_out.K_1_base = rct::pk2rct(account.get_multisig_pubkey());
-    extend_seraphis_spendkey(keys_out.k_vb, keys_out.K_1_base);
+    extend_seraphis_spendkey_x(keys_out.k_vb, keys_out.K_1_base);
     crypto::x25519_scmul_base(keys_out.xk_ua, keys_out.xK_ua);
     crypto::x25519_scmul_key(keys_out.xk_fr, keys_out.xK_ua, keys_out.xK_fr);
 }
@@ -183,7 +183,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
 
         // make a seraphis composition proof pubkey: x G + y X + z U
         rct::key K{rct::pk2rct(accounts[0].get_multisig_pubkey())};  //start with base key: z U
-        sp::extend_seraphis_spendkey(accounts[0].get_common_privkey(), K);  //+ y X
+        sp::extend_seraphis_spendkey_x(accounts[0].get_common_privkey(), K);  //+ y X
         sp::mask_key(x, K, K);  //+ x G
 
         // make the corresponding key image: (z/y) U

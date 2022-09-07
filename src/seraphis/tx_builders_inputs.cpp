@@ -223,16 +223,19 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
     const rct::key &wallet_spend_pubkey_base)
 {
     // 1. the onetime address must be reproducible
-    rct::key onetime_address_reproduced{wallet_spend_pubkey_base};
-    extend_seraphis_spendkey(input_proposal.m_core.m_enote_view_privkey, onetime_address_reproduced);
+    rct::key extended_wallet_spendkey{wallet_spend_pubkey_base};
+    extend_seraphis_spendkey_u(input_proposal.m_core.m_enote_view_privkey_u, extended_wallet_spendkey);
+
+    rct::key onetime_address_reproduced{extended_wallet_spendkey};
+    extend_seraphis_spendkey_x(input_proposal.m_core.m_enote_view_privkey_x, onetime_address_reproduced);
 
     CHECK_AND_ASSERT_THROW_MES(onetime_address_reproduced == input_proposal.m_core.m_enote_core.m_onetime_address,
         "input proposal v1 semantics check: could not reproduce the one-time address.");
 
     // 2. the key image must be reproducible and canonical
     crypto::key_image key_image_reproduced;
-    make_seraphis_key_image(input_proposal.m_core.m_enote_view_privkey,
-        rct::rct2pk(wallet_spend_pubkey_base),
+    make_seraphis_key_image(input_proposal.m_core.m_enote_view_privkey_x,
+        rct::rct2pk(extended_wallet_spendkey),
         key_image_reproduced);
 
     CHECK_AND_ASSERT_THROW_MES(key_image_reproduced == input_proposal.m_core.m_key_image,
@@ -251,7 +254,8 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
 //-------------------------------------------------------------------------------------------------------------------
 void make_input_proposal(const SpEnote &enote_core,
     const crypto::key_image &key_image,
-    const crypto::secret_key &enote_view_privkey,
+    const crypto::secret_key &enote_view_privkey_x,
+    const crypto::secret_key &enote_view_privkey_u,
     const crypto::secret_key &input_amount_blinding_factor,
     const rct::xmr_amount &input_amount,
     const crypto::secret_key &address_mask,
@@ -261,7 +265,8 @@ void make_input_proposal(const SpEnote &enote_core,
     // make an input proposal
     proposal_out.m_enote_core             = enote_core;
     proposal_out.m_key_image              = key_image;
-    proposal_out.m_enote_view_privkey     = enote_view_privkey;
+    proposal_out.m_enote_view_privkey_x   = enote_view_privkey_x;
+    proposal_out.m_enote_view_privkey_u   = enote_view_privkey_u;
     proposal_out.m_amount_blinding_factor = input_amount_blinding_factor;
     proposal_out.m_amount                 = input_amount;
     proposal_out.m_address_mask           = address_mask;
@@ -276,7 +281,8 @@ void make_v1_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
     // make input proposal from enote record
     make_input_proposal(enote_record.m_enote.m_core,
         enote_record.m_key_image,
-        enote_record.m_enote_view_privkey,
+        enote_record.m_enote_view_privkey_x,
+        enote_record.m_enote_view_privkey_u,
         enote_record.m_amount_blinding_factor,
         enote_record.m_amount,
         address_mask,
@@ -349,10 +355,11 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
 
     // H_n(Ko,C) (k_{a, recipient} + k_{a, sender})
     crypto::secret_key y;
-    sc_mul(to_bytes(y), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey));
-    // H_n(Ko,C) k_{b, recipient}
+    sc_mul(to_bytes(y), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_x));
+    // H_n(Ko,C) (k_{b, recipient} + k_{b, sender})
     crypto::secret_key z;
-    sc_mul(to_bytes(z), to_bytes(squash_prefix), to_bytes(spendbase_privkey));
+    sc_add(to_bytes(z), to_bytes(input_proposal.m_enote_view_privkey_u), to_bytes(spendbase_privkey));
+    sc_mul(to_bytes(z), to_bytes(squash_prefix), to_bytes(z));
 
     // make seraphis composition proof
     image_proof_out.m_composition_proof =

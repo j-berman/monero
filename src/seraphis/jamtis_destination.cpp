@@ -68,7 +68,7 @@ void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
     const address_index_t j,
     JamtisDestinationV1 &destination_out)
 {
-    // K_1 = k^j_x X + K_s
+    // K_1 = k^j_x X + k^j_u U + K_s
     make_jamtis_address_spend_key(wallet_spend_pubkey, s_generate_address, j, destination_out.m_addr_K1);
 
     // xK_2 = xk^j_a xK_fr

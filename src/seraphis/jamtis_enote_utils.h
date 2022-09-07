@@ -142,19 +142,30 @@ void make_jamtis_sender_receiver_secret_selfsend(const crypto::secret_key &k_vie
     const jamtis::JamtisSelfSendType self_send_type,
     rct::key &sender_receiver_secret_out);
 /**
-* brief: make_jamtis_onetime_address_extension - extension for transforming a recipient spendkey into an
+* brief: make_jamtis_onetime_address_extension_x - extension for transforming a recipient spendkey into an
 *        enote one-time address
-*    k_{a, sender} = H_n(q, C)
+*    k_{a, sender} = H_n("..x..", q, C)
 * param: sender_receiver_secret - q
 * param: amount_commitment - C
 * outparam: sender_extension_out - k_{a, sender}
 */
-void make_jamtis_onetime_address_extension(const rct::key &sender_receiver_secret,
+void make_jamtis_onetime_address_extension_x(const rct::key &sender_receiver_secret,
+    const rct::key &amount_commitment,
+    crypto::secret_key &sender_extension_out);
+/**
+* brief: make_jamtis_onetime_address_extension_u - extension for transforming a recipient spendkey into an
+*        enote one-time address
+*    k_{b, sender} = H_n("..u..", q, C)
+* param: sender_receiver_secret - q
+* param: amount_commitment - C
+* outparam: sender_extension_out - k_{b, sender}
+*/
+void make_jamtis_onetime_address_extension_u(const rct::key &sender_receiver_secret,
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
 /**
 * brief: make_jamtis_onetime_address - create a onetime address
-*    Ko = H_n(q, C) X + K_1
+*    Ko = H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
 * param: sender_receiver_secret - q
 * param: amount_commitment - C
 * param: recipient_spend_key - K_1
@@ -246,7 +257,7 @@ rct::xmr_amount decode_jamtis_amount_selfsend(const rct::xmr_amount encoded_amou
     const rct::key &sender_receiver_secret);
 /**
 * brief: make_jamtis_nominal_spend_key - make a nominal spend key from a onetime address
-*   K'_1 = Ko - H_n(q, C) X
+*   K'_1 = Ko - H_n("..x..", q, C) X - H_n("..u..", q, C) U
 * param: sender_receiver_secret - q
 * param: onetime_address - Ko
 * param: amount_commitment - C

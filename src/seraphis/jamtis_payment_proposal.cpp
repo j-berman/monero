@@ -117,7 +117,7 @@ void JamtisPaymentProposalV1::get_output_proposal_v1(const rct::key &input_conte
             rct::commit(m_amount, rct::sk2rct(output_proposal_out.m_core.m_amount_blinding_factor))
         };
 
-    // 10. onetime address: Ko = H_n(q, C) X + K_1
+    // 10. onetime address: Ko = H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
     make_jamtis_onetime_address(q,
         temp_amount_commitment,
         m_destination.m_addr_K1,
@@ -201,7 +201,7 @@ void JamtisPaymentProposalSelfSendV1::get_output_proposal_v1(const crypto::secre
             rct::commit(m_amount, rct::sk2rct(output_proposal_out.m_core.m_amount_blinding_factor))
         };
 
-    // 8. onetime address: Ko = H_n(q, C) X + K_1
+    // 8. onetime address: Ko = H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
     make_jamtis_onetime_address(q,
         temp_amount_commitment,
         m_destination.m_addr_K1,
@@ -267,7 +267,6 @@ void check_jamtis_payment_proposal_selfsend_semantics_v1(const JamtisPaymentProp
 
     // 3. try to get an enote record from the enote (via selfsend path)
     SpEnoteRecordV1 temp_enote_record;
-
     CHECK_AND_ASSERT_THROW_MES(try_get_enote_record_v1_selfsend(temp_enote,
             output_proposal.m_enote_ephemeral_pubkey,
             input_context,
@@ -276,7 +275,7 @@ void check_jamtis_payment_proposal_selfsend_semantics_v1(const JamtisPaymentProp
             temp_enote_record),
         "semantics check jamtis self-send payment proposal: failed to extract enote record from the proposal.");
 
-    // 4. convert to a self-send type
+    // 4. extract the self-send type
     JamtisSelfSendType dummy_type;
     CHECK_AND_ASSERT_THROW_MES(try_get_jamtis_self_send_type(temp_enote_record.m_type, dummy_type),
         "semantics check jamtis self-send payment proposal: failed to convert enote type to self-send type (bug).");

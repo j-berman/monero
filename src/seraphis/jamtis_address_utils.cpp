@@ -56,12 +56,23 @@ namespace sp
 namespace jamtis
 {
 //-------------------------------------------------------------------------------------------------------------------
-void make_jamtis_spendkey_extension(const crypto::secret_key &s_generate_address,
+void make_jamtis_spendkey_extension_x(const crypto::secret_key &s_generate_address,
     const address_index_t j,
     crypto::secret_key &extension_out)
 {
     // k^j_x = H_n[s_ga](j)
-    SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_SPENDKEY_EXTENSION, ADDRESS_INDEX_BYTES};
+    SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_X, ADDRESS_INDEX_BYTES};
+    transcript.append("j", j.bytes);
+
+    sp_derive_key(to_bytes(s_generate_address), transcript, to_bytes(extension_out));
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_jamtis_spendkey_extension_u(const crypto::secret_key &s_generate_address,
+    const address_index_t j,
+    crypto::secret_key &extension_out)
+{
+    // k^j_u = H_n[s_ga](j)
+    SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_U, ADDRESS_INDEX_BYTES};
     transcript.append("j", j.bytes);
 
     sp_derive_key(to_bytes(s_generate_address), transcript, to_bytes(extension_out));
@@ -83,12 +94,15 @@ void make_jamtis_address_spend_key(const rct::key &wallet_spend_pubkey,
     const address_index_t j,
     rct::key &address_spendkey_out)
 {
-    // K_1 = k^j_x X + K_s
-    crypto::secret_key address_extension_key;
-    make_jamtis_spendkey_extension(s_generate_address, j, address_extension_key);  //k^j_x
+    // K_1 = k^j_x X + k^j_u U + K_s
+    crypto::secret_key address_extension_key_u;
+    crypto::secret_key address_extension_key_x;
+    make_jamtis_spendkey_extension_u(s_generate_address, j, address_extension_key_u);  //k^j_u
+    make_jamtis_spendkey_extension_x(s_generate_address, j, address_extension_key_x);  //k^j_x
 
     address_spendkey_out = wallet_spend_pubkey;  //K_s
-    extend_seraphis_spendkey(address_extension_key, address_spendkey_out);  //k^j_x X + K_s
+    extend_seraphis_spendkey_u(address_extension_key_u, address_spendkey_out);  //k^j_u U + K_s
+    extend_seraphis_spendkey_x(address_extension_key_x, address_spendkey_out);  //k^j_x X + k^j_u U + K_s
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool test_jamtis_nominal_spend_key(const rct::key &wallet_spend_pubkey,
@@ -106,23 +120,29 @@ bool test_jamtis_nominal_spend_key(const rct::key &wallet_spend_pubkey,
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_key_image_jamtis_style(const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    const crypto::secret_key &spendkey_extension,
-    const crypto::secret_key &sender_extension,
+    const crypto::secret_key &spendkey_extension_x,
+    const crypto::secret_key &spendkey_extension_u,
+    const crypto::secret_key &sender_extension_x,
+    const crypto::secret_key &sender_extension_u,
     crypto::key_image &key_image_out)
 {
-    // KI = (k_m/(H_n(q) + k^j_x + k_vb)) U
+    // KI = ((H_n("..u..", q, C) + k^j_u + k_m)/(H_n("..x..", q, C) + k^j_x + k_vb)) U
 
-    // k_b U = k_m U = K_s - k_vb X
+    // k_m U = K_s - k_vb X
     rct::key master_pubkey{wallet_spend_pubkey};  //K_s = k_vb X + k_m U
-    reduce_seraphis_spendkey(k_view_balance, master_pubkey);  //k_m U
+    reduce_seraphis_spendkey_x(k_view_balance, master_pubkey);  //k_m U
+
+    // k_b U = H_n("..u..", q, C) U + k^j_u U + k_m U
+    extend_seraphis_spendkey_u(spendkey_extension_u, master_pubkey);  //k^j_u U + k_m U
+    extend_seraphis_spendkey_u(sender_extension_u, master_pubkey);  //H_n("..u..", q, C) U + k^j_u U + k_m U
 
     // k_a_recipient = k^j_x + k_vb
     crypto::secret_key k_a_recipient;
-    sc_add(to_bytes(k_a_recipient), to_bytes(spendkey_extension), to_bytes(k_view_balance));  //k^j_x + k_vb
+    sc_add(to_bytes(k_a_recipient), to_bytes(spendkey_extension_x), to_bytes(k_view_balance));  //k^j_x + k_vb
 
-    // k_a_sender = H_n(q)
+    // k_a_sender = H_n("..x..", q, C)
     // KI = (1/(k_a_sender + k_a_recipient))*k_b*U
-    make_seraphis_key_image(sender_extension, k_a_recipient, rct::rct2pk(master_pubkey), key_image_out);
+    make_seraphis_key_image(sender_extension_x, k_a_recipient, rct::rct2pk(master_pubkey), key_image_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace jamtis

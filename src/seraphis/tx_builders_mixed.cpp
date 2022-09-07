@@ -376,7 +376,7 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
 
     // 3. input proposal semantics should be valid
     rct::key wallet_spend_pubkey_base{wallet_spend_pubkey};
-    reduce_seraphis_spendkey(k_view_balance, wallet_spend_pubkey_base);
+    reduce_seraphis_spendkey_x(k_view_balance, wallet_spend_pubkey_base);
 
     for (const SpInputProposalV1 &input_proposal : tx_proposal.m_input_proposals)
         check_v1_input_proposal_semantics_v1(input_proposal, wallet_spend_pubkey_base);

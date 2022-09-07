@@ -70,11 +70,13 @@ namespace config
   const constexpr char HASH_KEY_JAMTIS_CIPHERTAG_SECRET[] = "jamtis_cipher_tag_secret";
   const constexpr char HASH_KEY_JAMTIS_FINDRECEIVED_KEY[] = "jamtis_find_received_key";
   const constexpr char HASH_KEY_JAMTIS_ADDRESS_PRIVKEY[] = "jamtis_address_privkey";
-  const constexpr char HASH_KEY_JAMTIS_SPENDKEY_EXTENSION[] = "jamtis_spendkey_extension";
+  const constexpr char HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_X[] = "jamtis_spendkey_extension_x";
+  const constexpr char HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_U[] = "jamtis_spendkey_extension_u";
   const constexpr char HASH_KEY_JAMTIS_ENCRYPTED_ADDRESS_TAG[] = "jamtis_encrypted_address_tag";
   const constexpr char HASH_KEY_JAMTIS_VIEW_TAG[] = "jamtis_view_tag";
   const constexpr char HASH_KEY_JAMTIS_SENDER_RECEIVER_SECRET_PLAIN[] = "jamtis_sender_receiver_secret_plain";
-  const constexpr char HASH_KEY_JAMTIS_SENDER_ONETIME_ADDRESS_EXTENSION[] = "jamtis_sender_onetime_address_extension";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_ONETIME_ADDRESS_EXTENSION_X[] = "jamtis_sender_onetime_address_extension_x";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_ONETIME_ADDRESS_EXTENSION_U[] = "jamtis_sender_onetime_address_extension_u";
   const constexpr char HASH_KEY_JAMTIS_AMOUNT_BLINDING_FACTOR_PLAIN[] = "jamtis_enote_amount_commitment_blinding_factor_plain";
   const constexpr char HASH_KEY_JAMTIS_AMOUNT_BLINDING_FACTOR_SELF[] = "jamtis_enote_amount_commitment_blinding_factor_self";
   const constexpr char HASH_KEY_JAMTIS_AMOUNT_ENC[] = "jamtis_enote_amount_encoding";
