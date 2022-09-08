@@ -61,6 +61,25 @@ namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void make_enote_view_privkey_g_helper(const crypto::secret_key &s_generate_address,
+    const jamtis::address_index_t j,
+    const rct::key &sender_receiver_secret,
+    const rct::key &amount_commitment,
+    crypto::secret_key &enote_view_privkey_g_out)
+{
+    // enote view privkey: k_mask = H_n("..g..", q, C) + k^j_g
+    crypto::secret_key spendkey_extension_g;  //k^j_g
+    crypto::secret_key sender_extension_g;    //H_n("..g..", q, C)
+    jamtis::make_jamtis_spendkey_extension_g(s_generate_address, j, spendkey_extension_g);
+    jamtis::make_jamtis_onetime_address_extension_g(sender_receiver_secret, amount_commitment, sender_extension_g);
+
+    // k^j_g
+    enote_view_privkey_g_out = spendkey_extension_g;
+    // H_n("..g..", q, C) + k^j_g
+    sc_add(to_bytes(enote_view_privkey_g_out), to_bytes(sender_extension_g), to_bytes(enote_view_privkey_g_out));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void make_enote_view_privkey_x_helper(const crypto::secret_key &k_view_balance,
     const crypto::secret_key &s_generate_address,
     const jamtis::address_index_t j,
@@ -245,11 +264,19 @@ static void get_final_record_info_v1_helper(const rct::key &sender_receiver_secr
     const rct::key &wallet_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const crypto::secret_key &s_generate_address,
+    crypto::secret_key &enote_view_privkey_g_out,
     crypto::secret_key &enote_view_privkey_x_out,
     crypto::secret_key &enote_view_privkey_u_out,
     crypto::key_image &key_image_out)
 {
     // get final info (enote view privkey, key image)
+
+    // construct enote view privkey for G component: k_mask = H_n("..g..", q, C) + k^j_g
+    make_enote_view_privkey_g_helper(s_generate_address,
+        j,
+        sender_receiver_secret,
+        amount_commitment,
+        enote_view_privkey_g_out);
 
     // construct enote view privkey for X component: k_a = H_n("..x..", q, C) + k^j_x + k_vb
     make_enote_view_privkey_x_helper(k_view_balance,
@@ -341,6 +368,7 @@ static bool try_get_enote_record_v1_plain_finalize(const SpEnoteV1 &enote,
         wallet_spend_pubkey,
         k_view_balance,
         s_generate_address,
+        record_out.m_enote_view_privkey_g,
         record_out.m_enote_view_privkey_x,
         record_out.m_enote_view_privkey_u,
         record_out.m_key_image);
@@ -689,7 +717,14 @@ bool try_get_enote_record_v1_selfsend_for_type(const SpEnoteV1 &enote,
             record_out.m_amount_blinding_factor))
         return false;
 
-    // construct enote view privkey: k_a = H_n("..x..", q, C) + k^j_x + k_vb
+    // construct enote view privkey for G: k_mask = H_n("..g..", q, C) + k^j_g
+    make_enote_view_privkey_g_helper(s_generate_address,
+        record_out.m_address_index,
+        q,
+        enote.m_core.m_amount_commitment,
+        record_out.m_enote_view_privkey_g);
+
+    // construct enote view privkey for X: k_a = H_n("..x..", q, C) + k^j_x + k_vb
     make_enote_view_privkey_x_helper(k_view_balance,
         s_generate_address,
         record_out.m_address_index,
@@ -697,7 +732,7 @@ bool try_get_enote_record_v1_selfsend_for_type(const SpEnoteV1 &enote,
         enote.m_core.m_amount_commitment,
         record_out.m_enote_view_privkey_x);
 
-    // construct enote view privkey: k_b_view = H_n("..u..", q, C) + k^j_u
+    // construct enote view privkey for U: k_b_view = H_n("..u..", q, C) + k^j_u
     make_enote_view_privkey_u_helper(s_generate_address,
         record_out.m_address_index,
         q,

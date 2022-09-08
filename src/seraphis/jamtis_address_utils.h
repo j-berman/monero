@@ -53,6 +53,16 @@ namespace jamtis
 {
 
 /**
+* brief: make_jamtis_spendkey_extension_g - k^j_g
+*   - k^j_g = H_n[s_ga](j)
+* param: s_generate_address - s_ga
+* param: j - address index
+* outparam: extension_out - k^j_g
+*/
+void make_jamtis_spendkey_extension_g(const crypto::secret_key &s_generate_address,
+    const address_index_t j,
+    crypto::secret_key &extension_out);
+/**
 * brief: make_jamtis_spendkey_extension_x - k^j_x
 *   - k^j_x = H_n[s_ga](j)
 * param: s_generate_address - s_ga
@@ -84,7 +94,7 @@ void make_jamtis_address_privkey(const crypto::secret_key &s_generate_address,
     crypto::x25519_secret_key &address_privkey_out);
 /**
 * brief: make_jamtis_address_spend_key - K_1
-*   - K_1 = k^j_x X + k^j_u U + K_s
+*   - K_1 = k^j_g G + k^j_x X + k^j_u U + K_s
 * param: wallet_spend_pubkey - K_s
 * param: s_generate_address - s_ga
 * param: j - address index

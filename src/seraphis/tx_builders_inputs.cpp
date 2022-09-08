@@ -228,6 +228,7 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
 
     rct::key onetime_address_reproduced{extended_wallet_spendkey};
     extend_seraphis_spendkey_x(input_proposal.m_core.m_enote_view_privkey_x, onetime_address_reproduced);
+    mask_key(input_proposal.m_core.m_enote_view_privkey_g, onetime_address_reproduced, onetime_address_reproduced);
 
     CHECK_AND_ASSERT_THROW_MES(onetime_address_reproduced == input_proposal.m_core.m_enote_core.m_onetime_address,
         "input proposal v1 semantics check: could not reproduce the one-time address.");
@@ -254,6 +255,7 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
 //-------------------------------------------------------------------------------------------------------------------
 void make_input_proposal(const SpEnote &enote_core,
     const crypto::key_image &key_image,
+    const crypto::secret_key &enote_view_privkey_g,
     const crypto::secret_key &enote_view_privkey_x,
     const crypto::secret_key &enote_view_privkey_u,
     const crypto::secret_key &input_amount_blinding_factor,
@@ -265,6 +267,7 @@ void make_input_proposal(const SpEnote &enote_core,
     // make an input proposal
     proposal_out.m_enote_core             = enote_core;
     proposal_out.m_key_image              = key_image;
+    proposal_out.m_enote_view_privkey_g   = enote_view_privkey_g;
     proposal_out.m_enote_view_privkey_x   = enote_view_privkey_x;
     proposal_out.m_enote_view_privkey_u   = enote_view_privkey_u;
     proposal_out.m_amount_blinding_factor = input_amount_blinding_factor;
@@ -281,6 +284,7 @@ void make_v1_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
     // make input proposal from enote record
     make_input_proposal(enote_record.m_enote.m_core,
         enote_record.m_key_image,
+        enote_record.m_enote_view_privkey_g,
         enote_record.m_enote_view_privkey_x,
         enote_record.m_enote_view_privkey_u,
         enote_record.m_amount_blinding_factor,
@@ -347,12 +351,16 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     SpEnoteImage input_enote_image_core;
     input_proposal.get_enote_image_core(input_enote_image_core);
 
-    // prepare for proof (squashed enote model): y, z
+    // prepare for proof (squashed enote model): x, y, z
     crypto::secret_key squash_prefix;
     make_seraphis_squash_prefix(input_enote_core.m_onetime_address,
         input_enote_core.m_amount_commitment,
         squash_prefix);  // H_n(Ko,C)
 
+    // t_k + H_n(Ko,C) (k_{mask, recipient} + k_{mask, sender})
+    crypto::secret_key x;
+    sc_mul(to_bytes(x), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_g));
+    sc_add(to_bytes(x), to_bytes(input_proposal.m_address_mask), to_bytes(x));
     // H_n(Ko,C) (k_{a, recipient} + k_{a, sender})
     crypto::secret_key y;
     sc_mul(to_bytes(y), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_x));
@@ -362,8 +370,7 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     sc_mul(to_bytes(z), to_bytes(squash_prefix), to_bytes(z));
 
     // make seraphis composition proof
-    image_proof_out.m_composition_proof =
-        sp_composition_prove(message, input_enote_image_core.m_masked_address, input_proposal.m_address_mask, y, z);
+    image_proof_out.m_composition_proof = sp_composition_prove(message, input_enote_image_core.m_masked_address, x, y, z);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_image_proofs_v1(const std::vector<SpInputProposalV1> &input_proposals,

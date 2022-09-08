@@ -478,7 +478,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
             input_proposals.back());
     }
 
-    //3.  get total input amount
+    // 3.  get total input amount
     boost::multiprecision::uint128_t total_input_amount{0};
     for (const SpInputProposalV1 &input_proposal : input_proposals)
         total_input_amount += input_proposal.m_core.m_amount;
@@ -527,11 +527,11 @@ void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &input_amounts,
 {
     // for squashed enote model
 
-    // check balance
+    // 1. check balance
     CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(input_amounts, output_amounts, transaction_fee),
         "Amounts don't balance when making balance proof.");
 
-    // combine inputs and outputs
+    // 2. combine inputs and outputs
     std::vector<rct::xmr_amount> amounts;
     std::vector<crypto::secret_key> blinding_factors;
     amounts.reserve(input_amounts.size() + output_amounts.size());
@@ -544,7 +544,7 @@ void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &input_amounts,
         output_amount_commitment_blinding_factors.begin(),
         output_amount_commitment_blinding_factors.end());
 
-    // make range proofs
+    // 3. make range proofs
     BulletproofPlus2 range_proofs;
 
     rct::keyV amount_commitment_blinding_factors;
@@ -553,7 +553,7 @@ void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &input_amounts,
 
     balance_proof_out.m_bpp2_proof = std::move(range_proofs);
 
-    // set the remainder blinding factor
+    // 4. set the remainder blinding factor
     crypto::secret_key remainder_blinding_factor;
     subtract_secret_key_vectors(input_image_amount_commitment_blinding_factors,
         output_amount_commitment_blinding_factors,
@@ -587,17 +587,17 @@ bool balance_check_in_out_amnts_v1(const std::vector<SpInputProposalV1> &input_p
 void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version)
 {
-    // prepare a mock ledger
+    // 1. prepare a mock ledger
     MockLedgerContext mock_ledger{0, 0};
 
-    // get parameters for making mock ref sets (use minimum parameters for efficiency when possible)
+    // 2. get parameters for making mock ref sets (use minimum parameters for efficiency when possible)
     const SemanticConfigRefSetV1 ref_set_config{semantic_config_ref_sets_v1(semantic_rules_version)};
     const SpBinnedReferenceSetConfigV1 bin_config{
             .m_bin_radius = static_cast<ref_set_bin_dimension_v1_t>(ref_set_config.m_bin_radius_min),
             .m_num_bin_members = static_cast<ref_set_bin_dimension_v1_t>(ref_set_config.m_num_bin_members_min),
         };
 
-    // make mock membership proof ref sets
+    // 3. make mock membership proof ref sets
     std::vector<SpMembershipProofPrepV1> membership_proof_preps{
             gen_mock_sp_membership_proof_preps_v1(partial_tx.m_input_enotes,
                 partial_tx.m_address_masks,
@@ -608,11 +608,11 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
                 mock_ledger)
         };
 
-    // make the mock membership proofs
+    // 4. make the mock membership proofs
     std::vector<SpMembershipProofV1> membership_proofs;
     make_v1_membership_proofs_v1(std::move(membership_proof_preps), membership_proofs);
 
-    // make tx (use raw constructor instead of partial tx constructor to avoid infinite loop)
+    // 5. make tx (use raw constructor instead of partial tx constructor to avoid infinite loop)
     SpTxSquashedV1 test_tx;
     make_seraphis_tx_squashed_v1(
         std::move(partial_tx.m_input_images),
@@ -625,7 +625,7 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
         semantic_rules_version,
         test_tx);
 
-    // validate tx
+    // 6. validate tx
     const TxValidationContextMock tx_validation_context{mock_ledger};
 
     CHECK_AND_ASSERT_THROW_MES(validate_tx(test_tx, tx_validation_context),

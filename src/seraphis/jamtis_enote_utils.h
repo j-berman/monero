@@ -142,6 +142,17 @@ void make_jamtis_sender_receiver_secret_selfsend(const crypto::secret_key &k_vie
     const jamtis::JamtisSelfSendType self_send_type,
     rct::key &sender_receiver_secret_out);
 /**
+* brief: make_jamtis_onetime_address_extension_g - extension for transforming a recipient spendkey into an
+*        enote one-time address
+*    k_{mask, sender} = H_n("..g..", q, C)
+* param: sender_receiver_secret - q
+* param: amount_commitment - C
+* outparam: sender_extension_out - k_{mask, sender}
+*/
+void make_jamtis_onetime_address_extension_g(const rct::key &sender_receiver_secret,
+    const rct::key &amount_commitment,
+    crypto::secret_key &sender_extension_out);
+/**
 * brief: make_jamtis_onetime_address_extension_x - extension for transforming a recipient spendkey into an
 *        enote one-time address
 *    k_{a, sender} = H_n("..x..", q, C)

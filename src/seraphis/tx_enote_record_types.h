@@ -175,6 +175,8 @@ struct SpEnoteRecordV1 final
     crypto::x25519_pubkey m_enote_ephemeral_pubkey;
     /// context of the tx input(s) associated with this enote
     rct::key m_input_context;
+    /// k_mask: enote view privkey for G component
+    crypto::secret_key m_enote_view_privkey_g;
     /// k_a: enote view privkey for X component
     crypto::secret_key m_enote_view_privkey_x;
     /// k_b_view: enote view privkey for U component

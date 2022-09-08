@@ -42,6 +42,7 @@
 #include "ringct/rctOps.h"
 #include "sp_core_enote_utils.h"
 #include "sp_hash_functions.h"
+#include "sp_crypto_utils.h"
 #include "sp_transcript.h"
 
 //third party headers
@@ -55,6 +56,17 @@ namespace sp
 {
 namespace jamtis
 {
+//-------------------------------------------------------------------------------------------------------------------
+void make_jamtis_spendkey_extension_g(const crypto::secret_key &s_generate_address,
+    const address_index_t j,
+    crypto::secret_key &extension_out)
+{
+    // k^j_g = H_n[s_ga](j)
+    SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_G, ADDRESS_INDEX_BYTES};
+    transcript.append("j", j.bytes);
+
+    sp_derive_key(to_bytes(s_generate_address), transcript, to_bytes(extension_out));
+}
 //-------------------------------------------------------------------------------------------------------------------
 void make_jamtis_spendkey_extension_x(const crypto::secret_key &s_generate_address,
     const address_index_t j,
@@ -94,15 +106,18 @@ void make_jamtis_address_spend_key(const rct::key &wallet_spend_pubkey,
     const address_index_t j,
     rct::key &address_spendkey_out)
 {
-    // K_1 = k^j_x X + k^j_u U + K_s
+    // K_1 = k^j_g G + k^j_x X + k^j_u U + K_s
     crypto::secret_key address_extension_key_u;
     crypto::secret_key address_extension_key_x;
+    crypto::secret_key address_extension_key_g;
     make_jamtis_spendkey_extension_u(s_generate_address, j, address_extension_key_u);  //k^j_u
     make_jamtis_spendkey_extension_x(s_generate_address, j, address_extension_key_x);  //k^j_x
+    make_jamtis_spendkey_extension_g(s_generate_address, j, address_extension_key_g);  //k^j_g
 
     address_spendkey_out = wallet_spend_pubkey;  //K_s
-    extend_seraphis_spendkey_u(address_extension_key_u, address_spendkey_out);  //k^j_u U + K_s
-    extend_seraphis_spendkey_x(address_extension_key_x, address_spendkey_out);  //k^j_x X + k^j_u U + K_s
+    extend_seraphis_spendkey_u(address_extension_key_u, address_spendkey_out);      //k^j_u U + K_s
+    extend_seraphis_spendkey_x(address_extension_key_x, address_spendkey_out);      //k^j_x X + k^j_u U + K_s
+    mask_key(address_extension_key_g, address_spendkey_out, address_spendkey_out);  //k^j_g G + k^j_x X + k^j_u U + K_s
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool test_jamtis_nominal_spend_key(const rct::key &wallet_spend_pubkey,

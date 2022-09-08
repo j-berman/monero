@@ -100,6 +100,7 @@ void SpInputProposal::get_enote_image_core(SpEnoteImage &image_out) const
 //-------------------------------------------------------------------------------------------------------------------
 void SpInputProposal::gen(const crypto::secret_key &spendbase_privkey, const rct::xmr_amount amount)
 {
+    m_enote_view_privkey_g = rct::rct2sk(rct::skGen());
     m_enote_view_privkey_x = rct::rct2sk(rct::skGen());
     m_enote_view_privkey_u = rct::rct2sk(rct::skGen());
     crypto::secret_key spendbase_privkey_extended;
@@ -107,7 +108,8 @@ void SpInputProposal::gen(const crypto::secret_key &spendbase_privkey, const rct
     make_seraphis_key_image(m_enote_view_privkey_x, spendbase_privkey_extended, m_key_image);
     m_amount_blinding_factor = rct::rct2sk(rct::skGen());
     m_amount = amount;
-    make_seraphis_enote_core(m_enote_view_privkey_x,
+    make_seraphis_enote_core(m_enote_view_privkey_g,
+        m_enote_view_privkey_x,
         m_enote_view_privkey_u,
         spendbase_privkey,
         m_amount_blinding_factor,

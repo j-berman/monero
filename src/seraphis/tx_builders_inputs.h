@@ -118,6 +118,7 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
 * brief: make_input_proposal - make the core of an input proposal
 * param: enote_core -
 * param: key_image -
+* param: enote_view_privkey_g -
 * param: enote_view_privkey_x -
 * param: enote_view_privkey_u -
 * param: input_amount_blinding_factor -
@@ -128,6 +129,7 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
 */
 void make_input_proposal(const SpEnote &enote_core,
     const crypto::key_image &key_image,
+    const crypto::secret_key &enote_view_privkey_g,
     const crypto::secret_key &enote_view_privkey_x,
     const crypto::secret_key &enote_view_privkey_u,
     const crypto::secret_key &input_amount_blinding_factor,

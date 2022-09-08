@@ -117,6 +117,17 @@ void extend_seraphis_spendkey_u(const crypto::secret_key &k_extender_u, rct::key
     rct::addKeys(spendkey_inout, extender_key, spendkey_inout);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void reduce_seraphis_spendkey_g(const crypto::secret_key &k_reducer_g, rct::key &spendkey_inout)
+{
+    static const rct::key MINUS_ONE{minus_one()};
+
+    // K = K_original - k_reducer_g G
+    crypto::secret_key mask_to_remove;
+
+    sc_mul(to_bytes(mask_to_remove), MINUS_ONE.bytes, to_bytes(k_reducer_g));  // -k_reducer_g
+    mask_key(mask_to_remove, spendkey_inout, spendkey_inout);  // (-k_reducer_g) G + Ko_t
+}
+//-------------------------------------------------------------------------------------------------------------------
 void reduce_seraphis_spendkey_x(const crypto::secret_key &k_reducer_x, rct::key &spendkey_inout)
 {
     static const rct::key MINUS_ONE{minus_one()};
@@ -195,23 +206,26 @@ void make_seraphis_enote_core(const rct::key &onetime_address,
     enote_core_out.m_amount_commitment = rct::commit(amount, rct::sk2rct(amount_blinding_factor));
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_x,
+void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_g,
+    const crypto::secret_key &extension_privkey_x,
     const crypto::secret_key &extension_privkey_u,
     const rct::key &initial_address,
     const crypto::secret_key &amount_blinding_factor,
     const rct::xmr_amount amount,
     SpEnote &enote_core_out)
 {
-    // Ko = k_address_extension_x X + k_address_extension_u U + K
+    // Ko = k_sender_extension_g G + k_sender_extension_x X + k_sender_extension_u U + K
     enote_core_out.m_onetime_address = initial_address;
     extend_seraphis_spendkey_u(extension_privkey_u, enote_core_out.m_onetime_address);
     extend_seraphis_spendkey_x(extension_privkey_x, enote_core_out.m_onetime_address);
+    mask_key(extension_privkey_g, enote_core_out.m_onetime_address, enote_core_out.m_onetime_address);
 
     // finish making the enote
     make_seraphis_enote_core(enote_core_out.m_onetime_address, amount_blinding_factor, amount, enote_core_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_x,
+void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_g,
+    const crypto::secret_key &enote_view_privkey_x,
     const crypto::secret_key &enote_view_privkey_u,
     const crypto::secret_key &spendbase_privkey,
     const crypto::secret_key &amount_blinding_factor,
@@ -223,7 +237,8 @@ void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_x,
     make_seraphis_spendbase(spendbase_privkey, spendbase);
 
     // finish making the enote
-    make_seraphis_enote_core(enote_view_privkey_x,
+    make_seraphis_enote_core(enote_view_privkey_g,
+        enote_view_privkey_x,
         enote_view_privkey_u,
         spendbase,
         amount_blinding_factor,

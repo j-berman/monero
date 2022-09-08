@@ -227,6 +227,7 @@ static void attempt_make_v1_multisig_input_partial_sig_set_v1(const multisig::mu
     const std::vector<multisig::signer_set_filter> &available_signers_as_filters,
     const std::vector<std::size_t> &signer_nonce_trackers,
     const std::vector<crypto::secret_key> &squash_prefixes,
+    const std::vector<crypto::secret_key> &enote_view_privkeys_g,
     const std::vector<crypto::secret_key> &enote_view_privkeys_x,
     const std::vector<crypto::secret_key> &enote_view_privkeys_u,
     SpMultisigNonceRecord &nonce_record_inout,
@@ -241,6 +242,8 @@ static void attempt_make_v1_multisig_input_partial_sig_set_v1(const multisig::mu
     CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_input_proposals.size() == 
             multisig_tx_proposal.m_input_proof_proposals.size(),
         "multisig input partial sigs: input proposals don't line up with input proof proposals (bug).");
+    CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_input_proposals.size() == enote_view_privkeys_g.size(),
+        "multisig input partial sigs: input proposals don't line up with converted input proposals (bug).");
     CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_input_proposals.size() == enote_view_privkeys_x.size(),
         "multisig input partial sigs: input proposals don't line up with converted input proposals (bug).");
     CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_input_proposals.size() == enote_view_privkeys_u.size(),
@@ -255,6 +258,8 @@ static void attempt_make_v1_multisig_input_partial_sig_set_v1(const multisig::mu
         "multisig input partial sigs: signer nonce trackers don't line up with input init sets (bug).");
 
     // prepare 1/threshold
+    CHECK_AND_ASSERT_THROW_MES(signer_account.get_threshold() > 0,
+        "multisig input partial sigs: multisig threshold is zero.");
     const rct::key one_div_threshold{invert(rct::d2h(signer_account.get_threshold()))};
 
 
@@ -262,12 +267,13 @@ static void attempt_make_v1_multisig_input_partial_sig_set_v1(const multisig::mu
     std::vector<SpMultisigPubNonces> signer_pub_nonces_temp;
     signer_pub_nonces_temp.reserve(signer_account.get_threshold());
 
-    crypto::secret_key enote_view_privkey_x_with_squash_prefix;
-    crypto::secret_key z_temp;
-    crypto::secret_key z_temp_modified_for_enote;
+    crypto::secret_key x_temp;
+    crypto::secret_key y_temp;
+    crypto::secret_key z_e_temp;
 
     // 1. local signer's signing key for this group
-    if (!signer_account.try_get_aggregate_signing_key(filter, z_temp))
+    crypto::secret_key k_b_e;
+    if (!signer_account.try_get_aggregate_signing_key(filter, k_b_e))
         throw;
 
     // 2. make a partial signature for each input
@@ -299,30 +305,29 @@ static void attempt_make_v1_multisig_input_partial_sig_set_v1(const multisig::mu
         if (signer_pub_nonces_temp.size() != signer_account.get_threshold())
             throw;
 
-        // add U component of enote view privkey to z_e (each signer adds (1/threshold)*k_view_u so the sum works out)
-        sc_mul(to_bytes(z_temp_modified_for_enote),
-            one_div_threshold.bytes,
-            to_bytes(enote_view_privkeys_u[input_index]));
-        sc_add(to_bytes(z_temp_modified_for_enote),
-            to_bytes(z_temp_modified_for_enote),
-            to_bytes(z_temp));
+        // prepare x: t_k + Hn(Ko, C) * k_mask
+        sc_mul(to_bytes(x_temp), to_bytes(squash_prefixes[input_index]), to_bytes(enote_view_privkeys_g[input_index]));
+        sc_add(to_bytes(x_temp),
+            to_bytes(multisig_tx_proposal.m_input_proposals[input_index].m_address_mask),
+            to_bytes(x_temp));
 
-        // apply squash prefix to signing keys y and z_e
-        sc_mul(to_bytes(enote_view_privkey_x_with_squash_prefix),
-            to_bytes(squash_prefixes[input_index]),
-            to_bytes(enote_view_privkeys_x[input_index]));
-        sc_mul(to_bytes(z_temp_modified_for_enote),
-            to_bytes(squash_prefixes[input_index]),
-            to_bytes(z_temp_modified_for_enote));
+        // prepare y: Hn(Ko, C) * k_a
+        sc_mul(to_bytes(y_temp), to_bytes(squash_prefixes[input_index]), to_bytes(enote_view_privkeys_x[input_index]));
+
+        // prepare z_e: Hn(Ko, C) * ((1/threshold)*k_view_u + k_b_e)
+        // note: each signer adds (1/threshold)*k_view_u so the sum works out
+        sc_mul(to_bytes(z_e_temp), one_div_threshold.bytes, to_bytes(enote_view_privkeys_u[input_index]));
+        sc_add(to_bytes(z_e_temp), to_bytes(z_e_temp), to_bytes(k_b_e));
+        sc_mul(to_bytes(z_e_temp), to_bytes(squash_prefixes[input_index]), to_bytes(z_e_temp));
 
         // local signer's partial sig for this input
         new_partial_sig_set_out.m_partial_signatures.emplace_back();
 
         if (!try_make_sp_composition_multisig_partial_sig(
                 multisig_tx_proposal.m_input_proof_proposals[input_index],
-                multisig_tx_proposal.m_input_proposals[input_index].m_address_mask,  //x
-                enote_view_privkey_x_with_squash_prefix,                             //y
-                z_temp_modified_for_enote,                                           //z_e
+                x_temp,
+                y_temp,
+                z_e_temp,
                 signer_pub_nonces_temp,
                 filter,
                 nonce_record_inout,
@@ -348,6 +353,7 @@ static void make_v1_multisig_input_partial_sig_sets_v1(const multisig::multisig_
     const multisig::signer_set_filter available_signers_filter,
     const std::vector<multisig::signer_set_filter> &available_signers_as_filters,
     const std::vector<crypto::secret_key> &squash_prefixes,
+    const std::vector<crypto::secret_key> &enote_view_privkeys_g,
     const std::vector<crypto::secret_key> &enote_view_privkeys_x,
     const std::vector<crypto::secret_key> &enote_view_privkeys_u,
     SpMultisigNonceRecord &nonce_record_inout,
@@ -395,6 +401,7 @@ static void make_v1_multisig_input_partial_sig_sets_v1(const multisig::multisig_
                     available_signers_as_filters,
                     signer_nonce_trackers,
                     squash_prefixes,
+                    enote_view_privkeys_g,
                     enote_view_privkeys_x,
                     enote_view_privkeys_u,
                     nonce_record_inout,
@@ -913,13 +920,16 @@ bool try_make_v1_multisig_input_partial_sig_sets_v1(const multisig::multisig_acc
     get_masked_addresses(tx_proposal.m_input_proposals, input_masked_addresses);
 
     // c. enote view privkeys (for signing)
+    std::vector<crypto::secret_key> enote_view_privkeys_g;
     std::vector<crypto::secret_key> enote_view_privkeys_x;
     std::vector<crypto::secret_key> enote_view_privkeys_u;
+    enote_view_privkeys_g.reserve(multisig_tx_proposal.m_input_proposals.size());
     enote_view_privkeys_x.reserve(multisig_tx_proposal.m_input_proposals.size());
     enote_view_privkeys_u.reserve(multisig_tx_proposal.m_input_proposals.size());
 
     for (const SpInputProposalV1 &input_proposal : tx_proposal.m_input_proposals)
     {
+        enote_view_privkeys_g.emplace_back(input_proposal.m_core.m_enote_view_privkey_g);
         enote_view_privkeys_x.emplace_back(input_proposal.m_core.m_enote_view_privkey_x);
         enote_view_privkeys_u.emplace_back(input_proposal.m_core.m_enote_view_privkey_u);
     }
@@ -1000,6 +1010,7 @@ bool try_make_v1_multisig_input_partial_sig_sets_v1(const multisig::multisig_acc
         available_signers_filter,
         available_signers_as_filters,
         squash_prefixes,
+        enote_view_privkeys_g,
         enote_view_privkeys_x,
         enote_view_privkeys_u,
         nonce_record_inout,

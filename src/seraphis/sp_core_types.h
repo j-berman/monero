@@ -115,6 +115,8 @@ struct SpInputProposal final
     /// the enote's key image
     crypto::key_image m_key_image;
 
+    /// k_{mask, sender} + k_{mask, recipient}
+    crypto::secret_key m_enote_view_privkey_g;
     /// k_{a, sender} + k_{a, recipient}
     crypto::secret_key m_enote_view_privkey_x;
     /// k_{b, sender} + k_{b, recipient}  (does not include k_s)

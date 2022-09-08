@@ -117,7 +117,7 @@ void JamtisPaymentProposalV1::get_output_proposal_v1(const rct::key &input_conte
             rct::commit(m_amount, rct::sk2rct(output_proposal_out.m_core.m_amount_blinding_factor))
         };
 
-    // 10. onetime address: Ko = H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
+    // 10. onetime address: Ko = H_n("..g..", q, C) G + H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
     make_jamtis_onetime_address(q,
         temp_amount_commitment,
         m_destination.m_addr_K1,
@@ -201,7 +201,7 @@ void JamtisPaymentProposalSelfSendV1::get_output_proposal_v1(const crypto::secre
             rct::commit(m_amount, rct::sk2rct(output_proposal_out.m_core.m_amount_blinding_factor))
         };
 
-    // 8. onetime address: Ko = H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
+    // 8. onetime address: Ko = H_n("..g..", q, C) G + H_n("..x..", q, C) X + H_n("..u..", q, C) U + K_1
     make_jamtis_onetime_address(q,
         temp_amount_commitment,
         m_destination.m_addr_K1,

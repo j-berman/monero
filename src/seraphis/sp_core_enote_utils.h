@@ -98,6 +98,13 @@ void extend_seraphis_spendkey_x(const crypto::secret_key &k_extender_x, rct::key
 */
 void extend_seraphis_spendkey_u(const crypto::secret_key &k_extender_u, rct::key &spendkey_inout);
 /**
+* brief: reduce_seraphis_spendkey_g - remove private key material from a Seraphis spendkey (or onetime address) on generator G
+*   K = K_original - k_reducer_g G
+* param: k_reducer_g - material to remove from the existing pubkey
+* inoutparam: spendkey_inout - [in: K_original] [out: K_original - k_reducer_g G]
+*/
+void reduce_seraphis_spendkey_g(const crypto::secret_key &k_reducer_g, rct::key &spendkey_inout);
+/**
 * brief: reduce_seraphis_spendkey_x - remove private key material from a Seraphis spendkey (or onetime address) on generator X
 *   K = K_original - k_reducer_x X
 * param: k_reducer_x - material to remove from the existing pubkey
@@ -162,6 +169,7 @@ void make_seraphis_enote_core(const rct::key &onetime_address,
     SpEnote &enote_core_out);
 /**
 * brief: make_seraphis_enote_core - make a Seraphis enote by extending an existing address
+* param: extension_privkey_g -
 * param: extension_privkey_x -
 * param: extension_privkey_u -
 * param: initial_address -
@@ -169,7 +177,8 @@ void make_seraphis_enote_core(const rct::key &onetime_address,
 * param: amount -
 * outparam: enote_core_out -
 */
-void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_x,
+void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_g,
+    const crypto::secret_key &extension_privkey_x,
     const crypto::secret_key &extension_privkey_u,
     const rct::key &initial_address,
     const crypto::secret_key &amount_blinding_factor,
@@ -177,6 +186,7 @@ void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_x,
     SpEnote &enote_core_out);
 /**
 * brief: make_seraphis_enote_core - make a Seraphis enote when all secrets are known
+* param: enote_view_privkey_g -
 * param: enote_view_privkey_x -
 * param: enote_view_privkey_u -
 * param: spendbase_privkey -
@@ -184,7 +194,8 @@ void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_x,
 * param: amount -
 * outparam: enote_core_out -
 */
-void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_x,
+void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_g,
+    const crypto::secret_key &enote_view_privkey_x,
     const crypto::secret_key &enote_view_privkey_u,
     const crypto::secret_key &spendbase_privkey,
     const crypto::secret_key &amount_blinding_factor,
