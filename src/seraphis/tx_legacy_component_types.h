@@ -41,7 +41,7 @@
 #include <boost/utility/string_ref.hpp>
 
 //standard headers
-#include <string>
+#include <vector>
 
 //forward declarations
 namespace sp { class SpTranscriptBuilder; }

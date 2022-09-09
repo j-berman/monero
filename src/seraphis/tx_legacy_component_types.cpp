@@ -32,7 +32,6 @@
 #include "tx_legacy_component_types.h"
 
 //local headers
-#include "crypto/crypto.h"
 #include "misc_log_ex.h"
 #include "sp_transcript.h"
 #include "tx_misc_utils.h"
@@ -40,7 +39,6 @@
 //third party headers
 
 //standard headers
-#include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"

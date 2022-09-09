@@ -174,7 +174,7 @@ bool validate_sp_semantics_legacy_reference_sets_v1(const SemanticConfigLegacyRe
 bool validate_sp_semantics_sp_reference_sets_v1(const SemanticConfigSpRefSetV1 &config,
     const std::vector<SpMembershipProofV1> &sp_membership_proofs)
 {
-    // assume valid if proofs
+    // assume valid if no proofs
     if (sp_membership_proofs.size() == 0)
         return true;
 
@@ -512,7 +512,7 @@ bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3>
     for (std::size_t legacy_input_index{0}; legacy_input_index < legacy_ring_signatures.size(); ++legacy_input_index)
     {
         if (rct::rct2ki(legacy_ring_signatures[legacy_input_index].m_clsag_proof.I) !=
-            legacy_input_images[legacy_input_index].m_key_image)
+                legacy_input_images[legacy_input_index].m_key_image)
             return false;
     }
 

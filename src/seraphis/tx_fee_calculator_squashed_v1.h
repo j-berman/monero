@@ -56,8 +56,8 @@ public:
     FeeCalculatorSpTxSquashedV1() = default;
 
     FeeCalculatorSpTxSquashedV1(const std::size_t legacy_ring_size,
-        const std::size_t ref_set_decomp_m,
         const std::size_t ref_set_decomp_n,
+        const std::size_t ref_set_decomp_m,
         const std::size_t num_bin_members,
         const TxExtra &tx_extra);
 
@@ -75,8 +75,8 @@ private:
 //member variables
     /// misc. info for calculating tx weight
     std::size_t m_legacy_ring_size;
-    std::size_t m_ref_set_decomp_m;
     std::size_t m_ref_set_decomp_n;
+    std::size_t m_ref_set_decomp_m;
     std::size_t m_num_bin_members;
     TxExtra m_tx_extra;
 };

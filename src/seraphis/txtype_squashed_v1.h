@@ -108,8 +108,8 @@ struct SpTxSquashedV1 final
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const std::size_t legacy_ring_size,
-        const std::size_t ref_set_decomp_m,
         const std::size_t ref_set_decomp_n,
+        const std::size_t ref_set_decomp_m,
         const std::size_t num_bin_members,
         const TxExtra &tx_extra);
     /// get size of the tx

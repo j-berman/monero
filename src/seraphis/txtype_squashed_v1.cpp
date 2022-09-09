@@ -454,7 +454,6 @@ SemanticConfigLegacyRefSetV1 semantic_config_legacy_ref_sets_v1(
     }
     else if (tx_semantic_rules_version == SpTxSquashedV1::SemanticRulesVersion::ONE)
     {
-        // legacy
         config.m_ring_size_min = config::LEGACY_RING_SIZE_V1;
         config.m_ring_size_max = config::LEGACY_RING_SIZE_V1;
     }
@@ -485,7 +484,6 @@ SemanticConfigSpRefSetV1 semantic_config_sp_ref_sets_v1(const SpTxSquashedV1::Se
     }
     else if (tx_semantic_rules_version == SpTxSquashedV1::SemanticRulesVersion::ONE)
     {
-        // seraphis
         config.m_decomp_n_min = config::SP_GROOTLE_N_V1;
         config.m_decomp_n_max = config::SP_GROOTLE_N_V1;
         config.m_decomp_m_min = config::SP_GROOTLE_M_V1;

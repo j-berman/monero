@@ -114,8 +114,7 @@ std::size_t round_up_to_power_of_2(const std::size_t num);
 std::size_t highest_bit_position(const std::size_t num);
 /**
 * brief: append_clsag_to_transcript - append CLSAG proof to a transcript
-*   transcript += {s} || c1 || D
-*   note: the main key image 'I' is not included (it is assumed to be a cached value)
+*   transcript += {s} || c1 || I || D
 * param: clsag_proof -
 * inoutparam: transcript_inout - contents appended to a transcript
 */

@@ -35,7 +35,7 @@
 
 namespace config
 {
-  // note: version number should line up with intended grootle n^m decomposition
+  // note: SP_REF_SET_* version number should line up with intended grootle n^m decomposition
   const constexpr std::uint64_t LEGACY_RING_SIZE_V1 = 16;
   const constexpr std::uint64_t SP_REF_SET_BIN_RADIUS_V1 = 127;
   const constexpr std::uint64_t SP_REF_SET_NUM_BIN_MEMBERS_V1 = 8;

@@ -293,7 +293,6 @@ static bool try_update_added_inputs_selection_v1(const boost::multiprecision::ui
         return false;
 
     // - search for an input that can be used immediately; shunt failures into the exclude pile so they can be examined later
-    bool found_useful_input{false};
     do
     {
         const bool new_input_is_legacy{is_legacy_record(requested_input)};
@@ -320,16 +319,20 @@ static bool try_update_added_inputs_selection_v1(const boost::multiprecision::ui
                 added_inputs_inout.pop_back();
 
             added_inputs_inout.emplace_back(std::move(requested_input));
-            found_useful_input = true;  //done searching
+            break;  //done searching
         }
         // otherwise, add it to the excluded list
         else
         {
             excluded_inputs_inout.emplace_back(requested_input);  //don't move - requested_input may be used again later
         }
-    } while (input_selector.try_select_input_v1(selection_amount, added_inputs_inout, excluded_inputs_inout, requested_input)
-        && found_useful_input == false);
+    } while (input_selector.try_select_input_v1(selection_amount,
+        added_inputs_inout,
+        excluded_inputs_inout,
+        requested_input));
 
+    // return true even if no inputs were added, because we have at least increased the excluded inputs pile, which can
+    //   be examined later to possibly improve the added inputs set
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------

@@ -89,7 +89,7 @@ void append_clsag_to_transcript(const rct::clsag &clsag_proof, SpTranscriptBuild
 {
     transcript_inout.append("s", clsag_proof.s);
     transcript_inout.append("c1", clsag_proof.c1);
-    //transcript_inout.append("I", clsag_proof.I);  //intentionally excluded - I is treated as a cached value here
+    transcript_inout.append("I", clsag_proof.I);
     transcript_inout.append("D", clsag_proof.D);
 }
 //-------------------------------------------------------------------------------------------------------------------

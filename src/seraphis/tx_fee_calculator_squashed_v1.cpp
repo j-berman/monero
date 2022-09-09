@@ -47,13 +47,13 @@ namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
 FeeCalculatorSpTxSquashedV1::FeeCalculatorSpTxSquashedV1(const std::size_t legacy_ring_size,
-    const std::size_t ref_set_decomp_m,
     const std::size_t ref_set_decomp_n,
+    const std::size_t ref_set_decomp_m,
     const std::size_t num_bin_members,
     const TxExtra &tx_extra) :
         m_legacy_ring_size{legacy_ring_size},
-        m_ref_set_decomp_m{ref_set_decomp_m},
         m_ref_set_decomp_n{ref_set_decomp_n},
+        m_ref_set_decomp_m{ref_set_decomp_m},
         m_num_bin_members{num_bin_members},
         m_tx_extra{tx_extra}
 {}
@@ -84,8 +84,8 @@ rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_w
                 num_sp_inputs,
                 num_outputs,
                 m_legacy_ring_size,
-                m_ref_set_decomp_m,
                 m_ref_set_decomp_n,
+                m_ref_set_decomp_m,
                 m_num_bin_members,
                 m_tx_extra)
         };
