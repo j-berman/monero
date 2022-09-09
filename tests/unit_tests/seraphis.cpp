@@ -61,6 +61,7 @@ extern "C"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils.h"
 #include "seraphis/tx_extra.h"
+#include "seraphis/tx_legacy_component_types.h"
 #include "seraphis/tx_misc_utils.h"
 #include "seraphis/tx_ref_set_index_mapper_flat.h"
 #include "seraphis/tx_validation_context_mock.h"
@@ -337,7 +338,7 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
     std::vector<crypto::secret_key> output_amount_commitment_blinding_factors;
     std::vector<crypto::secret_key> image_address_masks;
     std::vector<crypto::secret_key> image_amount_masks;
-    rct::key image_proofs_message;
+    rct::key tx_proposal_message;
     std::vector<rct::xmr_amount> input_amounts;
     std::vector<crypto::secret_key> input_image_amount_commitment_blinding_factors;
 
@@ -360,14 +361,15 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
         image_address_masks[input_index] = input_proposals[input_index].m_core.m_address_mask;
         image_amount_masks[input_index] = input_proposals[input_index].m_core.m_commitment_mask;
     }
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
+        std::vector<LegacyEnoteImageV2>{}, //todo: legacy inputs
         input_images,
         outputs,
         tx_supplement,
         discretized_transaction_fee,
-        image_proofs_message);
+        tx_proposal_message);
     make_v1_image_proofs_v1(input_proposals,
-        image_proofs_message,
+        tx_proposal_message,
         spendbase_privkey,
         tx_image_proofs);
     prepare_input_commitment_factors_for_balance_proof_v1(input_proposals,
@@ -384,9 +386,10 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
         tx_alignable_membership_proofs);  //alignable membership proofs could theoretically be user inputs as well
     align_v1_membership_proofs_v1(input_images, std::move(tx_alignable_membership_proofs), tx_membership_proofs);
 
-    make_seraphis_tx_squashed_v1(std::move(input_images), std::move(outputs),
-        std::move(balance_proof), std::move(tx_image_proofs), std::move(tx_membership_proofs),
-        std::move(tx_supplement), discretized_transaction_fee, semantic_rules_version, tx_out);
+    make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2>{}, std::move(input_images), std::move(outputs),
+        std::move(balance_proof), std::vector<LegacyRingSignatureV3>{}, std::move(tx_image_proofs),
+        std::move(tx_membership_proofs), std::move(tx_supplement), discretized_transaction_fee, semantic_rules_version,
+        tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

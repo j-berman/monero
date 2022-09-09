@@ -29,6 +29,7 @@
 // NOT FOR PRODUCTION
 
 // Mock offchain context: for testing
+// note: the input context is used as a proxy for tx id in the maps, because the tx id is not known for partial txs
 
 
 #pragma once
@@ -39,6 +40,7 @@
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "tx_component_types.h"
+#include "tx_legacy_component_types.h"
 
 //third party headers
 #include <boost/thread/shared_mutex.hpp>
@@ -67,7 +69,7 @@ class MockOffchainContext final
 {
 public:
     /**
-    * brief: key_image_exists_onchain_v1 - checks if a Seraphis linking tag (key image) exists in the ledger
+    * brief: key_image_exists_onchain_v1 - checks if a legacy or Seraphis key image exists in the ledger
     * param: key_image -
     * return: true/false on check result
     */
@@ -114,7 +116,8 @@ private:
     bool key_image_exists_v1_impl(const crypto::key_image &key_image) const;
     bool try_get_offchain_chunk_sp_impl(const crypto::x25519_secret_key &xk_find_received,
         EnoteScanningChunkNonLedgerV1 &chunk_out) const;
-    bool try_add_v1_impl(const std::vector<SpEnoteImageV1> &input_images,
+    bool try_add_v1_impl(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+        const std::vector<SpEnoteImageV1> &sp_input_images,
         const SpTxSupplementV1 &tx_supplement,
         const std::vector<SpEnoteV1> &output_enotes);
     bool try_add_partial_tx_v1_impl(const SpPartialTxV1 &partial_tx);
@@ -126,6 +129,8 @@ private:
     /// context mutex (mutable for use in const member functions)
     mutable boost::shared_mutex m_context_mutex;
 
+    /// legacy key images
+    std::unordered_set<crypto::key_image> m_legacy_key_images;
     /// Seraphis key images
     std::unordered_set<crypto::key_image> m_sp_key_images;
     /// map of tx outputs
@@ -139,7 +144,10 @@ private:
     /// map of tx key images
     std::unordered_map<
         rct::key,     // input context
-        std::vector<crypto::key_image>  // key images in tx
+        std::pair<
+            std::vector<crypto::key_image>,  // legacy key images in tx
+            std::vector<crypto::key_image>   // seraphis key images in tx
+        >
     > m_tx_key_images;
 };
 

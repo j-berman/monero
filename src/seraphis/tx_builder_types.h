@@ -42,6 +42,7 @@
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
+#include "tx_legacy_component_types.h"
 
 //third party headers
 
@@ -226,22 +227,28 @@ struct SpPartialInputV1 final
 ///
 struct SpPartialTxV1 final
 {
-    /// tx input images  (spent e-notes)
-    std::vector<SpEnoteImageV1> m_input_images;
+    /// legacy tx input images  (spent legacy enotes)
+    std::vector<LegacyEnoteImageV2> m_legacy_input_images;
+    /// seraphis tx input images  (spent seraphis enotes)
+    std::vector<SpEnoteImageV1> m_sp_input_images;
     /// tx outputs (new e-notes)
     std::vector<SpEnoteV1> m_outputs;
     /// balance proof (balance proof and range proofs)
     SpBalanceProofV1 m_balance_proof;
-    /// composition proofs: ownership/unspentness for each input
-    std::vector<SpImageProofV1> m_image_proofs;
+    /// legacy ring signatures: membership/ownership/unspentness for each legacy input
+    std::vector<LegacyRingSignatureV3> m_legacy_ring_signatures;
+    /// composition proofs: ownership/unspentness for each seraphis input
+    std::vector<SpImageProofV1> m_sp_image_proofs;
     /// supplemental data for tx
     SpTxSupplementV1 m_tx_supplement;
     /// tx fee (discretized representation)
     DiscretizedFee m_tx_fee;
 
+    ///todo: cached legacy input info (legacy input enotes, legacy commitment masks, legacy reference set {KI, C})
+
     /// input enotes
     std::vector<SpEnote> m_input_enotes;
-    /// image masks for creating input membership proofs
+    /// image masks for creating seraphis input membership proofs
     std::vector<crypto::secret_key> m_address_masks;
     std::vector<crypto::secret_key> m_commitment_masks;
 };

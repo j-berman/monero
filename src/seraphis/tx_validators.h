@@ -39,6 +39,7 @@
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
+#include "tx_legacy_component_types.h"
 
 //third party headers
 
@@ -67,8 +68,15 @@ struct SemanticConfigComponentCountsV1 final
     std::size_t m_max_outputs;
 };
 
-/// semantic validation config: reference sets
-struct SemanticConfigRefSetV1 final
+/// semantic validation config: legacy reference sets
+struct SemanticConfigLegacyRefSetV1 final
+{
+    std::size_t m_ring_size_min;
+    std::size_t m_ring_size_max;
+};
+
+/// semantic validation config: seraphis reference sets
+struct SemanticConfigSpRefSetV1 final
 {
     std::size_t m_decomp_n_min;
     std::size_t m_decomp_n_max;
@@ -82,41 +90,58 @@ struct SemanticConfigRefSetV1 final
 
 /**
 * brief: validate_sp_semantics_component_counts_v1 - check tx component counts are valid
-*   - min_inputs <= num(input images) <= max_inputs
-*   - num(membership proofs) == num(image proofs) == num(input images)
+*   - min_inputs <= num(legacy and seraphis input images) <= max_inputs
+*   - num(legacy ring signatures) == num(legacy input images)
+*   - num(seraphis membership proofs) == num(seraphis image proofs) == num(seraphis input images)
 *   - min_outputs <= num(outputs) <= max_outputs
-*   - num(range proofs) == num(input images) + num(outputs)
+*   - num(range proofs) == num(seraphis input images) + num(outputs)
 *   - if (num(outputs) == 2), num(enote pubkeys) == 1, else num(enote pubkeys) == num(outputs)
 *
 * param: config -
-* param: num_input_images -
-* param: num_membership_proofs -
-* param: num_image_proofs -
+* param: num_legacy_input_images -
+* param: num_sp_input_images -
+* param: num_legacy_ring_signatures -
+* param: num_sp_membership_proofs -
+* param: num_sp_image_proofs -
 * param: num_outputs -
 * param: num_enote_pubkeys -
 * param: num_range_proofs -
 * return: true/false on validation result
 */
 bool validate_sp_semantics_component_counts_v1(const SemanticConfigComponentCountsV1 &config,
-    const std::size_t num_input_images,
-    const std::size_t num_membership_proofs,
-    const std::size_t num_image_proofs,
+    const std::size_t num_legacy_input_images,
+    const std::size_t num_sp_input_images,
+    const std::size_t num_legacy_ring_signatures,
+    const std::size_t num_sp_membership_proofs,
+    const std::size_t num_sp_image_proofs,
     const std::size_t num_outputs,
     const std::size_t num_enote_pubkeys,
     const std::size_t num_range_proofs);
 /**
-* brief: validate_sp_semantics_reference_sets_v1 - check membership proofs have consistent and valid reference sets
+* brief: validate_sp_semantics_legacy_reference_sets_v1 - check legacy ring signatures have consistent and
+*   valid reference sets
+*   - ring_size_min <= ring_size <= ring_size_max
+*   - CLSAG proof matches the stored ring member indices
+* param: config
+* param: legacy_ring_signatures -
+* return: true/false on validation result
+*/
+bool validate_sp_semantics_legacy_reference_sets_v1(const SemanticConfigLegacyRefSetV1 &config,
+    const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures);
+/**
+* brief: validate_sp_semantics_sp_reference_sets_v1 - check seraphis membership proofs have consistent and
+*   valid reference sets
 *   - decomp_n_min <= decomp_n <= decom_n_max
 *   - decomp_m_min <= decomp_m <= decom_m_max
 *   - bin_radius_min <= bin_radius <= bin_radius_max
 *   - num_bin_members_min <= num_bin_members <= num_bin_members_max
 *   - ref set size from decomposition == ref set size from binned reference set
 * param: config
-* param: membership_proofs -
+* param: sp_membership_proofs -
 * return: true/false on validation result
 */
-bool validate_sp_semantics_reference_sets_v1(const SemanticConfigRefSetV1 &config,
-    const std::vector<SpMembershipProofV1> &membership_proofs);
+bool validate_sp_semantics_sp_reference_sets_v1(const SemanticConfigSpRefSetV1 &config,
+    const std::vector<SpMembershipProofV1> &sp_membership_proofs);
 /**
 * brief: validate_sp_semantics_output_serialization_v1 - check output enotes and tx supplement are properly serialized
 *   - onetime addresses are deserializable (note: amount commitment serialization is checked in the balance proof)
@@ -127,31 +152,40 @@ bool validate_sp_semantics_reference_sets_v1(const SemanticConfigRefSetV1 &confi
 bool validate_sp_semantics_output_serialization_v1(const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement);
 /**
-* brief: validate_sp_semantics_input_images_v1 - check key images are well-formed
+* brief: validate_sp_semantics_input_images_v1 - check input images are well-formed
 *   - key images are in the prime-order EC subgroup: l*KI == identity
-*   - key image, masked address, and masked commitment are not identity
-* param: input_images -
+*   - key images, masked addresses, and masked commitments are not identity
+* param: legacy_input_images -
+* param: sp_input_images -
 * return: true/false on validation result
 */
-bool validate_sp_semantics_input_images_v1(const std::vector<SpEnoteImageV1> &input_images);
+bool validate_sp_semantics_input_images_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images);
 /**
 * brief: validate_sp_semantics_layout_v1 - check tx components have the proper layout
-*   - membership proof binned reference set bins are sorted (ascending)
-*   - input images sorted by key image with byte-wise comparisons (ascending)
+*   - legacy reference sets are sorted (ascending)
+*   - legacy reference set indices are unique
+*   - serpahis membership proof binned reference set bins are sorted (ascending)
+*   - legacy input images sorted by key image with byte-wise comparisons (ascending)
+*   - seraphis input images sorted by key image with byte-wise comparisons (ascending)
 *   - input key images are all unique
 *   - output enotes sorted by onetime addresses with byte-wise comparisons (ascending)
 *   - onetime addresses are all unique
 *   - enote ephemeral pubkeys are unique
 *   - extra field is in sorted TLV (Type-Length-Value) format
-* param: membership_proofs -
-* param: input_images -
+* param: legacy_ring_signatures -
+* param: sp_membership_proofs -
+* param: legacy_input_images -
+* param: sp_input_images -
 * param: outputs -
 * param: enote_ephemeral_pubkeys -
 * param: tx_extra -
 * return: true/false on validation result
 */
-bool validate_sp_semantics_layout_v1(const std::vector<SpMembershipProofV1> &membership_proofs,
-    const std::vector<SpEnoteImageV1> &input_images,
+bool validate_sp_semantics_layout_v1(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
+    const std::vector<SpMembershipProofV1> &sp_membership_proofs,
+    const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const std::vector<SpEnoteV1> &outputs,
     const std::vector<crypto::x25519_pubkey> &enote_ephemeral_pubkeys,
     const TxExtra &tx_extra);
@@ -164,27 +198,27 @@ bool validate_sp_semantics_fee_v1(const DiscretizedFee &discretized_transaction_
 /**
 * brief: validate_sp_linking_tags_v1 - check tx does not double spend
 *   - no key image duplicates in ledger
-* TODO: checking duplicates in tx pool could be embedded in the ledger context implementation
-*       - e.g. derive from the main ledger context a 'tx pool and ledger context', then virtual overload the key image
-*         check to also check the tx pool
-* TODO: similarly, when appending a block, you could have a derived ledger context that checks for in-block duplicates
-* param: input_images -
+* param: legacy_input_images -
+* param: sp_input_images -
 * param: tx_validation_context -
 * return: true/false on validation result
 */
-bool validate_sp_linking_tags_v1(const std::vector<SpEnoteImageV1> &input_images,
+bool validate_sp_linking_tags_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const TxValidationContext &tx_validation_context);
 /**
 * brief: validate_sp_amount_balance_v1 - check that amounts balance in the tx (inputs = outputs)
 *   - check sum(input image masked commitments) == sum(output commitments) + fee*H + remainder*G
 *   - note: BP+ verification is NOT done here (deferred for batch-verification)
-* param: input_images -
+* param: legacy_input_images -
+* param: sp_input_images -
 * param: outputs -
 * param: discretized_transaction_fee -
 * param: balance_proof -
 * return: true/false on validation result
 */
-bool validate_sp_amount_balance_v1(const std::vector<SpEnoteImageV1> &input_images,
+bool validate_sp_amount_balance_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const std::vector<SpEnoteV1> &outputs,
     const DiscretizedFee &discretized_transaction_fee,
     const SpBalanceProofV1 &balance_proof);
@@ -203,16 +237,30 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
     const TxValidationContext &tx_validation_context,
     std::list<SpMultiexpBuilder> &validation_data_out);
 /**
+* brief: validate_sp_composition_proofs_v1 - check that spending legacy tx inputs is authorized by their owners,
+*        key images are properly constructed, and the legacy inputs exist in the ledger
+*   - check Seraphis composition proofs
+* param: legacy_ring_signatures -
+* param: legacy_input_images -
+* param: tx_proposal_message -
+* param: tx_validation_context -
+* return: true/false on validation result
+*/
+bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
+    const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const rct::key &tx_proposal_message,
+    const TxValidationContext &tx_validation_context);
+/**
 * brief: validate_sp_composition_proofs_v1 - check that spending tx inputs is authorized by their owners,
 *        and key images are properly constructed
 *   - check Seraphis composition proofs
-* param: image_proofs -
-* param: input_images -
-* param: image_proofs_message -
+* param: sp_image_proofs -
+* param: sp_input_images -
+* param: tx_proposal_message -
 * return: true/false on validation result
 */
-bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &image_proofs,
-    const std::vector<SpEnoteImageV1> &input_images,
-    const rct::key &image_proofs_message);
+bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &sp_image_proofs,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
+    const rct::key &tx_proposal_message);
 
 } //namespace sp

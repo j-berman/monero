@@ -96,7 +96,7 @@ public:
     * outparam: proof_elements_out - {KI, C}
     */
     void get_reference_set_proof_elements_v1(const std::vector<std::uint64_t> &indices,
-        std::vector<std::pair<rct::key, rct::key>> &proof_elements_out) const;
+        rct::ctkeyV &proof_elements_out) const;
     /**
     * brief: get_reference_set_proof_elements_v2 - get Seraphis squashed enotes stored in the ledger
     * param: indices -
@@ -303,7 +303,7 @@ private:
         >
     > m_blocks_of_tx_key_images;
     /// legacy enote references {KI, C} (mapped to output index)
-    std::map<std::uint64_t, std::pair<rct::key, rct::key>> m_legacy_enote_references;
+    std::map<std::uint64_t, rct::ctkey> m_legacy_enote_references;
     /// Seraphis squashed enotes (mapped to output index)
     std::map<std::uint64_t, rct::key> m_sp_squashed_enotes;
     /// map of accumulated output counts (legacy)

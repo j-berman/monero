@@ -107,14 +107,14 @@ void append_to_transcript(const SpImageProofV1 &container, SpTranscriptBuilder &
     transcript_inout.append("composition_proof", container.m_composition_proof);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBalanceProofV1::get_size_bytes(const std::size_t num_inputs,
+std::size_t SpBalanceProofV1::get_size_bytes(const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
     const bool include_commitments /*=false*/)
 {
     std::size_t size{0};
 
     // BP+ proof
-    size += bpp_size_bytes(num_inputs + num_outputs, include_commitments);
+    size += bpp_size_bytes(num_sp_inputs + num_outputs, include_commitments);
 
     // remainder blinding factor
     size += 32;
@@ -127,14 +127,14 @@ std::size_t SpBalanceProofV1::get_size_bytes(const bool include_commitments /*=f
     return SpBalanceProofV1::get_size_bytes(m_bpp2_proof.V.size(), 0, include_commitments);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBalanceProofV1::get_weight(const std::size_t num_inputs,
+std::size_t SpBalanceProofV1::get_weight(const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
     const bool include_commitments /*=false*/)
 {
     std::size_t weight{0};
 
     // BP+ proof
-    weight += bpp_weight(num_inputs + num_outputs, include_commitments);
+    weight += bpp_weight(num_sp_inputs + num_outputs, include_commitments);
 
     // remainder blinding factor
     weight += 32;

@@ -42,6 +42,7 @@
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
+#include "tx_legacy_component_types.h"
 #include "tx_validation_context.h"
 #include "tx_validators.h"
 
@@ -59,11 +60,13 @@ namespace sp
 
 ////
 // Seraphis tx in the squashed enote model
-// - membership: grootle proofs (one per input)
-// - ownership: seraphis composition proofs (one per input)
-// - key image validity: seraphis composition proofs (one per input)
-// - range proofs: Bulletproof+ (aggregated range proofs for all input masked commitments and new output commitments)
-// - reference sets: binned reference sets
+// - membership/ownership/key image validity (legacy): clsag proofs (one per input)
+// - membership (seraphis): grootle proofs (one per input)
+// - ownership (seraphis): seraphis composition proofs (one per input)
+// - key image validity (seraphis): seraphis composition proofs (one per input)
+// - range proofs: Bulletproof+ (aggregated range proofs for all seraphis input masked commitments and new output commitments)
+// - reference sets (legacy): set of on-chain indices
+// - reference sets (seraphis): binned reference sets
 // - fees: discretized
 // - memo field: sorted TLV format
 ///
@@ -75,16 +78,20 @@ struct SpTxSquashedV1 final
         ONE = 1
     };
 
-    /// tx input images (spent e-notes)
-    std::vector<SpEnoteImageV1> m_input_images;
+    /// legacy tx input images (spent legacy enotes)
+    std::vector<LegacyEnoteImageV2> m_legacy_input_images;
+    /// seraphis tx input images (spent seraphis enotes)
+    std::vector<SpEnoteImageV1> m_sp_input_images;
     /// tx outputs (new e-notes)
     std::vector<SpEnoteV1> m_outputs;
     /// balance proof (balance proof and range proofs)
     SpBalanceProofV1 m_balance_proof;
-    /// composition proofs: ownership/key-image-legitimacy for each input
-    std::vector<SpImageProofV1> m_image_proofs;
-    /// Grootle proofs on squashed enotes: membership for each input
-    std::vector<SpMembershipProofV1> m_membership_proofs;
+    /// ring signature proofs: membership and ownership/key-image-legitimacy for each legacy input
+    std::vector<LegacyRingSignatureV3> m_legacy_ring_signatures;
+    /// composition proofs: ownership/key-image-legitimacy for each seraphis input
+    std::vector<SpImageProofV1> m_sp_image_proofs;
+    /// Grootle proofs on squashed enotes: membership for each seraphis input
+    std::vector<SpMembershipProofV1> m_sp_membership_proofs;
     /// supplemental data for tx
     SpTxSupplementV1 m_tx_supplement;
     /// the transaction fee (discretized representation)
@@ -97,8 +104,10 @@ struct SpTxSquashedV1 final
     void get_hash(rct::key &tx_hash_out) const;
 
     /// get size of a possible tx
-    static std::size_t get_size_bytes(const std::size_t num_inputs,
+    static std::size_t get_size_bytes(const std::size_t num_legacy_inputs,
+        const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
+        const std::size_t legacy_ring_size,
         const std::size_t ref_set_decomp_m,
         const std::size_t ref_set_decomp_n,
         const std::size_t num_bin_members,
@@ -106,8 +115,10 @@ struct SpTxSquashedV1 final
     /// get size of the tx
     std::size_t get_size_bytes() const;
     /// get weight of a possible tx
-    static std::size_t get_weight(const std::size_t num_inputs,
+    static std::size_t get_weight(const std::size_t num_legacy_inputs,
+        const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
+        const std::size_t legacy_ring_size,
         const std::size_t ref_set_decomp_n,
         const std::size_t ref_set_decomp_m,
         const std::size_t num_bin_members,
@@ -121,11 +132,13 @@ struct SpTxSquashedV1 final
 * ...
 * outparam: tx_out -
 */
-void make_seraphis_tx_squashed_v1(std::vector<SpEnoteImageV1> input_images,
+void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_images,
+    std::vector<SpEnoteImageV1> sp_input_images,
     std::vector<SpEnoteV1> outputs,
     SpBalanceProofV1 balance_proof,
-    std::vector<SpImageProofV1> image_proofs,
-    std::vector<SpMembershipProofV1> membership_proofs,
+    std::vector<LegacyRingSignatureV3> legacy_ring_signatures,
+    std::vector<SpImageProofV1> sp_image_proofs,
+    std::vector<SpMembershipProofV1> sp_membership_proofs,
     SpTxSupplementV1 tx_supplement,
     const DiscretizedFee &discretized_transaction_fee,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
@@ -170,11 +183,19 @@ void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> n
 SemanticConfigComponentCountsV1 semantic_config_component_counts_v1(
     const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version);
 /**
-* brief: semantic_config_ref_sets_v1 - reference set configuration for a given semantics rule version
+* brief: semantic_config_legacy_ref_sets_v1 - legacy reference set configuration for a given semantics rule version
 * param: tx_semantic_rules_version -
 * return: allowed reference set configuration for the given semantics rules version
 */
-SemanticConfigRefSetV1 semantic_config_ref_sets_v1(const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version);
+SemanticConfigLegacyRefSetV1 semantic_config_legacy_ref_sets_v1(
+    const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version);
+/**
+* brief: semantic_config_sp_ref_sets_v1 - seraphis reference set configuration for a given semantics rule version
+* param: tx_semantic_rules_version -
+* return: allowed reference set configuration for the given semantics rules version
+*/
+SemanticConfigSpRefSetV1 semantic_config_sp_ref_sets_v1(
+    const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version);
 
 
 //// tx base concept implementations
@@ -218,6 +239,7 @@ bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashed
 ///
 struct SpTxParamPackV1
 {
+    std::size_t legacy_ring_size{0};
     std::size_t ref_set_decomp_n{0};
     std::size_t ref_set_decomp_m{0};
     std::size_t num_random_memo_elements{0};
@@ -226,14 +248,16 @@ struct SpTxParamPackV1
 /**
 * brief: make_mock_tx - make an SpTxSquashedV1 transaction
 * param: params -
-* param: in_amounts -
+* param: legacy_in_amounts -
+* param: sp_in_amounts -
 * param: out_amounts -
 * inoutparam: ledger_context_inout -
 * outparam: tx_out -
 */
 template <>
 void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
-    const std::vector<rct::xmr_amount> &in_amounts,
+    const std::vector<rct::xmr_amount> &legacy_in_amounts,
+    const std::vector<rct::xmr_amount> &sp_in_amounts,
     const std::vector<rct::xmr_amount> &out_amounts,
     const DiscretizedFee &discretized_transaction_fee,
     MockLedgerContext &ledger_context_inout,

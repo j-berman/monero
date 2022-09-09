@@ -55,7 +55,8 @@ public:
 //constructors
     FeeCalculatorSpTxSquashedV1() = default;
 
-    FeeCalculatorSpTxSquashedV1(const std::size_t ref_set_decomp_m,
+    FeeCalculatorSpTxSquashedV1(const std::size_t legacy_ring_size,
+        const std::size_t ref_set_decomp_m,
         const std::size_t ref_set_decomp_n,
         const std::size_t num_bin_members,
         const TxExtra &tx_extra);
@@ -66,12 +67,14 @@ public:
     static rct::xmr_amount get_fee(const std::size_t fee_per_weight, const std::size_t weight);
     static rct::xmr_amount get_fee(const std::size_t fee_per_weight, const SpTxSquashedV1 &tx);
     rct::xmr_amount get_fee(const std::size_t fee_per_weight,
-        const std::size_t num_inputs,
+        const std::size_t num_legacy_inputs,
+        const std::size_t num_sp_inputs,
         const std::size_t num_outputs) const override;
 
 private:
 //member variables
     /// misc. info for calculating tx weight
+    std::size_t m_legacy_ring_size;
     std::size_t m_ref_set_decomp_m;
     std::size_t m_ref_set_decomp_n;
     std::size_t m_num_bin_members;

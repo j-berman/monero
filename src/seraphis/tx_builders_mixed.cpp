@@ -53,6 +53,7 @@
 #include "tx_component_types.h"
 #include "tx_contextual_enote_record_utils.h"
 #include "tx_input_selection_output_context_v1.h"
+#include "tx_legacy_component_types.h"
 #include "tx_misc_utils.h"
 #include "tx_validation_context_mock.h"
 #include "txtype_squashed_v1.h"
@@ -97,7 +98,7 @@ static bool same_key_image(const SpPartialInputV1 &partial_input, const SpInputP
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_image_proof_message_v1(const std::string &version_string,
+void make_tx_proposal_message_v1(const std::string &version_string,
     const std::vector<crypto::key_image> &input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
@@ -108,7 +109,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
 
     // H_32(crypto project name, version string, input key images, output enotes, tx supplement, fee)
     SpFSTranscript transcript{
-            config::HASH_KEY_SERAPHIS_IMAGE_PROOF_MESSAGE_V1,
+            config::HASH_KEY_SERAPHIS_TX_PROPOSAL_MESSAGE_V1,
             project_name.size() +
                 version_string.size() +
                 input_key_images.size()*sizeof(crypto::key_image) +
@@ -125,7 +126,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
     sp_hash_to_32(transcript, proof_message_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_image_proof_message_v1(const std::string &version_string,
+void make_tx_proposal_message_v1(const std::string &version_string,
     const std::vector<crypto::key_image> &input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
@@ -138,7 +139,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         "make image proof message (v1): could not extract raw fee from discretized fee.");
 
     // get proof message
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
         input_key_images,
         output_enotes,
         tx_supplement,
@@ -146,22 +147,26 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         proof_message_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_image_proof_message_v1(const std::string &version_string,
-    const std::vector<SpEnoteImageV1> &input_enote_images,
+void make_tx_proposal_message_v1(const std::string &version_string,
+    const std::vector<LegacyEnoteImageV2> &input_legacy_enote_images,
+    const std::vector<SpEnoteImageV1> &input_sp_enote_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const DiscretizedFee &transaction_fee,
     rct::key &proof_message_out)
 {
-    // get key images from partial inputs
+    // get key images from enote images
     std::vector<crypto::key_image> input_key_images;
-    input_key_images.reserve(input_enote_images.size());
+    input_key_images.reserve(input_legacy_enote_images.size() + input_sp_enote_images.size());
 
-    for (const SpEnoteImageV1 &enote_image : input_enote_images)
-        input_key_images.emplace_back(enote_image.m_core.m_key_image);
+    for (const LegacyEnoteImageV2 &legacy_enote_image : input_legacy_enote_images)
+        input_key_images.emplace_back(legacy_enote_image.m_key_image);
+
+    for (const SpEnoteImageV1 &sp_enote_image : input_sp_enote_images)
+        input_key_images.emplace_back(sp_enote_image.m_core.m_key_image);
 
     // get proof message
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
         input_key_images,
         output_enotes,
         tx_supplement,
@@ -169,7 +174,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         proof_message_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_image_proof_message_v1(const std::string &version_string,
+void make_tx_proposal_message_v1(const std::string &version_string,
     const std::vector<crypto::key_image> &input_key_images,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
@@ -192,7 +197,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
     finalize_tx_extra_v1(partial_memo, output_proposals, tx_supplement.m_tx_extra);
 
     // get proof message
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
         input_key_images,
         output_enotes,
         tx_supplement,
@@ -200,7 +205,8 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         proof_message_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_image_proof_message_v1(const std::string &version_string,
+void make_tx_proposal_message_v1(const std::string &version_string,
+    //todo: legacy partial inputs
     const std::vector<SpPartialInputV1> &partial_inputs,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
@@ -215,7 +221,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         input_key_images.emplace_back(partial_input.m_input_image.m_core.m_key_image);
 
     // get proof message
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
         input_key_images,
         output_proposals,
         partial_memo,
@@ -223,7 +229,8 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         proof_message_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_image_proof_message_v1(const std::string &version_string,
+void make_tx_proposal_message_v1(const std::string &version_string,
+    //todo: legacy input proposals
     const std::vector<SpInputProposalV1> &input_proposals,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
@@ -238,7 +245,7 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
         input_key_images.emplace_back(input_proposal.m_core.m_key_image);
 
     // get proof message
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
         input_key_images,
         output_proposals,
         partial_memo,
@@ -247,20 +254,27 @@ void make_tx_image_proof_message_v1(const std::string &version_string,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
-    const std::vector<SpImageProofV1> &image_proofs,
-    const std::vector<SpMembershipProofV1> &membership_proofs,
+    const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
+    const std::vector<SpImageProofV1> &sp_image_proofs,
+    const std::vector<SpMembershipProofV1> &sp_membership_proofs,
     rct::key &tx_proofs_prefix_out)
 {
-    // H_32(balance proof, image proofs, membership proofs)
+    // H_32(balance proof, legacy ring signatures, seraphis image proofs, seraphis membership proofs)
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_TRANSACTION_PROOFS_PREFIX_V1,
             balance_proof.get_size_bytes() +
-                image_proofs.size() * SpImageProofV1::get_size_bytes() +
-                membership_proofs.size() ? membership_proofs.size() * membership_proofs[0].get_size_bytes() : 0
+                (legacy_ring_signatures.size()
+                    ? legacy_ring_signatures.size() * legacy_ring_signatures[0].get_size_bytes()
+                    : 0) +
+                sp_image_proofs.size() * SpImageProofV1::get_size_bytes() +
+                (sp_membership_proofs.size()
+                    ? sp_membership_proofs.size() * sp_membership_proofs[0].get_size_bytes()
+                    : 0)
         };
     transcript.append("balance_proof", balance_proof);
-    transcript.append("image_proofs", image_proofs);
-    transcript.append("membership_proofs", membership_proofs);
+    transcript.append("legacy_ring_signatures", legacy_ring_signatures);
+    transcript.append("sp_image_proofs", sp_image_proofs);
+    transcript.append("sp_membership_proofs", sp_membership_proofs);
 
     sp_hash_to_32(transcript, tx_proofs_prefix_out.bytes);
 }
@@ -497,7 +511,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
         selfsend_payment_proposals);
 
     CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.get_fee(fee_per_tx_weight,
-                legacy_contextual_inputs.size() + sp_contextual_inputs.size(),
+                legacy_contextual_inputs.size(), sp_contextual_inputs.size(),
                 normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
             reported_final_fee,
         "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");
@@ -591,7 +605,7 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
     MockLedgerContext mock_ledger{0, 0};
 
     // 2. get parameters for making mock ref sets (use minimum parameters for efficiency when possible)
-    const SemanticConfigRefSetV1 ref_set_config{semantic_config_ref_sets_v1(semantic_rules_version)};
+    const SemanticConfigSpRefSetV1 ref_set_config{semantic_config_sp_ref_sets_v1(semantic_rules_version)};
     const SpBinnedReferenceSetConfigV1 bin_config{
             .m_bin_radius = static_cast<ref_set_bin_dimension_v1_t>(ref_set_config.m_bin_radius_min),
             .m_num_bin_members = static_cast<ref_set_bin_dimension_v1_t>(ref_set_config.m_num_bin_members_min),
@@ -615,10 +629,12 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
     // 5. make tx (use raw constructor instead of partial tx constructor to avoid infinite loop)
     SpTxSquashedV1 test_tx;
     make_seraphis_tx_squashed_v1(
-        std::move(partial_tx.m_input_images),
+        std::move(partial_tx.m_legacy_input_images),
+        std::move(partial_tx.m_sp_input_images),
         std::move(partial_tx.m_outputs),
         std::move(partial_tx.m_balance_proof),
-        std::move(partial_tx.m_image_proofs),
+        std::move(partial_tx.m_legacy_ring_signatures),
+        std::move(partial_tx.m_sp_image_proofs),
         std::move(membership_proofs),
         std::move(partial_tx.m_tx_supplement),
         partial_tx.m_tx_fee,
@@ -626,6 +642,7 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
         test_tx);
 
     // 6. validate tx
+    //todo: use mock validation context that knows the mapping for legacy ring signature ring members
     const TxValidationContextMock tx_validation_context{mock_ledger};
 
     CHECK_AND_ASSERT_THROW_MES(validate_tx(test_tx, tx_validation_context),
@@ -671,7 +688,7 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
 
     // 6. check: inputs and proposal must have consistent proposal prefixes
     rct::key proposal_prefix;
-    make_tx_image_proof_message_v1(version_string,
+    make_tx_proposal_message_v1(version_string,
         partial_inputs,
         output_proposals,
         partial_memo,
@@ -711,16 +728,18 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
     /// copy misc tx pieces
 
     // 1. gather tx input parts
-    partial_tx_out.m_input_images.reserve(partial_inputs.size());
-    partial_tx_out.m_image_proofs.reserve(partial_inputs.size());
+    //partial_tx_out.m_legacy_input_images.reserve(...);  //todo
+    partial_tx_out.m_sp_input_images.reserve(partial_inputs.size());
+    //partial_tx_out.m_legacy_ring_signatures.reserve(...);  //todo
+    partial_tx_out.m_sp_image_proofs.reserve(partial_inputs.size());
     partial_tx_out.m_input_enotes.reserve(partial_inputs.size());
     partial_tx_out.m_address_masks.reserve(partial_inputs.size());
     partial_tx_out.m_commitment_masks.reserve(partial_inputs.size());
 
     for (SpPartialInputV1 &partial_input : partial_inputs)
     {
-        partial_tx_out.m_input_images.emplace_back(partial_input.m_input_image);
-        partial_tx_out.m_image_proofs.emplace_back(std::move(partial_input.m_image_proof));
+        partial_tx_out.m_sp_input_images.emplace_back(partial_input.m_input_image);
+        partial_tx_out.m_sp_image_proofs.emplace_back(std::move(partial_input.m_image_proof));
         partial_tx_out.m_input_enotes.emplace_back(partial_input.m_input_enote_core);
         partial_tx_out.m_address_masks.emplace_back(partial_input.m_address_mask);
         partial_tx_out.m_commitment_masks.emplace_back(partial_input.m_commitment_mask);

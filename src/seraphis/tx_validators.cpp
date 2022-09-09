@@ -36,6 +36,7 @@
 #include "crypto/crypto.h"
 #include "grootle.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctSigs.h"
 #include "ringct/rctTypes.h"
 #include "sp_composition_proof.h"
 #include "sp_crypto_utils.h"
@@ -44,6 +45,7 @@
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
+#include "tx_legacy_component_types.h"
 #include "tx_misc_utils.h"
 #include "tx_validation_context.h"
 
@@ -62,7 +64,8 @@ namespace sp
 //-------------------------------------------------------------------------------------------------------------------
 // helper for validating v1 balance proofs (balance equality check)
 //-------------------------------------------------------------------------------------------------------------------
-static bool validate_sp_amount_balance_equality_check_v1(const std::vector<SpEnoteImageV1> &input_images,
+static bool validate_sp_amount_balance_equality_check_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const std::vector<SpEnoteV1> &outputs,
     const rct::xmr_amount transaction_fee,
     const rct::key &remainder_blinding_factor)
@@ -74,11 +77,14 @@ static bool validate_sp_amount_balance_equality_check_v1(const std::vector<SpEno
     // balance check
     rct::keyV input_image_amount_commitments;
     rct::keyV output_commitments;
-    input_image_amount_commitments.reserve(input_images.size());
+    input_image_amount_commitments.reserve(legacy_input_images.size() + sp_input_images.size());
     output_commitments.reserve(outputs.size() + 1 + (remainder_blinding_factor == rct::zero() ? 0 : 1));
 
-    for (const SpEnoteImageV1 &input_image : input_images)
-        input_image_amount_commitments.emplace_back(input_image.m_core.m_masked_commitment);
+    for (const LegacyEnoteImageV2 &legacy_input_image : legacy_input_images)
+        input_image_amount_commitments.emplace_back(legacy_input_image.m_masked_commitment);
+
+    for (const SpEnoteImageV1 &sp_input_image : sp_input_images)
+        input_image_amount_commitments.emplace_back(sp_input_image.m_core.m_masked_commitment);
 
     for (const SpEnoteV1 &output : outputs)
         output_commitments.emplace_back(output.m_core.m_amount_commitment);
@@ -94,24 +100,30 @@ static bool validate_sp_amount_balance_equality_check_v1(const std::vector<SpEno
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 bool validate_sp_semantics_component_counts_v1(const SemanticConfigComponentCountsV1 &config,
-    const std::size_t num_input_images,
-    const std::size_t num_membership_proofs,
-    const std::size_t num_image_proofs,
+    const std::size_t num_legacy_input_images,
+    const std::size_t num_sp_input_images,
+    const std::size_t num_legacy_ring_signatures,
+    const std::size_t num_sp_membership_proofs,
+    const std::size_t num_sp_image_proofs,
     const std::size_t num_outputs,
     const std::size_t num_enote_pubkeys,
     const std::size_t num_range_proofs)
 {
     // input count
-    if (num_input_images < config.m_min_inputs ||
-        num_input_images > config.m_max_inputs)
+    if (num_legacy_input_images + num_sp_input_images < config.m_min_inputs ||
+        num_legacy_input_images + num_sp_input_images > config.m_max_inputs)
         return false;
 
-    // input images and image proofs should be 1:1
-    if (num_input_images != num_image_proofs)
+    // legacy input images and ring signatures should be 1:1
+    if (num_legacy_input_images != num_legacy_ring_signatures)
         return false;
 
-    // input images and membership proofs should be 1:1
-    if (num_input_images != num_membership_proofs)
+    // seraphis input images and image proofs should be 1:1
+    if (num_sp_input_images != num_sp_image_proofs)
+        return false;
+
+    // seraphis input images and membership proofs should be 1:1
+    if (num_sp_input_images != num_sp_membership_proofs)
         return false;
 
     // output count
@@ -119,8 +131,8 @@ bool validate_sp_semantics_component_counts_v1(const SemanticConfigComponentCoun
         num_outputs > config.m_max_outputs)
         return false;
 
-    // range proofs should be 1:1 with input image amount commitments and outputs
-    if (num_range_proofs != num_input_images + num_outputs)
+    // range proofs should be 1:1 with seraphis input image amount commitments and outputs
+    if (num_range_proofs != num_sp_input_images + num_outputs)
         return false;
 
     // outputs and enote pubkeys should be 1:1
@@ -136,16 +148,39 @@ bool validate_sp_semantics_component_counts_v1(const SemanticConfigComponentCoun
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_sp_semantics_reference_sets_v1(const SemanticConfigRefSetV1 &config,
-    const std::vector<SpMembershipProofV1> &membership_proofs)
+bool validate_sp_semantics_legacy_reference_sets_v1(const SemanticConfigLegacyRefSetV1 &config,
+    const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures)
 {
-    // sanity check
-    if (membership_proofs.size() == 0)
-        return false;
+    // assume valid if no signatures
+    if (legacy_ring_signatures.size() == 0)
+        return true;
+
+    // check ring size in each ring signature
+    for (const LegacyRingSignatureV3 &legacy_ring_signature : legacy_ring_signatures)
+    {
+        // reference set
+        if (legacy_ring_signature.m_reference_set.size() < config.m_ring_size_min ||
+            legacy_ring_signature.m_reference_set.size() > config.m_ring_size_max)
+            return false;
+
+        // CLSAG signature size
+        if (legacy_ring_signature.m_reference_set.size() != legacy_ring_signature.m_clsag_proof.s.size())
+            return false;
+    }
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool validate_sp_semantics_sp_reference_sets_v1(const SemanticConfigSpRefSetV1 &config,
+    const std::vector<SpMembershipProofV1> &sp_membership_proofs)
+{
+    // assume valid if proofs
+    if (sp_membership_proofs.size() == 0)
+        return true;
 
     // check ref set decomp
-    const std::size_t ref_set_decomp_n{membership_proofs[0].m_ref_set_decomp_n};
-    const std::size_t ref_set_decomp_m{membership_proofs[0].m_ref_set_decomp_m};
+    const std::size_t ref_set_decomp_n{sp_membership_proofs[0].m_ref_set_decomp_n};
+    const std::size_t ref_set_decomp_m{sp_membership_proofs[0].m_ref_set_decomp_m};
 
     if (ref_set_decomp_n < config.m_decomp_n_min ||
         ref_set_decomp_n > config.m_decomp_n_max)
@@ -156,7 +191,7 @@ bool validate_sp_semantics_reference_sets_v1(const SemanticConfigRefSetV1 &confi
         return false;
 
     // check binned reference set configuration
-    const SpBinnedReferenceSetConfigV1 bin_config{membership_proofs[0].m_binned_reference_set.m_bin_config};
+    const SpBinnedReferenceSetConfigV1 bin_config{sp_membership_proofs[0].m_binned_reference_set.m_bin_config};
 
     if (bin_config.m_bin_radius < config.m_bin_radius_min ||
         bin_config.m_bin_radius > config.m_bin_radius_max)
@@ -166,23 +201,23 @@ bool validate_sp_semantics_reference_sets_v1(const SemanticConfigRefSetV1 &confi
         bin_config.m_num_bin_members > config.m_num_bin_members_max)
         return false;
 
-    // check membership proofs
-    for (const SpMembershipProofV1 &proof : membership_proofs)
+    // check seraphis membership proofs
+    for (const SpMembershipProofV1 &sp_proof : sp_membership_proofs)
     {
         // proof ref set decomposition (n^m) should match number of referenced enotes
-        const std::size_t ref_set_size{ref_set_size_from_decomp(proof.m_ref_set_decomp_n, proof.m_ref_set_decomp_m)};
+        const std::size_t ref_set_size{ref_set_size_from_decomp(sp_proof.m_ref_set_decomp_n, sp_proof.m_ref_set_decomp_m)};
 
-        if (ref_set_size != proof.m_binned_reference_set.reference_set_size())
+        if (ref_set_size != sp_proof.m_binned_reference_set.reference_set_size())
             return false;
 
         // all proofs should have same ref set decomp (and implicitly: same ref set size)
-        if (proof.m_ref_set_decomp_n != ref_set_decomp_n)
+        if (sp_proof.m_ref_set_decomp_n != ref_set_decomp_n)
             return false;
-        if (proof.m_ref_set_decomp_m != ref_set_decomp_m)
+        if (sp_proof.m_ref_set_decomp_m != ref_set_decomp_m)
             return false;
 
         // all proofs should have the same bin config
-        if (proof.m_binned_reference_set.m_bin_config != bin_config)
+        if (sp_proof.m_binned_reference_set.m_bin_config != bin_config)
             return false;
     }
 
@@ -206,45 +241,90 @@ bool validate_sp_semantics_output_serialization_v1(const std::vector<SpEnoteV1> 
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_sp_semantics_input_images_v1(const std::vector<SpEnoteImageV1> &input_images)
+bool validate_sp_semantics_input_images_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images)
 {
-    for (const SpEnoteImageV1 &image : input_images)
+    for (const LegacyEnoteImageV2 &legacy_image : legacy_input_images)
     {
         // input linking tags must be in the prime subgroup: l*KI = identity
-        if (!sp::key_domain_is_prime_subgroup(rct::ki2rct(image.m_core.m_key_image)))
+        if (!sp::key_domain_is_prime_subgroup(rct::ki2rct(legacy_image.m_key_image)))
             return false;
 
         // image parts must not be identity
-        if (rct::ki2rct(image.m_core.m_key_image) == rct::identity())
+        if (rct::ki2rct(legacy_image.m_key_image) == rct::identity())
             return false;
-        if (image.m_core.m_masked_address == rct::identity())
+        if (legacy_image.m_masked_commitment == rct::identity())
             return false;
-        if (image.m_core.m_masked_commitment == rct::identity())
+    }
+
+    for (const SpEnoteImageV1 &sp_image : sp_input_images)
+    {
+        // input linking tags must be in the prime subgroup: l*KI = identity
+        if (!sp::key_domain_is_prime_subgroup(rct::ki2rct(sp_image.m_core.m_key_image)))
+            return false;
+
+        // image parts must not be identity
+        if (rct::ki2rct(sp_image.m_core.m_key_image) == rct::identity())
+            return false;
+        if (sp_image.m_core.m_masked_address == rct::identity())
+            return false;
+        if (sp_image.m_core.m_masked_commitment == rct::identity())
             return false;
     }
 
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_sp_semantics_layout_v1(const std::vector<SpMembershipProofV1> &membership_proofs,
-    const std::vector<SpEnoteImageV1> &input_images,
+bool validate_sp_semantics_layout_v1(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
+    const std::vector<SpMembershipProofV1> &sp_membership_proofs,
+    const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const std::vector<SpEnoteV1> &outputs,
     const std::vector<crypto::x25519_pubkey> &enote_ephemeral_pubkeys,
     const TxExtra &tx_extra)
 {
-    // membership proof binned reference set bins should be sorted (ascending)
-    // note: duplicate bin locations are allowed
-    for (const SpMembershipProofV1 &proof : membership_proofs)
+    // legacy reference sets should be sorted (ascending) without duplicates
+    for (const LegacyRingSignatureV3 &legacy_ring_signature : legacy_ring_signatures)
     {
-        if (!std::is_sorted(proof.m_binned_reference_set.m_bin_loci.begin(), proof.m_binned_reference_set.m_bin_loci.end()))
+        if (!std::is_sorted(legacy_ring_signature.m_reference_set.begin(), legacy_ring_signature.m_reference_set.end()))
+            return false;
+        if (std::adjacent_find(legacy_ring_signature.m_reference_set.begin(), legacy_ring_signature.m_reference_set.end()) !=
+                legacy_ring_signature.m_reference_set.end())
             return false;
     }
 
-    // input images should be sorted by key image with byte-wise comparisons (ascending), and unique
-    if (!std::is_sorted(input_images.begin(), input_images.end()))
+    // seraphis membership proof binned reference set bins should be sorted (ascending)
+    // note: duplicate bin locations are allowed
+    for (const SpMembershipProofV1 &sp_proof : sp_membership_proofs)
+    {
+        if (!std::is_sorted(sp_proof.m_binned_reference_set.m_bin_loci.begin(),
+                sp_proof.m_binned_reference_set.m_bin_loci.end()))
+            return false;
+    }
+
+    // legacy input images should be sorted by key image with byte-wise comparisons (ascending), and unique
+    if (!std::is_sorted(legacy_input_images.begin(), legacy_input_images.end()))
         return false;
-    if (std::adjacent_find(input_images.begin(), input_images.end(), equals_from_less{}) != input_images.end())
+    if (std::adjacent_find(legacy_input_images.begin(), legacy_input_images.end(), equals_from_less{}) !=
+            legacy_input_images.end())
         return false;
+
+    // seraphis input images should be sorted by key image with byte-wise comparisons (ascending), and unique
+    if (!std::is_sorted(sp_input_images.begin(), sp_input_images.end()))
+        return false;
+    if (std::adjacent_find(sp_input_images.begin(), sp_input_images.end(), equals_from_less{}) != sp_input_images.end())
+        return false;
+
+    // legacy and seraphis input images should not have any matching key images
+    // note: this is just a sanity check, it should be impossible to return false here if the proofs are valid
+    if (legacy_input_images.size() > 0)
+    {
+        for (const SpEnoteImageV1 &sp_input_image : sp_input_images)
+        {
+            if (legacy_input_images[0].m_key_image == sp_input_image.m_core.m_key_image)
+                return false;
+        }
+    }
 
     // output enotes should be sorted by onetime address with byte-wise comparisons (ascending), and unique
     if (!std::is_sorted(outputs.begin(), outputs.end()))
@@ -273,20 +353,29 @@ bool validate_sp_semantics_fee_v1(const DiscretizedFee &discretized_transaction_
     return try_get_fee_value(discretized_transaction_fee, raw_transaction_fee);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_sp_linking_tags_v1(const std::vector<SpEnoteImageV1> &input_images,
+bool validate_sp_linking_tags_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const TxValidationContext &tx_validation_context)
 {
-    // check no duplicates in ledger context
-    for (std::size_t input_index{0}; input_index < input_images.size(); ++input_index)
+    // check no legacy duplicates in ledger context
+    for (const LegacyEnoteImageV2 &legacy_input_image : legacy_input_images)
     {
-        if (tx_validation_context.key_image_exists_v1(input_images[input_index].m_core.m_key_image))
+        if (tx_validation_context.key_image_exists_v1(legacy_input_image.m_key_image))
+            return false;
+    }
+
+    // check no seraphis duplicates in ledger context
+    for (const SpEnoteImageV1 &sp_input_image : sp_input_images)
+    {
+        if (tx_validation_context.key_image_exists_v1(sp_input_image.m_core.m_key_image))
             return false;
     }
 
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_sp_amount_balance_v1(const std::vector<SpEnoteImageV1> &input_images,
+bool validate_sp_amount_balance_v1(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const std::vector<SpEnoteV1> &outputs,
     const DiscretizedFee &discretized_transaction_fee,
     const SpBalanceProofV1 &balance_proof)
@@ -303,20 +392,21 @@ bool validate_sp_amount_balance_v1(const std::vector<SpEnoteImageV1> &input_imag
         return false;
 
     // check that amount commitments balance
-    if (!validate_sp_amount_balance_equality_check_v1(input_images,
+    if (!validate_sp_amount_balance_equality_check_v1(legacy_input_images,
+            sp_input_images,
             outputs,
             raw_transaction_fee,
             balance_proof.m_remainder_blinding_factor))
         return false;
 
-    // check that commitments in range proofs line up with input image and output commitments
-    if (input_images.size() + outputs.size() != range_proofs.V.size())
+    // check that commitments in range proofs line up with seraphis input image and output commitments
+    if (sp_input_images.size() + outputs.size() != range_proofs.V.size())
         return false;
 
-    for (std::size_t input_commitment_index{0}; input_commitment_index < input_images.size(); ++input_commitment_index)
+    for (std::size_t input_commitment_index{0}; input_commitment_index < sp_input_images.size(); ++input_commitment_index)
     {
         // the two stored copies of input image commitments must match
-        if (input_images[input_commitment_index].m_core.m_masked_commitment !=
+        if (sp_input_images[input_commitment_index].m_core.m_masked_commitment !=
                 rct::rct2pk(rct::scalarmult8(range_proofs.V[input_commitment_index])))
             return false;
     }
@@ -325,7 +415,7 @@ bool validate_sp_amount_balance_v1(const std::vector<SpEnoteImageV1> &input_imag
     {
         // the two stored copies of output commitments must match
         if (outputs[output_commitment_index].m_core.m_amount_commitment !=
-                rct::rct2pk(rct::scalarmult8(range_proofs.V[input_images.size() + output_commitment_index])))
+                rct::rct2pk(rct::scalarmult8(range_proofs.V[sp_input_images.size() + output_commitment_index])))
             return false;
     }
 
@@ -334,17 +424,20 @@ bool validate_sp_amount_balance_v1(const std::vector<SpEnoteImageV1> &input_imag
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpMembershipProofV1*> &membership_proofs,
-    const std::vector<const SpEnoteImage*> &input_images,
+bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpMembershipProofV1*> &sp_membership_proofs,
+    const std::vector<const SpEnoteImage*> &sp_input_images,
     const TxValidationContext &tx_validation_context,
     std::list<SpMultiexpBuilder> &validation_data_out)
 {
-    const std::size_t num_proofs{membership_proofs.size()};
+    const std::size_t num_proofs{sp_membership_proofs.size()};
 
     // sanity check
-    if (num_proofs != input_images.size() ||
-        num_proofs == 0)
+    if (num_proofs != sp_input_images.size())
         return false;
+
+    // assume true of no proofs
+    if (num_proofs == 0)
+        return true;
 
     // get batched validation data
     std::vector<const sp::GrootleProof*> proofs;
@@ -362,20 +455,20 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
     for (std::size_t proof_index{0}; proof_index < num_proofs; ++proof_index)
     {
         // sanity check
-        if (!membership_proofs[proof_index] ||
-            !input_images[proof_index])
+        if (!sp_membership_proofs[proof_index] ||
+            !sp_input_images[proof_index])
             return false;
 
         // the binned reference set's generator seed should be reproducible
-        make_binned_ref_set_generator_seed_v1(input_images[proof_index]->m_masked_address,
-            input_images[proof_index]->m_masked_commitment,
+        make_binned_ref_set_generator_seed_v1(sp_input_images[proof_index]->m_masked_address,
+            sp_input_images[proof_index]->m_masked_commitment,
             generator_seed_reproduced);
 
-        if (!(generator_seed_reproduced == membership_proofs[proof_index]->m_binned_reference_set.m_bin_generator_seed))
+        if (!(generator_seed_reproduced == sp_membership_proofs[proof_index]->m_binned_reference_set.m_bin_generator_seed))
             return false;
 
         // extract the references
-        if(!try_get_reference_indices_from_binned_reference_set_v1(membership_proofs[proof_index]->m_binned_reference_set,
+        if(!try_get_reference_indices_from_binned_reference_set_v1(sp_membership_proofs[proof_index]->m_binned_reference_set,
                 reference_indices))
             return false;
 
@@ -384,43 +477,85 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
 
         // offset (input image masked keys squashed: Q" = K" + C")
         rct::addKeys(offsets[proof_index],
-            input_images[proof_index]->m_masked_address,
-            input_images[proof_index]->m_masked_commitment);
+            sp_input_images[proof_index]->m_masked_address,
+            sp_input_images[proof_index]->m_masked_commitment);
 
         // proof message
         messages.emplace_back();
-        make_tx_membership_proof_message_v1(membership_proofs[proof_index]->m_binned_reference_set, messages.back());
+        make_tx_membership_proof_message_v1(sp_membership_proofs[proof_index]->m_binned_reference_set, messages.back());
 
         // save the proof
-        proofs.emplace_back(&(membership_proofs[proof_index]->m_grootle_proof));
+        proofs.emplace_back(&(sp_membership_proofs[proof_index]->m_grootle_proof));
     }
 
     // get verification data
     validation_data_out = sp::get_grootle_verification_data(proofs,
         membership_proof_keys,
         offsets,
-        membership_proofs[0]->m_ref_set_decomp_n,
-        membership_proofs[0]->m_ref_set_decomp_m,
+        sp_membership_proofs[0]->m_ref_set_decomp_n,
+        sp_membership_proofs[0]->m_ref_set_decomp_m,
         messages);
 
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &image_proofs,
-    const std::vector<SpEnoteImageV1> &input_images,
-    const rct::key &image_proofs_message)
+bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
+    const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const rct::key &tx_proposal_message,
+    const TxValidationContext &tx_validation_context)
 {
     // sanity check
-    if (image_proofs.size() != input_images.size())
+    if (legacy_ring_signatures.size() != legacy_input_images.size())
+        return false;
+
+    // legacy ring signatures and input images should have the same main key images stored
+    for (std::size_t legacy_input_index{0}; legacy_input_index < legacy_ring_signatures.size(); ++legacy_input_index)
+    {
+        if (rct::rct2ki(legacy_ring_signatures[legacy_input_index].m_clsag_proof.I) !=
+            legacy_input_images[legacy_input_index].m_key_image)
+            return false;
+    }
+
+    // validate each legacy ring signature
+    for (std::size_t legacy_input_index{0}; legacy_input_index < legacy_ring_signatures.size(); ++legacy_input_index)
+    {
+        // collect CLSAG ring members
+        rct::ctkeyV ring_members;
+        tx_validation_context.get_reference_set_proof_elements_v1(legacy_ring_signatures[legacy_input_index].m_reference_set,
+            ring_members);
+
+        // make legacy input proof message
+        rct::key ring_signature_message;
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_message,
+            legacy_ring_signatures[legacy_input_index].m_reference_set,
+            ring_signature_message);
+
+        // verify CLSAG proof
+        if (!rct::verRctCLSAGSimple(ring_signature_message,
+                legacy_ring_signatures[legacy_input_index].m_clsag_proof,
+                ring_members,
+                legacy_input_images[legacy_input_index].m_masked_commitment))
+            return false;
+    }
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &sp_image_proofs,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
+    const rct::key &tx_proposal_message)
+{
+    // sanity check
+    if (sp_image_proofs.size() != sp_input_images.size())
         return false;
 
     // validate each composition proof
-    for (std::size_t input_index{0}; input_index < input_images.size(); ++input_index)
+    for (std::size_t input_index{0}; input_index < sp_input_images.size(); ++input_index)
     {
-        if (!sp::sp_composition_verify(image_proofs[input_index].m_composition_proof,
-                image_proofs_message,
-                input_images[input_index].m_core.m_masked_address,
-                input_images[input_index].m_core.m_key_image))
+        if (!sp::sp_composition_verify(sp_image_proofs[input_index].m_composition_proof,
+                tx_proposal_message,
+                sp_input_images[input_index].m_core.m_masked_address,
+                sp_input_images[input_index].m_core.m_key_image))
             return false;
     }
 

@@ -29,16 +29,18 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_fee_calculator_squashed_v1.h"
+#include "tx_legacy_component_types.h"
 
 //local headers
+#include "crypto/crypto.h"
 #include "misc_log_ex.h"
-#include "ringct/rctTypes.h"
-#include "tx_discretized_fee.h"
+#include "sp_transcript.h"
+#include "tx_misc_utils.h"
 
 //third party headers
 
 //standard headers
+#include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
@@ -46,51 +48,29 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-FeeCalculatorSpTxSquashedV1::FeeCalculatorSpTxSquashedV1(const std::size_t legacy_ring_size,
-    const std::size_t ref_set_decomp_m,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t num_bin_members,
-    const TxExtra &tx_extra) :
-        m_legacy_ring_size{legacy_ring_size},
-        m_ref_set_decomp_m{ref_set_decomp_m},
-        m_ref_set_decomp_n{ref_set_decomp_n},
-        m_num_bin_members{num_bin_members},
-        m_tx_extra{tx_extra}
-{}
-//-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_weight, const std::size_t weight)
+void append_to_transcript(const LegacyEnoteImageV2 &container, SpTranscriptBuilder &transcript_inout)
 {
-    const DiscretizedFee fee_discretized{fee_per_weight * weight};
-
-    rct::xmr_amount fee_value;
-    CHECK_AND_ASSERT_THROW_MES(try_get_fee_value(fee_discretized, fee_value),
-        "tx fee getter (SpTxSquashedV1): extracting discretized fee failed (bug).");
-
-    return fee_value;
+    transcript_inout.append("C_masked", container.m_masked_commitment);
+    transcript_inout.append("KI", container.m_key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_weight, const SpTxSquashedV1 &tx)
+std::size_t LegacyRingSignatureV3::get_size_bytes(const std::size_t num_ring_members)
 {
-    return get_fee(fee_per_weight, tx.get_weight());
+    return clsag_size_bytes(num_ring_members) + num_ring_members * 8;
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_weight,
-    const std::size_t num_legacy_inputs,
-    const std::size_t num_sp_inputs,
-    const std::size_t num_outputs) const
+std::size_t LegacyRingSignatureV3::get_size_bytes() const
 {
-    const std::size_t weight{
-            SpTxSquashedV1::get_weight(num_legacy_inputs,
-                num_sp_inputs,
-                num_outputs,
-                m_legacy_ring_size,
-                m_ref_set_decomp_m,
-                m_ref_set_decomp_n,
-                m_num_bin_members,
-                m_tx_extra)
-        };
+    CHECK_AND_ASSERT_THROW_MES(m_clsag_proof.s.size() == m_reference_set.size(),
+        "legacy ring signature v3 size: clsag proof doesn't match reference set size.");
 
-    return get_fee(fee_per_weight, weight);
+    return LegacyRingSignatureV3::get_size_bytes(m_reference_set.size());
+}
+//-------------------------------------------------------------------------------------------------------------------
+void append_to_transcript(const LegacyRingSignatureV3 &container, SpTranscriptBuilder &transcript_inout)
+{
+    append_clsag_to_transcript(container.m_clsag_proof, transcript_inout);
+    transcript_inout.append("reference_set", container.m_reference_set);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

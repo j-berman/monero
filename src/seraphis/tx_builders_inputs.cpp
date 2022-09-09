@@ -57,6 +57,7 @@ extern "C"
 #include "tx_binned_reference_set_utils.h"
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
+#include "tx_legacy_component_types.h"
 #include "tx_misc_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
@@ -140,6 +141,21 @@ void align_v1_membership_proofs_v1(const std::vector<SpEnoteImageV1> &input_imag
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_message,
+    const std::vector<std::uint64_t> &reference_set_indices,
+    rct::key &message_out)
+{
+    // m = H_32(tx proposal message, {reference set indices})
+    SpFSTranscript transcript{
+            config::HASH_KEY_LEGACY_RING_SIGNATURES_MESSAGE_V1,
+            32 + reference_set_indices.size() * 8
+        };
+    transcript.append("tx_proposal_message", tx_proposal_message);
+    transcript.append("reference_set_indices", reference_set_indices);
+
+    sp_hash_to_32(transcript, message_out.bytes);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_tx_membership_proof_message_v1(const SpBinnedReferenceSetV1 &binned_reference_set, rct::key &message_out)
 {
     static const std::string project_name{CRYPTONOTE_NAME};
@@ -157,8 +173,7 @@ void make_tx_membership_proof_message_v1(const SpBinnedReferenceSetV1 &binned_re
     sp_hash_to_32(transcript, message_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void prepare_input_commitment_factors_for_balance_proof_v1(
-    const std::vector<SpInputProposalV1> &input_proposals,
+void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpInputProposalV1> &input_proposals,
     const std::vector<crypto::secret_key> &image_amount_masks,
     std::vector<rct::xmr_amount> &input_amounts_out,
     std::vector<crypto::secret_key> &blinding_factors_out)
@@ -184,8 +199,7 @@ void prepare_input_commitment_factors_for_balance_proof_v1(
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void prepare_input_commitment_factors_for_balance_proof_v1(
-    const std::vector<SpPartialInputV1> &partial_inputs,
+void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpPartialInputV1> &partial_inputs,
     std::vector<rct::xmr_amount> &input_amounts_out,
     std::vector<crypto::secret_key> &blinding_factors_out)
 {
@@ -207,14 +221,18 @@ void prepare_input_commitment_factors_for_balance_proof_v1(
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_input_images_prefix_v1(const std::vector<SpEnoteImageV1> &enote_images, rct::key &input_images_prefix_out)
+void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_enote_images,
+    const std::vector<SpEnoteImageV1> &sp_enote_images,
+    rct::key &input_images_prefix_out)
 {
-    // input images prefix = H_32({K", C", KI})
+    // input images prefix = H_32({C", KI}((legacy)), {K", C", KI})
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_INPUT_IMAGES_PREFIX_V1,
-            enote_images.size()*SpEnoteImageV1::get_size_bytes()
+            legacy_enote_images.size() * LegacyEnoteImageV2::get_size_bytes() +
+            sp_enote_images.size() * SpEnoteImageV1::get_size_bytes()
         };
-    transcript.append("enote_images", enote_images);
+    transcript.append("legacy_enote_images", legacy_enote_images);
+    transcript.append("sp_enote_images", sp_enote_images);
 
     sp_hash_to_32(transcript, input_images_prefix_out.bytes);
 }

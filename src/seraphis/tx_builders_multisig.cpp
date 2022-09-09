@@ -684,7 +684,7 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
         selfsend_payment_proposals);
 
     CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.get_fee(fee_per_tx_weight,
-                legacy_contextual_inputs.size() + sp_contextual_inputs.size(),
+                legacy_contextual_inputs.size(), sp_contextual_inputs.size(),
                 normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
             reported_final_fee,
         "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");

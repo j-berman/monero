@@ -28,7 +28,7 @@
 
 // NOT FOR PRODUCTION
 
-// Interface for interacting with a context where a tx should be valid (e.g. a ledger).
+// Seraphis transaction component types.
 
 
 #pragma once
@@ -38,47 +38,70 @@
 #include "ringct/rctTypes.h"
 
 //third party headers
+#include <boost/utility/string_ref.hpp>
 
 //standard headers
-#include <vector>
+#include <string>
 
 //forward declarations
+namespace sp { class SpTranscriptBuilder; }
 
 
 namespace sp
 {
 
-class TxValidationContext
+////
+// LegacyEnoteImageV1: not used in seraphis
+// - key image only
+///
+
+////
+// LegacyEnoteImageV2
+///
+struct LegacyEnoteImageV2 final
 {
-public:
-//destructor
-    virtual ~TxValidationContext() = default;
+    /// masked commitment (aka 'pseudo-output commitment')
+    rct::key m_masked_commitment;
+    /// legacy key image
+    crypto::key_image m_key_image;
 
-//overloaded operators
-    /// disable copy/move (this is a pure virtual base class)
-    TxValidationContext& operator=(TxValidationContext&&) = delete;
+    /// less-than operator for sorting
+    bool operator<(const LegacyEnoteImageV2 &other_image) const
+    {
+        return m_key_image < other_image.m_key_image;
+    }
 
-//member functions
-    /**
-    * brief: key_image_exists_v1 - checks if a Seraphis key image (linking tag) exists in the validation context
-    * param: key_image -
-    * return: true/false on check result
-    */
-    virtual bool key_image_exists_v1(const crypto::key_image &key_image) const = 0;
-    /**
-    * brief: get_reference_set_proof_elements_v1 - gets legacy {KI, C} pairs stored in the validation context
-    * param: indices -
-    * outparam: proof_elements_out - {squashed enote}
-    */
-    virtual void get_reference_set_proof_elements_v1(const std::vector<std::uint64_t> &indices,
-        rct::ctkeyV &proof_elements_out) const = 0;
-    /**
-    * brief: get_reference_set_proof_elements_v2 - gets Seraphis squashed enotes stored in the validation context
-    * param: indices -
-    * outparam: proof_elements_out - {squashed enote}
-    */
-    virtual void get_reference_set_proof_elements_v2(const std::vector<std::uint64_t> &indices,
-        rct::keyV &proof_elements_out) const = 0;
+    static std::size_t get_size_bytes() { return 32 + 32; }
 };
+inline const boost::string_ref get_container_name(const LegacyEnoteImageV2&) { return "LegacyEnoteImageV2"; }
+void append_to_transcript(const LegacyEnoteImageV2 &container, SpTranscriptBuilder &transcript_inout);
+
+////
+// LegacyRingSignatureV1: not used in seraphis
+// - Cryptonote ring signature (using LegacyEnoteImageV1)
+///
+
+////
+// LegacyRingSignatureV2: not used in seraphis
+// - MLSAG (using LegacyEnoteImageV2)
+///
+
+////
+// LegacyRingSignatureV3
+// - CLSAG (using LegacyEnoteImageV2)
+///
+struct LegacyRingSignatureV3 final
+{
+    /// a grootle proof
+    rct::clsag m_clsag_proof;
+    /// on-chain indices of the proof's ring members
+    std::vector<std::uint64_t> m_reference_set;
+
+    /// size of the membership proof (does not include the ref set decomp)
+    static std::size_t get_size_bytes(const std::size_t num_ring_members);
+    std::size_t get_size_bytes() const;
+};
+inline const boost::string_ref get_container_name(const LegacyRingSignatureV3&) { return "LegacyRingSignatureV3"; }
+void append_to_transcript(const LegacyRingSignatureV3 &container, SpTranscriptBuilder &transcript_inout);
 
 } //namespace sp

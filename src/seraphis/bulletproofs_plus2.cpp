@@ -96,11 +96,11 @@ namespace sp
         if (HiGi_size > 0)
         {
             static_assert(232 <= STRAUS_SIZE_LIMIT, "Straus in precalc mode can only be calculated till STRAUS_SIZE_LIMIT");
-            return HiGi_size <= 232 && data.size() == HiGi_size ? straus(data, straus_HiGi_cache, 0) : pippenger(data, pippenger_HiGi_cache, HiGi_size, rct::get_pippenger_c(data.size()));
+            return ((HiGi_size <= 232) && (data.size() == HiGi_size)) ? straus(data, straus_HiGi_cache, 0) : pippenger(data, pippenger_HiGi_cache, HiGi_size, rct::get_pippenger_c(data.size()));
         }
         else
         {
-            return data.size() <= 95 ? straus(data, NULL, 0) : pippenger(data, NULL, 0, rct::get_pippenger_c(data.size()));
+            return (data.size() <= 95) ? straus(data, NULL, 0) : pippenger(data, NULL, 0, rct::get_pippenger_c(data.size()));
         }
     }
 

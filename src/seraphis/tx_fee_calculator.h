@@ -60,7 +60,8 @@ public:
 
 //getters
     virtual rct::xmr_amount get_fee(const std::size_t fee_per_weight,
-        const std::size_t num_inputs,
+        const std::size_t num_legacy_inputs,
+        const std::size_t num_sp_inputs,
         const std::size_t num_outputs) const = 0;
 };
 

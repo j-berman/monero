@@ -36,6 +36,7 @@
 namespace config
 {
   // note: version number should line up with intended grootle n^m decomposition
+  const constexpr std::uint64_t LEGACY_RING_SIZE_V1 = 16;
   const constexpr std::uint64_t SP_REF_SET_BIN_RADIUS_V1 = 127;
   const constexpr std::uint64_t SP_REF_SET_NUM_BIN_MEMBERS_V1 = 8;
   const constexpr std::uint64_t DISCRETIZED_FEE_LEVEL_NUMERATOR_X100 = 150;  //fee level factor = 1.5
@@ -45,10 +46,11 @@ namespace config
   const constexpr char SERAPHIS_FS_TRANSCRIPT_PREFIX[] = "sp_FS_transcript";
 
   const constexpr char HASH_KEY_LEGACY_ENOTE_IDENTIFIER[] = "legacy_enote_identifier";
+  const constexpr char HASH_KEY_LEGACY_RING_SIGNATURES_MESSAGE_V1[] = "legacy_ring_signatures_message_v1";
 
   const constexpr char HASH_KEY_SERAPHIS_GENERATOR_FACTORY[] = "sp_generator_factory";
   const constexpr char HASH_KEY_SERAPHIS_SQUASHED_ENOTE[] = "sp_squashed_enote";
-  const constexpr char HASH_KEY_SERAPHIS_IMAGE_PROOF_MESSAGE_V1[] = "sp_image_proof_message_v1";
+  const constexpr char HASH_KEY_SERAPHIS_TX_PROPOSAL_MESSAGE_V1[] = "sp_tx_proposal_message_v1";
   const constexpr char HASH_KEY_SERAPHIS_MEMBERSHIP_PROOF_MESSAGE_V1[] = "sp_membership_proof_message_v1";
   const constexpr char HASH_KEY_SERAPHIS_INPUT_IMAGES_PREFIX_V1[] = "sp_input_images_prefix_v1";
   const constexpr char HASH_KEY_SERAPHIS_TRANSACTION_PROOFS_PREFIX_V1[] = "sp_transaction_proofs_prefix_v1";

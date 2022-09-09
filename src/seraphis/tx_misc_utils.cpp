@@ -85,10 +85,17 @@ std::size_t highest_bit_position(std::size_t num)
     return bit_position;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool balance_check_equality(const rct::keyV &commitment_set1, const rct::keyV &commitment_set2)
+void append_clsag_to_transcript(const rct::clsag &clsag_proof, SpTranscriptBuilder &transcript_inout)
 {
-    // balance check method chosen from perf test: tests/performance_tests/balance_check.h
-    return rct::equalKeys(rct::addKeys(commitment_set1), rct::addKeys(commitment_set2));
+    transcript_inout.append("s", clsag_proof.s);
+    transcript_inout.append("c1", clsag_proof.c1);
+    //transcript_inout.append("I", clsag_proof.I);  //intentionally excluded - I is treated as a cached value here
+    transcript_inout.append("D", clsag_proof.D);
+}
+//-------------------------------------------------------------------------------------------------------------------
+std::size_t clsag_size_bytes(const std::size_t ring_size)
+{
+    return 32 * (ring_size + 2);  //does not include 'I', which is treated as a cached value here
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_bpp2_rangeproofs(const std::vector<rct::xmr_amount> &amounts,
@@ -154,6 +161,12 @@ std::size_t bpp_weight(const std::size_t num_range_proofs, const bool include_co
 
     // return the weight
     return (2 * proof_size + 8 * size_two_agg_proof * num_two_agg_groups) / 10 + commitments_size;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool balance_check_equality(const rct::keyV &commitment_set1, const rct::keyV &commitment_set2)
+{
+    // balance check method chosen from perf test: tests/performance_tests/balance_check.h
+    return rct::equalKeys(rct::addKeys(commitment_set1), rct::addKeys(commitment_set2));
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool balance_check_in_out_amnts(const std::vector<rct::xmr_amount> &input_amounts,

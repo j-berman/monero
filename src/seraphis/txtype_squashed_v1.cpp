@@ -52,6 +52,7 @@
 #include "tx_builders_outputs.h"
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
+#include "tx_legacy_component_types.h"
 #include "tx_misc_utils.h"
 #include "tx_validation_context.h"
 #include "tx_validators.h"
@@ -70,32 +71,40 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSquashedV1::get_size_bytes(const std::size_t num_inputs,
+std::size_t SpTxSquashedV1::get_size_bytes(const std::size_t num_legacy_inputs,
+    const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
+    const std::size_t legacy_ring_size,
     const std::size_t ref_set_decomp_n,
     const std::size_t ref_set_decomp_m,
     const std::size_t num_bin_members,
     const TxExtra &tx_extra)
 {
-    // doesn't include:
-    // - ring member references (e.g. indices or explicit copies)
-    // - miscellaneous serialization bytes
+    // size of the transaction as represented in C++ (it is likely ~5-15% smaller when serialized)
+    // note: configs and derived data that are cached post-deserialization are NOT included (e.g. binned reference set
+    //       config and seed)
     std::size_t size{0};
 
-    // input images
-    size += num_inputs * SpEnoteImageV1::get_size_bytes();
+    // legacy input images
+    size += num_legacy_inputs * LegacyEnoteImageV2::get_size_bytes();
+
+    // seraphis input images
+    size += num_sp_inputs * SpEnoteImageV1::get_size_bytes();
 
     // outputs
     size += num_outputs * SpEnoteV1::get_size_bytes();
 
-    // balance proof
-    size += SpBalanceProofV1::get_size_bytes(num_inputs, num_outputs);
+    // balance proof (note: only seraphis inputs are range proofed)
+    size += SpBalanceProofV1::get_size_bytes(num_sp_inputs, num_outputs);
 
-    // ownership/key-image-legitimacy proof for all inputs
-    size += num_inputs * SpImageProofV1::get_size_bytes();
+    // legacy ring signatures
+    size += num_legacy_inputs * LegacyRingSignatureV3::get_size_bytes(legacy_ring_size);
 
-    // membership proofs
-    size += num_inputs * SpMembershipProofV1::get_size_bytes(ref_set_decomp_n, ref_set_decomp_m, num_bin_members);
+    // ownership/key-image-legitimacy proof for all seraphis inputs
+    size += num_sp_inputs * SpImageProofV1::get_size_bytes();
+
+    // membership proofs for seraphis inputs
+    size += num_sp_inputs * SpMembershipProofV1::get_size_bytes(ref_set_decomp_n, ref_set_decomp_m, num_bin_members);
 
     // extra data in tx
     size += SpTxSupplementV1::get_size_bytes(num_outputs, tx_extra);
@@ -108,32 +117,41 @@ std::size_t SpTxSquashedV1::get_size_bytes(const std::size_t num_inputs,
 //-------------------------------------------------------------------------------------------------------------------
 std::size_t SpTxSquashedV1::get_size_bytes() const
 {
+    const std::size_t legacy_ring_size{
+            m_legacy_ring_signatures.size()
+            ? m_legacy_ring_signatures[0].m_reference_set.size()
+            : 0
+        };
     const std::size_t ref_set_decomp_n{
-            m_membership_proofs.size()
-            ? m_membership_proofs[0].m_ref_set_decomp_n
+            m_sp_membership_proofs.size()
+            ? m_sp_membership_proofs[0].m_ref_set_decomp_n
             : 0
         };
     const std::size_t ref_set_decomp_m{
-            m_membership_proofs.size()
-            ? m_membership_proofs[0].m_ref_set_decomp_m
+            m_sp_membership_proofs.size()
+            ? m_sp_membership_proofs[0].m_ref_set_decomp_m
             : 0
         };
     const std::size_t num_bin_members{
-            m_membership_proofs.size()
-            ? m_membership_proofs[0].m_binned_reference_set.m_bin_config.m_num_bin_members
+            m_sp_membership_proofs.size()
+            ? m_sp_membership_proofs[0].m_binned_reference_set.m_bin_config.m_num_bin_members
             : 0u
         };
 
-    return SpTxSquashedV1::get_size_bytes(m_input_images.size(),
+    return SpTxSquashedV1::get_size_bytes(m_legacy_input_images.size(),
+        m_sp_input_images.size(),
         m_outputs.size(),
+        legacy_ring_size,
         ref_set_decomp_n,
         ref_set_decomp_m,
         num_bin_members,
         m_tx_supplement.m_tx_extra);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSquashedV1::get_weight(const std::size_t num_inputs,
+std::size_t SpTxSquashedV1::get_weight(const std::size_t num_legacy_inputs,
+    const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
+    const std::size_t legacy_ring_size,
     const std::size_t ref_set_decomp_n,
     const std::size_t ref_set_decomp_m,
     const std::size_t num_bin_members,
@@ -141,8 +159,10 @@ std::size_t SpTxSquashedV1::get_weight(const std::size_t num_inputs,
 {
     // tx weight = tx size + balance proof clawback
     std::size_t weight{
-            SpTxSquashedV1::get_size_bytes(num_inputs,
+            SpTxSquashedV1::get_size_bytes(num_legacy_inputs,
+                num_sp_inputs,
                 num_outputs,
+                legacy_ring_size,
                 ref_set_decomp_n,
                 ref_set_decomp_m,
                 num_bin_members,
@@ -150,32 +170,39 @@ std::size_t SpTxSquashedV1::get_weight(const std::size_t num_inputs,
         };
 
     // subtract balance proof size and add its weight
-    weight -= SpBalanceProofV1::get_size_bytes(num_inputs, num_outputs);
-    weight += SpBalanceProofV1::get_weight(num_inputs, num_outputs);
+    weight -= SpBalanceProofV1::get_size_bytes(num_sp_inputs, num_outputs);
+    weight += SpBalanceProofV1::get_weight(num_sp_inputs, num_outputs);
 
     return weight;
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::size_t SpTxSquashedV1::get_weight() const
 {
+    const std::size_t legacy_ring_size{
+            m_legacy_ring_signatures.size()
+            ? m_legacy_ring_signatures[0].m_reference_set.size()
+            : 0
+        };
     const std::size_t ref_set_decomp_n{
-            m_membership_proofs.size()
-            ? m_membership_proofs[0].m_ref_set_decomp_n
+            m_sp_membership_proofs.size()
+            ? m_sp_membership_proofs[0].m_ref_set_decomp_n
             : 0
         };
     const std::size_t ref_set_decomp_m{
-            m_membership_proofs.size()
-            ? m_membership_proofs[0].m_ref_set_decomp_m
+            m_sp_membership_proofs.size()
+            ? m_sp_membership_proofs[0].m_ref_set_decomp_m
             : 0
         };
     const std::size_t num_bin_members{
-            m_membership_proofs.size()
-            ? m_membership_proofs[0].m_binned_reference_set.m_bin_config.m_num_bin_members
+            m_sp_membership_proofs.size()
+            ? m_sp_membership_proofs[0].m_binned_reference_set.m_bin_config.m_num_bin_members
             : 0u
         };
 
-    return SpTxSquashedV1::get_weight(m_input_images.size(),
+    return SpTxSquashedV1::get_weight(m_legacy_input_images.size(),
+        m_sp_input_images.size(),
         m_outputs.size(),
+        legacy_ring_size,
         ref_set_decomp_n,
         ref_set_decomp_m,
         num_bin_members,
@@ -184,7 +211,7 @@ std::size_t SpTxSquashedV1::get_weight() const
 //-------------------------------------------------------------------------------------------------------------------
 void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
 {
-    // tx_hash = H_32(image_proofs_message, input images, proofs)
+    // tx_hash = H_32(tx_proposal_message, input images, proofs)
 
     // 1. image proofs message
     // H_32(crypto project name, version string, input key images, output enotes, enote ephemeral pubkeys, memos, fee)
@@ -192,49 +219,58 @@ void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
     version_string.reserve(3);
     make_versioning_string(m_tx_semantic_rules_version, version_string);
 
-    rct::key image_proofs_message;
-    make_tx_image_proof_message_v1(version_string,
-        m_input_images,
+    rct::key tx_proposal_message;
+    make_tx_proposal_message_v1(version_string,
+        m_legacy_input_images,
+        m_sp_input_images,
         m_outputs,
         m_tx_supplement,
         m_tx_fee,
-        image_proofs_message);
+        tx_proposal_message);
 
     // 2. input images (note: key images are represented in the tx hash twice (image proofs message and input images))
-    // H_32({K", C", KI})
+    // H_32({C", KI}((legacy)), {K", C", KI})
     rct::key input_images_prefix;
-    make_input_images_prefix_v1(m_input_images, input_images_prefix);
+    make_input_images_prefix_v1(m_legacy_input_images, m_sp_input_images, input_images_prefix);
 
     // 3. proofs
     // H_32(balance proof, image proofs, membership proofs)
     rct::key tx_proofs_prefix;
-    make_tx_proofs_prefix_v1(m_balance_proof, m_image_proofs, m_membership_proofs, tx_proofs_prefix);
+    make_tx_proofs_prefix_v1(m_balance_proof,
+        m_legacy_ring_signatures,
+        m_sp_image_proofs,
+        m_sp_membership_proofs,
+        tx_proofs_prefix);
 
     // 4. tx hash
-    // tx_hash = H_32(image_proofs_message, input images, proofs)
+    // tx_hash = H_32(tx_proposal_message, input images, proofs)
     SpFSTranscript transcript{config::HASH_KEY_SERAPHIS_TRANSACTION_TYPE_SQUASHED_V1, 3*sizeof(rct::key)};
-    transcript.append("image_proofs_message", image_proofs_message);
+    transcript.append("tx_proposal_message", tx_proposal_message);
     transcript.append("input_images_prefix", input_images_prefix);
     transcript.append("tx_proofs_prefix", tx_proofs_prefix);
 
     sp_hash_to_32(transcript, tx_hash_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(std::vector<SpEnoteImageV1> input_images,
+void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_images,
+    std::vector<SpEnoteImageV1> sp_input_images,
     std::vector<SpEnoteV1> outputs,
     SpBalanceProofV1 balance_proof,
-    std::vector<SpImageProofV1> image_proofs,
-    std::vector<SpMembershipProofV1> membership_proofs,
+    std::vector<LegacyRingSignatureV3> legacy_ring_signatures,
+    std::vector<SpImageProofV1> sp_image_proofs,
+    std::vector<SpMembershipProofV1> sp_membership_proofs,
     SpTxSupplementV1 tx_supplement,
     const DiscretizedFee &discretized_transaction_fee,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out)
 {
-    tx_out.m_input_images = std::move(input_images);
+    tx_out.m_legacy_input_images = std::move(legacy_input_images);
+    tx_out.m_sp_input_images = std::move(sp_input_images);
     tx_out.m_outputs = std::move(outputs);
     tx_out.m_balance_proof = std::move(balance_proof);
-    tx_out.m_image_proofs = std::move(image_proofs);
-    tx_out.m_membership_proofs = std::move(membership_proofs);
+    tx_out.m_legacy_ring_signatures = std::move(legacy_ring_signatures);
+    tx_out.m_sp_image_proofs = std::move(sp_image_proofs);
+    tx_out.m_sp_membership_proofs = std::move(sp_membership_proofs);
     tx_out.m_tx_supplement = std::move(tx_supplement);
     tx_out.m_tx_fee = discretized_transaction_fee;
     tx_out.m_tx_semantic_rules_version = semantic_rules_version;
@@ -243,7 +279,7 @@ void make_seraphis_tx_squashed_v1(std::vector<SpEnoteImageV1> input_images,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
-    std::vector<SpMembershipProofV1> membership_proofs,
+    std::vector<SpMembershipProofV1> sp_membership_proofs,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out)
 {
@@ -254,11 +290,13 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
 
     // finish tx
     make_seraphis_tx_squashed_v1(
-        std::move(partial_tx.m_input_images),
+        std::vector<LegacyEnoteImageV2>{},
+        std::move(partial_tx.m_sp_input_images),
         std::move(partial_tx.m_outputs),
         std::move(partial_tx.m_balance_proof),
-        std::move(partial_tx.m_image_proofs),
-        std::move(membership_proofs),
+        std::vector<LegacyRingSignatureV3>{},
+        std::move(partial_tx.m_sp_image_proofs),
+        std::move(sp_membership_proofs),
         std::move(partial_tx.m_tx_supplement),
         partial_tx.m_tx_fee,
         semantic_rules_version,
@@ -272,7 +310,7 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
 {
     // line up the the membership proofs with the partial tx's input images (which are sorted)
     std::vector<SpMembershipProofV1> tx_membership_proofs;
-    align_v1_membership_proofs_v1(partial_tx.m_input_images,
+    align_v1_membership_proofs_v1(partial_tx.m_sp_input_images,
         std::move(alignable_membership_proofs),
         tx_membership_proofs);
 
@@ -404,9 +442,34 @@ SemanticConfigComponentCountsV1 semantic_config_component_counts_v1(
     return config;
 }
 //-------------------------------------------------------------------------------------------------------------------
-SemanticConfigRefSetV1 semantic_config_ref_sets_v1(const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version)
+SemanticConfigLegacyRefSetV1 semantic_config_legacy_ref_sets_v1(
+    const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version)
 {
-    SemanticConfigRefSetV1 config{};
+    SemanticConfigLegacyRefSetV1 config{};
+
+    if (tx_semantic_rules_version == SpTxSquashedV1::SemanticRulesVersion::MOCK)
+    {
+        config.m_ring_size_min = 1;
+        config.m_ring_size_max = 1000;
+    }
+    else if (tx_semantic_rules_version == SpTxSquashedV1::SemanticRulesVersion::ONE)
+    {
+        // legacy
+        config.m_ring_size_min = config::LEGACY_RING_SIZE_V1;
+        config.m_ring_size_max = config::LEGACY_RING_SIZE_V1;
+    }
+    else  //unknown semantic rules version
+    {
+        CHECK_AND_ASSERT_THROW_MES(false,
+            "Tried to get semantic config for legacy ref set sizes with unknown rules version.");
+    }
+
+    return config;
+}
+//-------------------------------------------------------------------------------------------------------------------
+SemanticConfigSpRefSetV1 semantic_config_sp_ref_sets_v1(const SpTxSquashedV1::SemanticRulesVersion tx_semantic_rules_version)
+{
+    SemanticConfigSpRefSetV1 config{};
 
     if (tx_semantic_rules_version == SpTxSquashedV1::SemanticRulesVersion::MOCK)
     {
@@ -422,6 +485,7 @@ SemanticConfigRefSetV1 semantic_config_ref_sets_v1(const SpTxSquashedV1::Semanti
     }
     else if (tx_semantic_rules_version == SpTxSquashedV1::SemanticRulesVersion::ONE)
     {
+        // seraphis
         config.m_decomp_n_min = config::SP_GROOTLE_N_V1;
         config.m_decomp_n_max = config::SP_GROOTLE_N_V1;
         config.m_decomp_m_min = config::SP_GROOTLE_M_V1;
@@ -443,20 +507,25 @@ template <>
 bool validate_tx_semantics<SpTxSquashedV1>(const SpTxSquashedV1 &tx)
 {
     // validate component counts (num inputs/outputs/etc.)
-    if (!validate_sp_semantics_component_counts_v1(
-            semantic_config_component_counts_v1(tx.m_tx_semantic_rules_version),
-            tx.m_input_images.size(),
-            tx.m_membership_proofs.size(),
-            tx.m_image_proofs.size(),
+    if (!validate_sp_semantics_component_counts_v1(semantic_config_component_counts_v1(tx.m_tx_semantic_rules_version),
+            tx.m_legacy_input_images.size(),
+            tx.m_sp_input_images.size(),
+            tx.m_legacy_ring_signatures.size(),
+            tx.m_sp_membership_proofs.size(),
+            tx.m_sp_image_proofs.size(),
             tx.m_outputs.size(),
             tx.m_tx_supplement.m_output_enote_ephemeral_pubkeys.size(),
             tx.m_balance_proof.m_bpp2_proof.V.size()))
         return false;
 
-    // validate input proof reference set sizes
-    if (!validate_sp_semantics_reference_sets_v1(
-            semantic_config_ref_sets_v1(tx.m_tx_semantic_rules_version),
-            tx.m_membership_proofs))
+    // validate legacy input proof reference set sizes
+    if (!validate_sp_semantics_legacy_reference_sets_v1(semantic_config_legacy_ref_sets_v1(tx.m_tx_semantic_rules_version),
+            tx.m_legacy_ring_signatures))
+        return false;
+
+    // validate seraphis input proof reference set sizes
+    if (!validate_sp_semantics_sp_reference_sets_v1(semantic_config_sp_ref_sets_v1(tx.m_tx_semantic_rules_version),
+            tx.m_sp_membership_proofs))
         return false;
 
     // validate output serialization semantics
@@ -464,12 +533,14 @@ bool validate_tx_semantics<SpTxSquashedV1>(const SpTxSquashedV1 &tx)
         return false;
 
     // validate input image semantics
-    if (!validate_sp_semantics_input_images_v1(tx.m_input_images))
+    if (!validate_sp_semantics_input_images_v1(tx.m_legacy_input_images, tx.m_sp_input_images))
         return false;
 
     // validate layout (sorting, uniqueness) of input images, membership proof ref sets, outputs, and tx supplement
-    if (!validate_sp_semantics_layout_v1(tx.m_membership_proofs,
-            tx.m_input_images,
+    if (!validate_sp_semantics_layout_v1(tx.m_legacy_ring_signatures,
+            tx.m_sp_membership_proofs,
+            tx.m_legacy_input_images,
+            tx.m_sp_input_images,
             tx.m_outputs,
             tx.m_tx_supplement.m_output_enote_ephemeral_pubkeys,
             tx.m_tx_supplement.m_tx_extra))
@@ -486,7 +557,7 @@ template <>
 bool validate_tx_linking_tags<SpTxSquashedV1>(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context)
 {
     // unspentness proof (key images not in ledger)
-    if (!validate_sp_linking_tags_v1(tx.m_input_images, tx_validation_context))
+    if (!validate_sp_linking_tags_v1(tx.m_legacy_input_images, tx.m_sp_input_images, tx_validation_context))
         return false;
 
     return true;
@@ -496,7 +567,11 @@ template <>
 bool validate_tx_amount_balance<SpTxSquashedV1>(const SpTxSquashedV1 &tx)
 {
     // balance proof
-    if (!validate_sp_amount_balance_v1(tx.m_input_images, tx.m_outputs, tx.m_tx_fee, tx.m_balance_proof))
+    if (!validate_sp_amount_balance_v1(tx.m_legacy_input_images,
+            tx.m_sp_input_images,
+            tx.m_outputs,
+            tx.m_tx_fee,
+            tx.m_balance_proof))
         return false;
 
     // deferred for batching: range proofs
@@ -507,22 +582,31 @@ bool validate_tx_amount_balance<SpTxSquashedV1>(const SpTxSquashedV1 &tx)
 template <>
 bool validate_tx_input_proofs<SpTxSquashedV1>(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context)
 {
-    // deferred for batching: membership proofs
+    // seraphis membership proofs: deferred for batching
 
-    // ownership proof (and proof that key images are well-formed)
+    // prepare image proofs message
     std::string version_string;
     version_string.reserve(3);
     make_versioning_string(tx.m_tx_semantic_rules_version, version_string);
 
-    rct::key image_proofs_message;
-    make_tx_image_proof_message_v1(version_string,
-        tx.m_input_images,
+    rct::key tx_proposal_message;
+    make_tx_proposal_message_v1(version_string,
+        tx.m_legacy_input_images,
+        tx.m_sp_input_images,
         tx.m_outputs,
         tx.m_tx_supplement,
         tx.m_tx_fee,
-        image_proofs_message);
+        tx_proposal_message);
 
-    if (!validate_sp_composition_proofs_v1(tx.m_image_proofs, tx.m_input_images, image_proofs_message))
+    // ownership, membership, and key image validity of legacy inputs
+    if (!validate_sp_legacy_input_proofs_v1(tx.m_legacy_ring_signatures,
+            tx.m_legacy_input_images,
+            tx_proposal_message,
+            tx_validation_context))
+        return false;
+
+    // ownership proof (and proof that key images are well-formed)
+    if (!validate_sp_composition_proofs_v1(tx.m_sp_image_proofs, tx.m_sp_input_images, tx_proposal_message))
         return false;
 
     return true;
@@ -532,11 +616,11 @@ template <>
 bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashedV1*> &txs,
     const TxValidationContext &tx_validation_context)
 {
-    std::vector<const SpMembershipProofV1*> membership_proof_ptrs;
-    std::vector<const SpEnoteImage*> input_image_ptrs;
+    std::vector<const SpMembershipProofV1*> sp_membership_proof_ptrs;
+    std::vector<const SpEnoteImage*> sp_input_image_ptrs;
     std::vector<const BulletproofPlus2*> range_proof_ptrs;
-    membership_proof_ptrs.reserve(txs.size()*20);  //heuristic... (most tx have 1-2 inputs)
-    input_image_ptrs.reserve(txs.size()*20);
+    sp_membership_proof_ptrs.reserve(txs.size()*20);  //heuristic... (most tx have 1-2 seraphis inputs)
+    sp_input_image_ptrs.reserve(txs.size()*20);
     range_proof_ptrs.reserve(txs.size());
 
     // prepare for batch-verification
@@ -546,11 +630,11 @@ bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashed
             return false;
 
         // gather membership proof pieces
-        for (const auto &membership_proof : tx->m_membership_proofs)
-            membership_proof_ptrs.push_back(&membership_proof);
+        for (const auto &sp_membership_proof : tx->m_sp_membership_proofs)
+            sp_membership_proof_ptrs.push_back(&sp_membership_proof);
 
-        for (const auto &input_image : tx->m_input_images)
-            input_image_ptrs.push_back(&(input_image.m_core));
+        for (const auto &sp_input_image : tx->m_sp_input_images)
+            sp_input_image_ptrs.push_back(&(sp_input_image.m_core));
 
         // gather range proofs
         range_proof_ptrs.push_back(&(tx->m_balance_proof.m_bpp2_proof));
@@ -558,12 +642,12 @@ bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashed
 
     // batch verification: collect pippenger data sets for an aggregated multiexponentiation
 
-    // membership proofs
-    std::list<SpMultiexpBuilder> validation_data_membership_proofs;
-    if (!try_get_sp_membership_proofs_v1_validation_data(membership_proof_ptrs,
-            input_image_ptrs,
+    // seraphis membership proofs
+    std::list<SpMultiexpBuilder> validation_data_sp_membership_proofs;
+    if (!try_get_sp_membership_proofs_v1_validation_data(sp_membership_proof_ptrs,
+            sp_input_image_ptrs,
             tx_validation_context,
-            validation_data_membership_proofs))
+            validation_data_sp_membership_proofs))
         return false;
 
     // range proofs
@@ -572,7 +656,7 @@ bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashed
         return false;
 
     // batch verify
-    std::list<SpMultiexpBuilder> validation_data{std::move(validation_data_membership_proofs)};
+    std::list<SpMultiexpBuilder> validation_data{std::move(validation_data_sp_membership_proofs)};
     validation_data.splice(validation_data.end(), validation_data_range_proofs);
 
     if (!SpMultiexp{validation_data}.evaluates_to_point_at_infinity())
@@ -583,13 +667,15 @@ bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashed
 //-------------------------------------------------------------------------------------------------------------------
 template <>
 void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
-    const std::vector<rct::xmr_amount> &in_amounts,
+    const std::vector<rct::xmr_amount> &legacy_in_amounts,
+    const std::vector<rct::xmr_amount> &sp_in_amounts,
     const std::vector<rct::xmr_amount> &out_amounts,
     const DiscretizedFee &tx_fee,
     MockLedgerContext &ledger_context_inout,
     SpTxSquashedV1 &tx_out)
 {
-    CHECK_AND_ASSERT_THROW_MES(in_amounts.size() > 0, "SpTxSquashedV1: tried to make mock tx without any inputs.");
+    CHECK_AND_ASSERT_THROW_MES(legacy_in_amounts.size() + sp_in_amounts.size() > 0,
+        "SpTxSquashedV1: tried to make mock tx without any inputs.");
     CHECK_AND_ASSERT_THROW_MES(out_amounts.size() > 0, "SpTxSquashedV1: tried to make mock tx without any outputs.");
 
     // mock semantics version
@@ -598,10 +684,13 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
     // make wallet spendbase privkey (master key)
     const crypto::secret_key spendbase_privkey{rct::rct2sk(rct::skGen())};
 
-    // make mock inputs
+    //todo: make mock legacy inputs
+    CHECK_AND_ASSERT_THROW_MES(legacy_in_amounts.size() == 0, "legacy inputs disabled for now... (todo)");
+
+    // make mock seraphis inputs
     // enote, view key stuff, amount, amount blinding factor
-    std::vector<SpInputProposalV1> input_proposals{gen_mock_sp_input_proposals_v1(spendbase_privkey, in_amounts)};
-    std::sort(input_proposals.begin(), input_proposals.end());
+    std::vector<SpInputProposalV1> sp_input_proposals{gen_mock_sp_input_proposals_v1(spendbase_privkey, sp_in_amounts)};
+    std::sort(sp_input_proposals.begin(), sp_input_proposals.end());
 
     // make mock outputs
     std::vector<SpOutputProposalV1> output_proposals{
@@ -613,7 +702,7 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
         output_proposals[1].m_enote_ephemeral_pubkey = output_proposals[0].m_enote_ephemeral_pubkey;
 
     // expect amounts to balance
-    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts_v1(input_proposals, output_proposals, tx_fee),
+    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts_v1(sp_input_proposals, output_proposals, tx_fee),
         "SpTxSquashedV1: tried to make mock tx with unbalanced amounts.");
 
     // make partial memo
@@ -633,16 +722,20 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
 
     // proposal prefix
     rct::key proposal_prefix;
-    make_tx_image_proof_message_v1(version_string,
-        input_proposals,
+    make_tx_proposal_message_v1(version_string,
+        sp_input_proposals,
         output_proposals,
         partial_memo,
         tx_fee,
         proposal_prefix);
 
-    // make partial inputs
+    //todo: make legacy ring signature preps
+
+    //todo: make legacy partial inputs
+
+    // make seraphis partial inputs
     std::vector<SpPartialInputV1> partial_inputs;
-    make_v1_partial_inputs_v1(input_proposals, proposal_prefix, spendbase_privkey, partial_inputs);
+    make_v1_partial_inputs_v1(sp_input_proposals, proposal_prefix, spendbase_privkey, partial_inputs);
 
     // prepare partial tx
     SpPartialTxV1 partial_tx;
@@ -654,16 +747,16 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
         version_string,
         partial_tx);
 
-    // make mock membership proof ref sets
+    // make mock seraphis membership proof ref sets
     std::vector<SpMembershipProofPrepV1> membership_proof_preps{
-            gen_mock_sp_membership_proof_preps_v1(input_proposals,
+            gen_mock_sp_membership_proof_preps_v1(sp_input_proposals,
                 params.ref_set_decomp_n,
                 params.ref_set_decomp_m,
                 params.bin_config,
                 ledger_context_inout)
         };
 
-    // membership proofs (assumes the caller prepared to make a membership proof for each input)
+    // seraphis membership proofs (assumes the caller prepared to make a membership proof for each input)
     std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs;
     make_v1_membership_proofs_v1(std::move(membership_proof_preps), alignable_membership_proofs);
 

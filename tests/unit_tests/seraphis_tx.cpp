@@ -81,6 +81,7 @@ static void run_mock_tx_test(const std::vector<SpTxGenData> &gen_data)
             // make tx
             SpTxType tx;
             sp::make_mock_tx<SpTxType>(tx_params,
+                {},  //todo: legacy amounts
                 gen.input_amounts,
                 gen.output_amounts,
                 gen.discretized_transaction_fee,
@@ -135,6 +136,7 @@ static void run_mock_tx_test_batch(const std::vector<SpTxGenData> &gen_data)
             // make tx
             txs_to_verify.emplace_back();
             sp::make_mock_tx<SpTxType>(tx_params,
+                {}, //todo: legacy amounts
                 gen.input_amounts,
                 gen.output_amounts,
                 gen.discretized_transaction_fee,

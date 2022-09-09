@@ -91,7 +91,7 @@ bool MockLedgerContext::key_image_exists_onchain_v1(const crypto::key_image &key
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockLedgerContext::get_reference_set_proof_elements_v1(const std::vector<std::uint64_t> &indices,
-    std::vector<std::pair<rct::key, rct::key>> &proof_elements_out) const
+    rct::ctkeyV &proof_elements_out) const
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
 
@@ -689,15 +689,25 @@ bool MockLedgerContext::try_add_unconfirmed_tx_v1_impl(const SpTxSquashedV1 &tx)
     /// check failure modes
 
     // 1. fail if new tx overlaps with cached key images: unconfirmed, onchain
+    std::vector<crypto::key_image> legacy_key_images_collected;
     std::vector<crypto::key_image> sp_key_images_collected;
 
-    for (const SpEnoteImageV1 &enote_image : tx.m_input_images)
+    for (const LegacyEnoteImageV2 &legacy_enote_image : tx.m_legacy_input_images)
     {
-        if (key_image_exists_unconfirmed_v1_impl(enote_image.m_core.m_key_image) ||
-            key_image_exists_onchain_v1_impl(enote_image.m_core.m_key_image))
+        if (key_image_exists_unconfirmed_v1_impl(legacy_enote_image.m_key_image) ||
+            key_image_exists_onchain_v1_impl(legacy_enote_image.m_key_image))
             return false;
 
-        sp_key_images_collected.emplace_back(enote_image.m_core.m_key_image);
+        legacy_key_images_collected.emplace_back(legacy_enote_image.m_key_image);
+    }
+
+    for (const SpEnoteImageV1 &sp_enote_image : tx.m_sp_input_images)
+    {
+        if (key_image_exists_unconfirmed_v1_impl(sp_enote_image.m_core.m_key_image) ||
+            key_image_exists_onchain_v1_impl(sp_enote_image.m_core.m_key_image))
+            return false;
+
+        sp_key_images_collected.emplace_back(sp_enote_image.m_core.m_key_image);
     }
 
     rct::key input_context;
@@ -715,11 +725,14 @@ bool MockLedgerContext::try_add_unconfirmed_tx_v1_impl(const SpTxSquashedV1 &tx)
 
     /// update state
 
-    // 1. add key images (todo: legacy key images)
-    for (const SpEnoteImageV1 &enote_image : tx.m_input_images)
-        m_unconfirmed_sp_key_images.insert(enote_image.m_core.m_key_image);
+    // 1. add key images
+    for (const crypto::key_image &legacy_key_image : legacy_key_images_collected)
+        m_unconfirmed_legacy_key_images.insert(legacy_key_image);
 
-    m_unconfirmed_tx_key_images[tx_id] = {std::vector<crypto::key_image>{}, std::move(sp_key_images_collected)};
+    for (const crypto::key_image &sp_key_image : sp_key_images_collected)
+        m_unconfirmed_sp_key_images.insert(sp_key_image);
+
+    m_unconfirmed_tx_key_images[tx_id] = {std::move(legacy_key_images_collected), std::move(sp_key_images_collected)};
 
     // 2. add tx outputs
     m_unconfirmed_tx_output_contents[tx_id] = {input_context, tx.m_tx_supplement, tx.m_outputs};
@@ -855,6 +868,7 @@ void MockLedgerContext::remove_tx_from_unconfirmed_cache_impl(const rct::key &tx
 //-------------------------------------------------------------------------------------------------------------------
 void MockLedgerContext::clear_unconfirmed_cache_impl()
 {
+    m_unconfirmed_legacy_key_images.clear();
     m_unconfirmed_sp_key_images.clear();
     m_unconfirmed_tx_key_images.clear();
     m_unconfirmed_tx_output_contents.clear();

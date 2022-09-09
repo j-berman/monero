@@ -44,6 +44,7 @@
 
 //standard headers
 #include <algorithm>
+#include <iterator>
 #include <list>
 #include <vector>
 
@@ -52,6 +53,29 @@
 
 namespace sp
 {
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static bool is_legacy_record(const ContextualRecordVariant &contextual_enote_record)
+{
+    return contextual_enote_record.is_type<LegacyContextualEnoteRecordV1>();
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static std::size_t count_legacy_records(const std::list<ContextualRecordVariant> &contextual_enote_records)
+{
+    std::size_t count{0};
+
+    for (const ContextualRecordVariant &contextual_enote_record : contextual_enote_records)
+        count += is_legacy_record(contextual_enote_record) ? 1 : 0;
+
+    return count;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static std::size_t count_sp_records(const std::list<ContextualRecordVariant> &contextual_enote_records)
+{
+    return contextual_enote_records.size() - count_legacy_records(contextual_enote_records);
+}
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static boost::multiprecision::uint128_t compute_total_amount(
@@ -78,24 +102,72 @@ static void sort_contextual_enote_records_descending(std::list<ContextualRecordV
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static bool try_update_added_inputs_exclude_useless_v1(const rct::xmr_amount fee_per_tx_weight,
+    const FeeCalculator &tx_fee_calculator,
+    const std::size_t num_outputs,
+    std::list<ContextualRecordVariant> &added_inputs_inout,
+    std::list<ContextualRecordVariant> &excluded_inputs_inout)
+{
+    // fail if no added inputs to remove
+    if (added_inputs_inout.size() == 0)
+        return false;
+
+    // make sure the added inputs are sorted
+    sort_contextual_enote_records_descending(added_inputs_inout);
+
+    // current tx fee
+    const std::size_t num_legacy_inputs_current{count_legacy_records(added_inputs_inout)};
+    const std::size_t num_sp_inputs_current{count_sp_records(added_inputs_inout)};
+    const rct::xmr_amount current_fee{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_current,
+                num_sp_inputs_current,
+                num_outputs)
+        };
+
+    // tx fee from adding the lowest-amount current input
+    const bool last_included_is_legacy{is_legacy_record(added_inputs_inout.back())};
+    const rct::xmr_amount last_included_fee{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_current - (last_included_is_legacy ? 1 : 0),
+                num_sp_inputs_current - (!last_included_is_legacy ? 1 : 0),
+                num_outputs)
+        };
+
+    // check if the lowest-amount added input exceeds its current differential fee
+    if (added_inputs_inout.back().get_amount() > current_fee - last_included_fee)
+        return false;
+
+    // if it can't, then move into the excluded inputs pile
+    excluded_inputs_inout.splice(excluded_inputs_inout.end(), added_inputs_inout, --(added_inputs_inout.end()));
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static bool try_update_added_inputs_replace_excluded_v1(std::list<ContextualRecordVariant> &added_inputs_inout,
     std::list<ContextualRecordVariant> &excluded_inputs_inout)
 {
+    // fail if no added or excluded inputs
+    if (added_inputs_inout.size() == 0 ||
+        excluded_inputs_inout.size() == 0)
+        return false;
+
     // make sure all the inputs are sorted
     sort_contextual_enote_records_descending(added_inputs_inout);
     sort_contextual_enote_records_descending(excluded_inputs_inout);
 
-    // try to use the highest excluded input to replace the lowest amount in the added inputs
-    if (excluded_inputs_inout.size() > 0 &&
-        excluded_inputs_inout.front().get_amount() > added_inputs_inout.back().get_amount())
-    {
-        added_inputs_inout.pop_back();
-        added_inputs_inout.splice(added_inputs_inout.end(), excluded_inputs_inout, excluded_inputs_inout.begin());
+    // check if the highest excluded input can replace the lowest amount in the added inputs
+    if (excluded_inputs_inout.front().get_amount() <= added_inputs_inout.back().get_amount())
+        return false;
 
-        return true;
-    }
+    // swap the lowest added input with the highest excluded input
+    std::list<ContextualRecordVariant> temp;
+    temp.splice(temp.end(), added_inputs_inout, --(added_inputs_inout.end()));
+    added_inputs_inout.splice(added_inputs_inout.end(), excluded_inputs_inout, excluded_inputs_inout.begin());
+    excluded_inputs_inout.splice(excluded_inputs_inout.end(), temp, temp.begin());
 
-    return false;
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -110,30 +182,42 @@ static bool try_update_added_inputs_add_excluded_v1(const std::size_t max_inputs
     if (added_inputs_inout.size() >= max_inputs_allowed)
         return false;
 
-    // current tx fee
-    const std::size_t num_inputs_current{added_inputs_inout.size()};
-    const rct::xmr_amount current_fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_current, num_outputs)};
-
-    // next tx fee (from adding one input)
-    const std::size_t num_inputs_next{added_inputs_inout.size() + 1};
-    const rct::xmr_amount next_fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_next, num_outputs)};
+    // fail if no excluded inputs available
+    if (excluded_inputs_inout.size() == 0)
+        return false;
 
     // make sure the excluded inputs are sorted
     sort_contextual_enote_records_descending(excluded_inputs_inout);
 
-    // try to use the highest excluded input to cover and exceed the differential fee from adding it
+    // current tx fee
+    const std::size_t num_legacy_inputs_current{count_legacy_records(added_inputs_inout)};
+    const std::size_t num_sp_inputs_current{count_sp_records(added_inputs_inout)};
+    const rct::xmr_amount current_fee{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_current,
+                num_sp_inputs_current,
+                num_outputs)
+        };
+
+    // next tx fee (from adding the frontmost excluded input)
+    const bool next_excluded_is_legacy{is_legacy_record(excluded_inputs_inout.front())};
+    const rct::xmr_amount next_fee{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_current + (next_excluded_is_legacy ? 1 : 0),
+                num_sp_inputs_current + (!next_excluded_is_legacy ? 1 : 0),
+                num_outputs)
+        };
+
+    // use the highest excluded input if it exceeds the differential fee from adding it
     CHECK_AND_ASSERT_THROW_MES(next_fee >= current_fee,
         "updating an input set (add excluded): next fee is less than current fee (bug).");
 
-    if (excluded_inputs_inout.size() > 0 &&
-        excluded_inputs_inout.front().get_amount() > next_fee - current_fee)
-    {
-        added_inputs_inout.splice(added_inputs_inout.end(), excluded_inputs_inout, excluded_inputs_inout.begin());
+    if (excluded_inputs_inout.front().get_amount() <= next_fee - current_fee)
+        return false;
 
-        return true;
-    }
+    added_inputs_inout.splice(added_inputs_inout.end(), excluded_inputs_inout, excluded_inputs_inout.begin());
 
-    return false;
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -149,62 +233,104 @@ static bool try_update_added_inputs_selection_v1(const boost::multiprecision::ui
     // make sure the added inputs are sorted
     sort_contextual_enote_records_descending(added_inputs_inout);
 
-    // current tx fee
-    const std::size_t num_inputs_current{added_inputs_inout.size()};
-    const rct::xmr_amount current_fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_current, num_outputs)};
+    // current legacy record counts
+    std::size_t num_legacy_inputs{count_legacy_records(added_inputs_inout)};
+    std::size_t num_sp_inputs{count_sp_records(added_inputs_inout)};
+    const rct::xmr_amount initial_fee{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs,
+                num_sp_inputs,
+                num_outputs)
+        };
 
-    // prepare for finding a new input
-    boost::multiprecision::uint128_t selection_amount;
-    boost::multiprecision::uint128_t comparison_amount;
+    // reference amounts for input selection algorithm
+    boost::multiprecision::uint128_t comparison_amount{0};
+    const boost::multiprecision::uint128_t selection_amount{output_amount + initial_fee};
 
-    if (added_inputs_inout.size() < max_inputs_allowed)
+    // if added inputs are full, remove the lowest-amount input temporarily
+    // - a new input will have to exceed the differential amount of that input
+    bool trying_to_replace_last_added_input{false};
+
+    if (added_inputs_inout.size() == max_inputs_allowed &&
+        max_inputs_allowed > 0)
     {
-        // if inputs aren't full, then we will be trying to add a new input to the added inputs list
-        const std::size_t num_inputs_next{added_inputs_inout.size() + 1};
-        const rct::xmr_amount next_fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_next, num_outputs)};
+        trying_to_replace_last_added_input = true;
 
-        CHECK_AND_ASSERT_THROW_MES(next_fee >= current_fee,
-            "updating an input set (selection): next fee is less than current fee (bug).");
+        if (is_legacy_record(added_inputs_inout.back()))
+            --num_legacy_inputs;
+        else
+            --num_sp_inputs;
 
-        selection_amount = output_amount + next_fee;
-        comparison_amount = next_fee - current_fee;
+        const rct::xmr_amount last_input_fee{
+                tx_fee_calculator.get_fee(fee_per_tx_weight,
+                    num_legacy_inputs,
+                    num_sp_inputs,
+                    num_outputs)
+            };
+
+        CHECK_AND_ASSERT_THROW_MES(initial_fee >= last_input_fee,
+            "updating an input set (selection): fee higher after removing last added input (bug).");
+        CHECK_AND_ASSERT_THROW_MES(added_inputs_inout.back().get_amount() >= last_input_fee,
+            "updating an input set (selection): last input has lower amount than its differential fee, which is a case "
+            "that should be prevented by another input set updating filter (bug).");
+
+        comparison_amount = added_inputs_inout.back().get_amount() - (initial_fee - last_input_fee);
     }
-    else
-    {
-        // if inputs are full, then we will be trying to replace the lowest amount input
-        selection_amount = output_amount + current_fee;
-        comparison_amount = added_inputs_inout.back().get_amount();
-    }
 
-    // try to get a new input from the selector
+    // fee to use for input selection
+    const rct::xmr_amount fee_pre_selection{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs,
+                num_sp_inputs,
+                num_outputs)
+        };
+
+    // try to get a new input from the selector until we run out of inputs or find one that will improve our amount total
     ContextualRecordVariant requested_input;
 
-    while (input_selector.try_select_input_v1(selection_amount,
-        added_inputs_inout,
-        excluded_inputs_inout,
-        requested_input))
+    // - fail if we can't select even one input
+    if (!input_selector.try_select_input_v1(selection_amount, added_inputs_inout, excluded_inputs_inout, requested_input))
+        return false;
+
+    // - search for an input that can be used immediately; shunt failures into the exclude pile so they can be examined later
+    bool found_useful_input{false};
+    do
     {
-        // if requested input can cover the comparison amount, add it to the inputs list
-        if (requested_input.get_amount() > comparison_amount)
+        const bool new_input_is_legacy{is_legacy_record(requested_input)};
+        const rct::xmr_amount new_input_fee{
+                tx_fee_calculator.get_fee(fee_per_tx_weight,
+                    num_legacy_inputs + (new_input_is_legacy ? 1 : 0),
+                    num_sp_inputs + (!new_input_is_legacy ? 1 : 0),
+                    num_outputs)
+            };
+
+        CHECK_AND_ASSERT_THROW_MES(new_input_fee >= fee_pre_selection,
+            "updating an input set (selection): fee lower after adding new input (bug).");
+
+        // new input can't be used if it's amount doesn't exceed its fee
+        if (requested_input.get_amount() <= (new_input_fee - fee_pre_selection))
         {
-            if (added_inputs_inout.size() >= max_inputs_allowed)
-            {
-                // for the 'inputs is full' case, we replace the lowest amount input
+            excluded_inputs_inout.emplace_back(requested_input);
+        }
+        // if requested input can cover the comparison amount, add it to the added inputs list
+        else if (requested_input.get_amount() - (new_input_fee - fee_pre_selection) > comparison_amount)
+        {
+            // remove last added input if we are replacing it here
+            if (trying_to_replace_last_added_input)
                 added_inputs_inout.pop_back();
-            }
 
             added_inputs_inout.emplace_back(std::move(requested_input));
-
-            return true;
+            found_useful_input = true;  //done searching
         }
         // otherwise, add it to the excluded list
         else
         {
-            excluded_inputs_inout.emplace_back(requested_input);  //don't move - requested_input may be used again
+            excluded_inputs_inout.emplace_back(requested_input);  //don't move - requested_input may be used again later
         }
-    }
+    } while (input_selector.try_select_input_v1(selection_amount, added_inputs_inout, excluded_inputs_inout, requested_input)
+        && found_useful_input == false);
 
-    return false;
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -220,8 +346,14 @@ static bool try_update_added_inputs_range_v1(const std::size_t max_inputs_allowe
         return false;
 
     // current tx fee
-    const std::size_t num_inputs_current{added_inputs_inout.size()};
-    const rct::xmr_amount current_fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_current, num_outputs)};
+    std::size_t num_legacy_inputs{count_legacy_records(added_inputs_inout)};
+    std::size_t num_sp_inputs{count_sp_records(added_inputs_inout)};
+    const rct::xmr_amount current_fee{
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs,
+                num_sp_inputs,
+                num_outputs)
+        };
 
     // make sure the excluded inputs are sorted
     sort_contextual_enote_records_descending(excluded_inputs_inout);
@@ -240,8 +372,17 @@ static bool try_update_added_inputs_range_v1(const std::size_t max_inputs_allowe
             return false;
 
         // total fee including this range of inputs
-        const std::size_t num_inputs_range{added_inputs_inout.size() + range_size};
-        const rct::xmr_amount range_fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_range, num_outputs)};
+        if (is_legacy_record(*exclude_it))
+            ++num_legacy_inputs;
+        else
+            ++num_sp_inputs;
+
+        const rct::xmr_amount range_fee{
+                tx_fee_calculator.get_fee(fee_per_tx_weight,
+                    num_legacy_inputs,
+                    num_sp_inputs,
+                    num_outputs)
+            };
 
         // if range of excluded inputs can cover the differential fee from those inputs, insert them
         CHECK_AND_ASSERT_THROW_MES(range_fee >= current_fee,
@@ -252,7 +393,7 @@ static bool try_update_added_inputs_range_v1(const std::size_t max_inputs_allowe
             added_inputs_inout.splice(added_inputs_inout.end(),
                 excluded_inputs_inout,
                 excluded_inputs_inout.begin(),
-                exclude_it);
+                std::next(exclude_it));
 
             return true;
         }
@@ -283,21 +424,35 @@ static bool try_select_inputs_v1(const boost::multiprecision::uint128_t output_a
             "selecting an input set: there are more inputs than the number allowed (bug).");
 
         // a. compute current fee
-        const std::size_t num_inputs{added_inputs.size()};
-        const rct::xmr_amount fee{tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs, num_outputs)};
+        const std::size_t num_legacy_inputs_current{count_legacy_records(added_inputs)};
+        const std::size_t num_sp_inputs_current{count_sp_records(added_inputs)};
+        const rct::xmr_amount current_fee{
+                tx_fee_calculator.get_fee(fee_per_tx_weight,
+                    num_legacy_inputs_current,
+                    num_sp_inputs_current,
+                    num_outputs)
+            };
 
         // b. check if we have covered the required amount
-        if (compute_total_amount(added_inputs) >= output_amount + fee)
+        if (compute_total_amount(added_inputs) >= output_amount + current_fee)
         {
             contextual_enote_records_out = std::move(added_inputs);
             return true;
         }
 
-        // 2. try to replace an added input with a better excluded input
+        // 2. try to exclude an added input that doesn't pay for its differential fee with the current set of inputs
+        if (try_update_added_inputs_exclude_useless_v1(fee_per_tx_weight,
+                tx_fee_calculator,
+                num_outputs,
+                added_inputs,
+                excluded_inputs))
+            continue;
+
+        // 3. try to replace an added input with a better excluded input
         if (try_update_added_inputs_replace_excluded_v1(added_inputs, excluded_inputs))
             continue;
 
-        // 3. try to add the best excluded input to the added inputs set
+        // 4. try to add the best excluded input to the added inputs set
         if (try_update_added_inputs_add_excluded_v1(max_inputs_allowed,
                 fee_per_tx_weight,
                 tx_fee_calculator,
@@ -306,7 +461,7 @@ static bool try_select_inputs_v1(const boost::multiprecision::uint128_t output_a
                 excluded_inputs))
             continue;
 
-        // 4. try to get a new input that can get us closer to a solution
+        // 5. try to get a new input that can get us closer to a solution
         if (try_update_added_inputs_selection_v1(output_amount,
                 max_inputs_allowed,
                 input_selector,
@@ -317,7 +472,7 @@ static bool try_select_inputs_v1(const boost::multiprecision::uint128_t output_a
                 excluded_inputs))
             continue;
 
-        // 5. try to use a range of excluded inputs to get us closer to a solution
+        // 6. try to use a range of excluded inputs to get us closer to a solution
         if (try_update_added_inputs_range_v1(max_inputs_allowed,
                 fee_per_tx_weight,
                 tx_fee_calculator,
@@ -355,9 +510,13 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
         return false;
 
     // 2. compute fee for selected inputs
-    const std::size_t num_inputs_first_try{contextual_enote_records_out.size()};
+    const std::size_t num_legacy_inputs_first_try{count_legacy_records(contextual_enote_records_out)};
+    const std::size_t num_sp_inputs_first_try{count_sp_records(contextual_enote_records_out)};
     const rct::xmr_amount zero_change_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_first_try, num_outputs_nochange)
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_first_try,
+                num_sp_inputs_first_try,
+                num_outputs_nochange)
         };
 
     // 3. return if we are done (zero change is covered by input amounts) (very rare case)
@@ -371,7 +530,10 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
     // a. update fee assuming non-zero change
     const std::size_t num_outputs_withchange{output_set_context.get_num_outputs_withchange()};
     rct::xmr_amount nonzero_change_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_first_try, num_outputs_withchange)
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_first_try,
+                num_sp_inputs_first_try,
+                num_outputs_withchange)
         };
 
     CHECK_AND_ASSERT_THROW_MES(zero_change_fee <= nonzero_change_fee,
@@ -389,8 +551,13 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
                 contextual_enote_records_out))
             return false;
 
-        const std::size_t num_inputs_second_try{contextual_enote_records_out.size()};
-        nonzero_change_fee = tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs_second_try, num_outputs_withchange);
+        const std::size_t num_legacy_inputs_second_try{count_legacy_records(contextual_enote_records_out)};
+        const std::size_t num_sp_inputs_second_try{count_sp_records(contextual_enote_records_out)};
+        nonzero_change_fee =
+            tx_fee_calculator.get_fee(fee_per_tx_weight,
+                num_legacy_inputs_second_try,
+                num_sp_inputs_second_try,
+                num_outputs_withchange);
     }
 
     // c. we are done (non-zero change is covered by input amounts)

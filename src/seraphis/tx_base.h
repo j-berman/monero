@@ -183,7 +183,8 @@ bool validate_txs(const std::vector<const SpTxSquashedV1*> &txs, const TxValidat
 * type: SpTxType - 
 * type: SpTxParamsT -
 * param: params -
-* param: in_amounts -
+* param: legacy_in_amounts -
+* param: sp_in_amounts -
 * param: out_amounts -
 * param: discretized_transaction_fee -
 * inoutparam: ledger_context_inout -
@@ -191,7 +192,8 @@ bool validate_txs(const std::vector<const SpTxSquashedV1*> &txs, const TxValidat
 */
 template <typename SpTxType, typename SpTxParamsT>
 void make_mock_tx(const SpTxParamsT &params,
-    const std::vector<rct::xmr_amount> &in_amounts,
+    const std::vector<rct::xmr_amount> &legacy_in_amounts,
+    const std::vector<rct::xmr_amount> &sp_in_amounts,
     const std::vector<rct::xmr_amount> &out_amounts,
     const DiscretizedFee &discretized_transaction_fee,
     MockLedgerContext &ledger_context_inout,

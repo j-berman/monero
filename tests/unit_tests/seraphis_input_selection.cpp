@@ -137,7 +137,7 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
     const std::size_t num_inputs{inputs_selected.size()};
     const std::size_t num_outputs_nochange{output_amounts.size()};
     const rct::xmr_amount fee_nochange{
-            tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs, num_outputs_nochange)
+            tx_fee_calculator.get_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_nochange)
         };
 
     CHECK_AND_ASSERT_THROW_MES(total_input_amount >= total_output_amount + fee_nochange,
@@ -153,7 +153,7 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
     // b. test non-zero-change case
     const std::size_t num_outputs_withchange{output_amounts.size() + num_additional_outputs_with_change};
     const rct::xmr_amount fee_withchange{
-            tx_fee_calculator.get_fee(fee_per_tx_weight, num_inputs, num_outputs_withchange)
+            tx_fee_calculator.get_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_withchange)
         };
 
     CHECK_AND_ASSERT_THROW_MES(total_input_amount > total_output_amount + fee_withchange,
@@ -187,6 +187,9 @@ TEST(seraphis_input_selection, trivial)
 
     // search for input (overfill the amount)
     EXPECT_NO_THROW(input_selection_test({0, 0, 1, 2}, {1}, 0, 1, fee_calculator, 2, {1, 2}, true));
+
+    // search for input (overfill the amount)
+    EXPECT_NO_THROW(input_selection_test({0, 0, 1, 3}, {1}, 0, 1, fee_calculator, 2, {1, 3}, true));
 
     // no solution: max inputs limit
     EXPECT_NO_THROW(input_selection_test({1, 1}, {1}, 0, 1, fee_calculator, 1, {}, false));
@@ -229,8 +232,9 @@ TEST(seraphis_input_selection, inputs_stepped)
 {
     //test(stored_enotes, out_amnts, +outs_w_change, fee/wght, fee_calc, max_ins, expect_in_amnts, result)
 
-    // fee = fee_per_weight * (num_inputs / 2 + num_outputs)
-    const sp::FeeCalculatorMockInputsStepped fee_calculator;
+    // fee = fee_per_weight * (num_inputs / step_size + num_outputs)
+    const sp::FeeCalculatorMockInputsStepped fee_calculator_2step{2};
+    const sp::FeeCalculatorMockInputsStepped fee_calculator_3step{3};
 
     // accumulation: no single input amount can cover the differential fee at each step
     // fee [0 in, 1 out, 3 weight]: 3
@@ -238,13 +242,25 @@ TEST(seraphis_input_selection, inputs_stepped)
     // fee [2 in, 1 out, 3 weight]: 6
     // fee [3 in, 1 out, 3 weight]: 6
     // fee [4 in, 1 out, 3 weight]: 9
-    EXPECT_NO_THROW(input_selection_test({2, 2, 2}, {0}, 1, 3, fee_calculator, 2, {}, false));  //input limit
-    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 2, 2}, {0}, 1, 3, fee_calculator, 3, {2, 2, 2}, true));
+    EXPECT_NO_THROW(input_selection_test({2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 2, {}, false));  //input limit
+    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 3, {2, 2, 2}, true));
 
     // don't fall back on accumulation if there is a simpler solution
-    EXPECT_NO_THROW(input_selection_test({2, 2, 2, 10}, {0}, 1, 3, fee_calculator, 3, {2, 10}, true));
+    EXPECT_NO_THROW(input_selection_test({2, 2, 2, 10}, {0}, 1, 3, fee_calculator_2step, 3, {2, 10}, true));
 
-    // replacement: an excluded input gets re-selected when input limit is encountered
-    EXPECT_NO_THROW(input_selection_test({1, 2, 4}, {0}, 1, 3, fee_calculator, 2, {4, 2}, true));
+    // removal: an included input gets excluded when differential fee jumps up
+    EXPECT_NO_THROW(input_selection_test({1, 2, 5}, {2}, 1, 3, fee_calculator_2step, 3, {5}, true));
+
+    // need change output: excluded input gets re-selected to satisfy change amount
+    EXPECT_NO_THROW(input_selection_test({1, 2, 5, 5}, {1}, 1, 3, fee_calculator_2step, 3, {5, 5, 2}, true));
+
+    // replacement: an included input gets replaced by an excluded input
+    // fee [0 in, 1 out, 3 weight]: 3
+    // fee [1 in, 1 out, 3 weight]: 3
+    // fee [2 in, 1 out, 3 weight]: 3
+    // fee [3 in, 1 out, 3 weight]: 6
+    // fee [4 in, 1 out, 3 weight]: 6
+    // {1} -> {1, 1} -> {1, 1} (exclude {2, 3}) -> {1, 3} (exclude {2, 1}) -> {3, 2} (exclude {1, 1})
+    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 3}, {2}, 1, 3, fee_calculator_3step, 3, {3, 2}, true));
 }
 //-------------------------------------------------------------------------------------------------------------------

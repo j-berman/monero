@@ -41,6 +41,7 @@
 #include "tx_component_types.h"
 #include "tx_enote_scanning.h"
 #include "tx_enote_scanning_utils.h"
+#include "tx_legacy_component_types.h"
 #include "txtype_squashed_v1.h"
 
 //third party headers
@@ -140,8 +141,8 @@ bool MockOffchainContext::try_get_offchain_chunk_sp_impl(const crypto::x25519_se
             collect_key_images_from_tx(-1,
                 -1,
                 sortable2rct(tx_with_output_contents.first),
-                std::vector<crypto::key_image>{},  //legacy key images todo?
-                m_tx_key_images.at(tx_with_output_contents.first),  //use input context as proxy for tx id
+                std::get<0>(m_tx_key_images.at(tx_with_output_contents.first)),
+                std::get<1>(m_tx_key_images.at(tx_with_output_contents.first)),
                 SpEnoteSpentStatus::SPENT_OFFCHAIN,
                 chunk_out.m_contextual_key_images);
         }
@@ -150,25 +151,35 @@ bool MockOffchainContext::try_get_offchain_chunk_sp_impl(const crypto::x25519_se
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool MockOffchainContext::try_add_v1_impl(const std::vector<SpEnoteImageV1> &input_images,
+bool MockOffchainContext::try_add_v1_impl(const std::vector<LegacyEnoteImageV2> &legacy_input_images,
+    const std::vector<SpEnoteImageV1> &sp_input_images,
     const SpTxSupplementV1 &tx_supplement,
     const std::vector<SpEnoteV1> &output_enotes)
 {
     /// check failure modes
 
-    // 1. fail if new tx overlaps with cached key images: offchain, unconfirmed, onchain
-    std::vector<crypto::key_image> key_images_collected;
+    // 1. fail if new tx overlaps with cached key images: offchain
+    std::vector<crypto::key_image> legacy_key_images_collected;
+    std::vector<crypto::key_image> sp_key_images_collected;
 
-    for (const SpEnoteImageV1 &enote_image : input_images)
+    for (const LegacyEnoteImageV2 &legacy_enote_image : legacy_input_images)
     {
-        if (key_image_exists_v1_impl(enote_image.m_core.m_key_image))
+        if (key_image_exists_v1_impl(legacy_enote_image.m_key_image))
             return false;
 
-        key_images_collected.emplace_back(enote_image.m_core.m_key_image);
+        legacy_key_images_collected.emplace_back(legacy_enote_image.m_key_image);
+    }
+
+    for (const SpEnoteImageV1 &sp_enote_image : sp_input_images)
+    {
+        if (key_image_exists_v1_impl(sp_enote_image.m_core.m_key_image))
+            return false;
+
+        sp_key_images_collected.emplace_back(sp_enote_image.m_core.m_key_image);
     }
 
     rct::key input_context;
-    jamtis::make_jamtis_input_context_standard(key_images_collected, input_context);
+    jamtis::make_jamtis_input_context_standard(sp_key_images_collected, input_context);
 
     // 2. fail if input context is duplicated (bug since key image check should prevent this)
     CHECK_AND_ASSERT_THROW_MES(m_tx_key_images.find(input_context) == m_tx_key_images.end(),
@@ -180,10 +191,13 @@ bool MockOffchainContext::try_add_v1_impl(const std::vector<SpEnoteImageV1> &inp
     /// update state
 
     // 1. add key images
-    for (const SpEnoteImageV1 &enote_image : input_images)
-        m_sp_key_images.insert(enote_image.m_core.m_key_image);
+    for (const crypto::key_image &legacy_key_image : legacy_key_images_collected)
+        m_legacy_key_images.insert(legacy_key_image);
 
-    m_tx_key_images[input_context] = std::move(key_images_collected);
+    for (const crypto::key_image &sp_key_image : sp_key_images_collected)
+        m_sp_key_images.insert(sp_key_image);
+
+    m_tx_key_images[input_context] = {std::move(legacy_key_images_collected), std::move(sp_key_images_collected)};
 
     // 2. add tx outputs
     m_output_contents[input_context] = {tx_supplement, output_enotes};
@@ -193,12 +207,15 @@ bool MockOffchainContext::try_add_v1_impl(const std::vector<SpEnoteImageV1> &inp
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_add_partial_tx_v1_impl(const SpPartialTxV1 &partial_tx)
 {
-    return try_add_v1_impl(partial_tx.m_input_images, partial_tx.m_tx_supplement, partial_tx.m_outputs);
+    return try_add_v1_impl(partial_tx.m_legacy_input_images,
+        partial_tx.m_sp_input_images,
+        partial_tx.m_tx_supplement,
+        partial_tx.m_outputs);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_add_tx_v1_impl(const SpTxSquashedV1 &tx)
 {
-    return try_add_v1_impl(tx.m_input_images, tx.m_tx_supplement, tx.m_outputs);
+    return try_add_v1_impl(tx.m_legacy_input_images, tx.m_sp_input_images, tx.m_tx_supplement, tx.m_outputs);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::remove_tx_from_cache_impl(const rct::key &input_context)
@@ -206,7 +223,9 @@ void MockOffchainContext::remove_tx_from_cache_impl(const rct::key &input_contex
     // clear key images
     if (m_tx_key_images.find(input_context) != m_tx_key_images.end())
     {
-        for (const crypto::key_image &key_image : m_tx_key_images[input_context])
+        for (const crypto::key_image &key_image : std::get<0>(m_tx_key_images[input_context]))
+            m_legacy_key_images.erase(key_image);
+        for (const crypto::key_image &key_image : std::get<1>(m_tx_key_images[input_context]))
             m_sp_key_images.erase(key_image);
 
         m_tx_key_images.erase(input_context);
@@ -219,15 +238,29 @@ void MockOffchainContext::remove_tx_from_cache_impl(const rct::key &input_contex
 void MockOffchainContext::remove_tx_with_key_image_from_cache_impl(const crypto::key_image &key_image)
 {
     // early return if key image isn't cached
-    if (m_sp_key_images.find(key_image) == m_sp_key_images.end())
+    if (m_sp_key_images.find(key_image) == m_sp_key_images.end() &&
+        m_legacy_key_images.find(key_image) == m_legacy_key_images.end())
         return;
 
     // remove the tx that has this key image (there should only be one)
     auto tx_key_images_search_it = std::find_if(m_tx_key_images.begin(), m_tx_key_images.end(), 
             [&key_image](const auto &tx_key_images) -> bool
             {
-                return std::find(tx_key_images.second.begin(), tx_key_images.second.end(), key_image) !=
-                    tx_key_images.second.end();
+                // check legacy key images
+                if (std::find(std::get<0>(tx_key_images.second).begin(),
+                            std::get<0>(tx_key_images.second).end(),
+                            key_image) !=
+                        std::get<0>(tx_key_images.second).end())
+                    return true;
+
+                // check seraphis key images
+                if (std::find(std::get<1>(tx_key_images.second).begin(),
+                            std::get<1>(tx_key_images.second).end(),
+                            key_image) !=
+                        std::get<1>(tx_key_images.second).end())
+                    return true;
+
+                return false;
             }
         );
 
@@ -237,6 +270,7 @@ void MockOffchainContext::remove_tx_with_key_image_from_cache_impl(const crypto:
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::clear_cache_impl()
 {
+    m_legacy_key_images.clear();
     m_sp_key_images.clear();
     m_output_contents.clear();
     m_tx_key_images.clear();

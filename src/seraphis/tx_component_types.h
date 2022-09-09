@@ -152,6 +152,7 @@ void append_to_transcript(const SpImageProofV1 &container, SpTranscriptBuilder &
 // SpBalanceProofV1
 // - balance proof: implicit with a remainder blinding factor: [sum(inputs) == sum(outputs) + remainder_blinding_factor*G]
 // - range proof: Bulletproofs+ v2
+// note: only seraphis inputs are range proofed (legacy inputs are not)
 ///
 struct SpBalanceProofV1 final
 {
@@ -160,11 +161,11 @@ struct SpBalanceProofV1 final
     /// the remainder blinding factor
     rct::key m_remainder_blinding_factor;
 
-    static std::size_t get_size_bytes(const std::size_t num_inputs,
+    static std::size_t get_size_bytes(const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const bool include_commitments = false);
     std::size_t get_size_bytes(const bool include_commitments = false) const;
-    static std::size_t get_weight(const std::size_t num_inputs,
+    static std::size_t get_weight(const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const bool include_commitments = false);
     std::size_t get_weight(const bool include_commitments = false) const;

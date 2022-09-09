@@ -43,6 +43,7 @@
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
 #include "tx_enote_record_types.h"
+#include "tx_legacy_component_types.h"
 
 //third party headers
 
@@ -81,9 +82,19 @@ void align_v1_membership_proofs_v1(const std::vector<SpEnoteImageV1> &input_imag
     std::vector<SpAlignableMembershipProofV1> membership_proofs_sortable,
     std::vector<SpMembershipProofV1> &membership_proofs_out);
 /**
+* brief: make_tx_legacy_ring_signature_message_v1 - message for legacy ring signatures
+*   - H_32(tx proposal message, {reference set indices})
+* param: tx_proposal_message - represents the transaction being signed (inputs, outputs, and memos), excluding proofs
+* param: reference_set_indices - indices into the ledger's set of legacy enotes
+* outparam: message_out - the message to sign in a legacy ring signature
+*/
+void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_message,
+    const std::vector<std::uint64_t> &reference_set_indices,
+    rct::key &message_out);
+/**
 * brief: make_tx_membership_proof_message_v1 - message for membership proofs
 *   - H_32(crypto project name, {binned reference set})
-* param: - binned_reference_set -
+* param: binned_reference_set -
 * outparam: message_out - the message to sign in a membership proof
 */
 void make_tx_membership_proof_message_v1(const SpBinnedReferenceSetV1 &binned_reference_set, rct::key &message_out);
@@ -95,22 +106,23 @@ void make_tx_membership_proof_message_v1(const SpBinnedReferenceSetV1 &binned_re
 * outparam: input_amounts_out -
 * outparam: blinding_factors_out -
 */
-void prepare_input_commitment_factors_for_balance_proof_v1(
-    const std::vector<SpInputProposalV1> &input_proposals,
+void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpInputProposalV1> &input_proposals,
     const std::vector<crypto::secret_key> &image_amount_masks,
     std::vector<rct::xmr_amount> &input_amounts_out,
     std::vector<crypto::secret_key> &blinding_factors_out);
-void prepare_input_commitment_factors_for_balance_proof_v1(
-    const std::vector<SpPartialInputV1> &partial_inputs,
+void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpPartialInputV1> &partial_inputs,
     std::vector<rct::xmr_amount> &input_amounts_out,
     std::vector<crypto::secret_key> &blinding_factors_out);
 /**
 * brief: make_input_images_prefix_v1 - hash of enote images (for tx hashes)
-*   - H_32({K", C", KI})
-* param: enote_images -
+*   - H_32({C", KI}((legacy)), {K", C", KI})
+* param: legacy_enote_images -
+* param: sp_enote_images -
 * outparam: input_images_prefix_out -
 */
-void make_input_images_prefix_v1(const std::vector<SpEnoteImageV1> &enote_images, rct::key &input_images_prefix_out);
+void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_enote_images,
+    const std::vector<SpEnoteImageV1> &sp_enote_images,
+    rct::key &input_images_prefix_out);
 //todo
 void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal,
     const rct::key &wallet_spend_pubkey_base);

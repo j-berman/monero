@@ -113,6 +113,22 @@ std::size_t round_up_to_power_of_2(const std::size_t num);
 */
 std::size_t highest_bit_position(const std::size_t num);
 /**
+* brief: append_clsag_to_transcript - append CLSAG proof to a transcript
+*   transcript += {s} || c1 || D
+*   note: the main key image 'I' is not included (it is assumed to be a cached value)
+* param: clsag_proof -
+* inoutparam: transcript_inout - contents appended to a transcript
+*/
+void append_clsag_to_transcript(const rct::clsag &clsag_proof, SpTranscriptBuilder &transcript_inout);
+/**
+* brief: clsag_size_bytes - get the size of a CLSAG proof in bytes
+*   - CLSAG size: 32 * (ring size + 2)
+*   note: the main key image 'I' is not included (it is assumed to be a cached value)
+* param: ring_size -
+* return: the CLSAG proof's size in bytes
+*/
+std::size_t clsag_size_bytes(const std::size_t ring_size);
+/**
 * brief: make_bpp2_rangeproofs - make a BP+ v2 proof that aggregates several range proofs
 * param: amounts -
 * param: amount_commitment_blinding_factors -

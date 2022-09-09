@@ -68,6 +68,10 @@ static inline const rct::key& sortable2rct(const sortable_key &sortable)
 {
     return reinterpret_cast<const rct::key&>(sortable);
 }
+static inline const rct::key sortable2rct(const sortable_key &&sortable)
+{
+    return reinterpret_cast<const rct::key&&>(sortable);
+}
 
 /**
 * brief: minus_one - -1 mod q
