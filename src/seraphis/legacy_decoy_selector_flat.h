@@ -28,14 +28,13 @@
 
 // NOT FOR PRODUCTION
 
-// Implementation of the reference set index mapper. Maps to and from a uniform distribution across [0, 2^64 - 1]
+// Implementation of legacy decoy selector: select unique decoys uniformly from the set of available legacy enote indices.
 
 
 #pragma once
 
 //local headers
-#include "ringct/rctTypes.h"
-#include "tx_ref_set_index_mapper.h"
+#include "legacy_decoy_selector.h"
 
 //third party headers
 
@@ -50,36 +49,30 @@ namespace sp
 {
 
 ////
-// SpRefSetIndexMapperFlat
-// - implementation of SpRefSetIndexMapper
-// - linear mapping function (i.e. project the element range onto the uniform space)
+// LegacyDecoySelectorFlat
+// - get a set of legacy ring members, selected uniquely from a flat distribution across the range of available enotes
 ///
-class SpRefSetIndexMapperFlat final : public SpRefSetIndexMapper
+class LegacyDecoySelectorFlat final : public LegacyDecoySelector
 {
 public:
 //constructors
     /// default constructor: disabled
 
     /// normal constructor
-    SpRefSetIndexMapperFlat(const std::uint64_t distribution_min_index,
-        const std::uint64_t distribution_max_index);
+    LegacyDecoySelectorFlat(const std::uint64_t min_index, const std::uint64_t max_index);
 
 //destructor: default
 
-//getters
-    std::uint64_t get_distribution_min_index() const override { return m_distribution_min_index; }
-    std::uint64_t get_distribution_max_index() const override { return m_distribution_max_index; }
-
 //member functions
-    /// [min, max] --(projection)-> [0, 2^64 - 1]
-    std::uint64_t element_index_to_uniform_index(const std::uint64_t element_index) const override;
-    /// [min, max] <-(projection)-- [0, 2^64 - 1]
-    std::uint64_t uniform_index_to_element_index(const std::uint64_t uniform_index) const override;
+    /// request a set of ring members
+    void get_ring_members(const std::uint64_t real_ring_member_index,
+        const std::uint64_t num_ring_members,
+        std::vector<std::uint64_t> &ring_members_out) const override;
 
 //member variables
 private:
-    std::uint64_t m_distribution_min_index;
-    std::uint64_t m_distribution_max_index;
+    std::uint64_t m_min_index;
+    std::uint64_t m_max_index;
 };
 
 } //namespace sp

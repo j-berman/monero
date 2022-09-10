@@ -28,14 +28,12 @@
 
 // NOT FOR PRODUCTION
 
-// Implementation of the reference set index mapper. Maps to and from a uniform distribution across [0, 2^64 - 1]
+// Interface for obtaining legacy ring member sets.
 
 
 #pragma once
 
 //local headers
-#include "ringct/rctTypes.h"
-#include "tx_ref_set_index_mapper.h"
 
 //third party headers
 
@@ -50,36 +48,25 @@ namespace sp
 {
 
 ////
-// SpRefSetIndexMapperFlat
-// - implementation of SpRefSetIndexMapper
-// - linear mapping function (i.e. project the element range onto the uniform space)
+// LegacyDecoySelector
+// - interface for requesting a ring member set for legacy ring signatures (represented as on-chain legacy enote indices)
 ///
-class SpRefSetIndexMapperFlat final : public SpRefSetIndexMapper
+class LegacyDecoySelector
 {
 public:
-//constructors
-    /// default constructor: disabled
+//constructors: default
+//destructor
+    virtual ~LegacyDecoySelector() = default;
 
-    /// normal constructor
-    SpRefSetIndexMapperFlat(const std::uint64_t distribution_min_index,
-        const std::uint64_t distribution_max_index);
-
-//destructor: default
-
-//getters
-    std::uint64_t get_distribution_min_index() const override { return m_distribution_min_index; }
-    std::uint64_t get_distribution_max_index() const override { return m_distribution_max_index; }
+//overloaded operators
+    /// disable copy/move (this is a pure virtual base class)
+    LegacyDecoySelector& operator=(LegacyDecoySelector&&) = delete;
 
 //member functions
-    /// [min, max] --(projection)-> [0, 2^64 - 1]
-    std::uint64_t element_index_to_uniform_index(const std::uint64_t element_index) const override;
-    /// [min, max] <-(projection)-- [0, 2^64 - 1]
-    std::uint64_t uniform_index_to_element_index(const std::uint64_t uniform_index) const override;
-
-//member variables
-private:
-    std::uint64_t m_distribution_min_index;
-    std::uint64_t m_distribution_max_index;
+    /// request a set of ring members
+    virtual void get_ring_members(const std::uint64_t real_ring_member_index,
+        const std::uint64_t num_ring_members,
+        std::vector<std::uint64_t> &ring_members_out) const = 0;
 };
 
 } //namespace sp

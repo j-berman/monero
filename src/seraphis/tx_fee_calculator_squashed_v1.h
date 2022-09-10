@@ -53,8 +53,9 @@ class FeeCalculatorSpTxSquashedV1 final : public FeeCalculator
 {
 public:
 //constructors
-    FeeCalculatorSpTxSquashedV1() = default;
+    /// default constructor: disabled
 
+    /// normal constructor
     FeeCalculatorSpTxSquashedV1(const std::size_t legacy_ring_size,
         const std::size_t ref_set_decomp_n,
         const std::size_t ref_set_decomp_m,
