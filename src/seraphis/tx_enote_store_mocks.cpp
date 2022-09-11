@@ -667,8 +667,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
                     m_tracked_legacy_onetime_address_duplicates.at(
                         current_contextual_record.m_record.m_enote.onetime_address()
                     ),
-                    [this](const rct::key &identifier)
-                        -> const SpEnoteOriginStatus&
+                    [this](const rct::key &identifier) -> const SpEnoteOriginStatus&
                     {
                         CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_intermediate_contextual_enote_records.find(
                                 identifier) != m_mapped_legacy_intermediate_contextual_enote_records.end(),
@@ -680,8 +679,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
                             .m_origin_context
                             .m_origin_status;
                     },
-                    [this](const rct::key &identifier)
-                        -> rct::xmr_amount
+                    [this](const rct::key &identifier) -> rct::xmr_amount
                     {
                         CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_intermediate_contextual_enote_records.find(
                                 identifier) != m_mapped_legacy_intermediate_contextual_enote_records.end(),
@@ -736,8 +734,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
                     m_tracked_legacy_onetime_address_duplicates.at(
                         current_contextual_record.m_record.m_enote.onetime_address()
                     ),
-                    [this](const rct::key &identifier)
-                        -> const SpEnoteOriginStatus&
+                    [this](const rct::key &identifier) -> const SpEnoteOriginStatus&
                     {
                         CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_contextual_enote_records.find(identifier) !=
                                 m_mapped_legacy_contextual_enote_records.end(),
@@ -749,8 +746,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
                             .m_origin_context
                             .m_origin_status;
                     },
-                    [this](const rct::key &identifier)
-                        -> rct::xmr_amount
+                    [this](const rct::key &identifier) -> rct::xmr_amount
                     {
                         CHECK_AND_ASSERT_THROW_MES(m_mapped_legacy_contextual_enote_records.find(identifier) != 
                                 m_mapped_legacy_contextual_enote_records.end(),

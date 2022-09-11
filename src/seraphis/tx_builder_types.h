@@ -76,12 +76,12 @@ struct SpInputProposalV1 final
     * brief: get_enote_image_v1 - get this input's enote image in the squashed enote model
     * outparam: image_out -
     */
-    void get_enote_image_v1(SpEnoteImageV1 &image_out) const { return m_core.get_enote_image_core(image_out.m_core); }
+    void get_enote_image_v1(SpEnoteImageV1 &image_out) const { m_core.get_enote_image_core(image_out.m_core); }
 
     /// get the amount of this proposal
     rct::xmr_amount get_amount() const { return m_core.m_amount; }
 
-    /// generate a v1 input (all random; does not support info recovery)
+    /// generate a v1 input (does not support info recovery)
     void gen(const crypto::secret_key &spendbase_privkey, const rct::xmr_amount amount)
     {
         m_core.gen(spendbase_privkey, amount);

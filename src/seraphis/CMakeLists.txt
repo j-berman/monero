@@ -56,6 +56,7 @@ set(seraphis_sources
   tx_builder_types.cpp
   tx_builder_types_multisig.cpp
   tx_builders_inputs.cpp
+  tx_builders_legacy_inputs.cpp
   tx_builders_mixed.cpp
   tx_builders_multisig.cpp
   tx_builders_outputs.cpp
@@ -74,6 +75,7 @@ set(seraphis_sources
   tx_input_selection.cpp
   tx_input_selection_output_context_v1.cpp
   tx_input_selector_mocks.cpp
+  tx_legacy_builder_types.cpp
   tx_legacy_component_types.cpp
   tx_legacy_enote_record_utils.cpp
   tx_misc_utils.cpp

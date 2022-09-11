@@ -77,150 +77,26 @@ extern "C"
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-void make_binned_ref_set_generator_seed_v1(const rct::key &masked_address,
-    const rct::key &masked_commitment,
-    rct::key &generator_seed_out)
+void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_message,
+    const std::vector<std::uint64_t> &reference_set_indices,
+    rct::key &message_out)
 {
-    // make binned reference set generator seed
-
-    // seed = H_32(K", C")
-    SpKDFTranscript transcript{config::HASH_KEY_BINNED_REF_SET_GENERATOR_SEED, 2*sizeof(rct::key)};
-    transcript.append("K_masked", masked_address);
-    transcript.append("C_masked", masked_commitment);
-
-    // hash to the result
-    sp_hash_to_32(transcript, generator_seed_out.bytes);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_binned_ref_set_generator_seed_v1(const rct::key &onetime_address,
-    const rct::key &amount_commitment,
-    const crypto::secret_key &address_mask,
-    const crypto::secret_key &commitment_mask,
-    rct::key &generator_seed_out)
-{
-    // make binned reference set generator seed from pieces
-
-    // masked address and commitment
-    rct::key masked_address;     //K" = t_k G + H_n(Ko,C) Ko
-    rct::key masked_commitment;  //C" = t_c G + C
-    make_seraphis_enote_image_masked_keys(onetime_address,
-        amount_commitment,
-        address_mask,
-        commitment_mask,
-        masked_address,
-        masked_commitment);
-
-    // finish making the seed
-    make_binned_ref_set_generator_seed_v1(masked_address, masked_commitment, generator_seed_out);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void align_v1_membership_proofs_v1(const std::vector<SpEnoteImageV1> &input_images,
-    std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs,
-    std::vector<SpMembershipProofV1> &membership_proofs_out)
-{
-    CHECK_AND_ASSERT_THROW_MES(alignable_membership_proofs.size() == input_images.size(),
-        "Mismatch between alignable membership proof count and partial tx input image count.");
-
-    membership_proofs_out.clear();
-    membership_proofs_out.reserve(alignable_membership_proofs.size());
-
-    for (const SpEnoteImageV1 &input_image : input_images)
-    {
-        // find the membership proof that matches with the input image at this index
-        auto membership_proof_match =
-            std::find(
-                alignable_membership_proofs.begin(),
-                alignable_membership_proofs.end(),
-                input_image.m_core.m_masked_address
-            );
-
-        CHECK_AND_ASSERT_THROW_MES(membership_proof_match != alignable_membership_proofs.end(),
-            "Could not find input image to match with an alignable membership proof.");
-
-        membership_proofs_out.emplace_back(std::move(membership_proof_match->m_membership_proof));
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_tx_membership_proof_message_v1(const SpBinnedReferenceSetV1 &binned_reference_set, rct::key &message_out)
-{
-    static const std::string project_name{CRYPTONOTE_NAME};
-
-    // m = H_32('project name', {binned reference set})
+    // m = H_32(tx proposal message, {reference set indices})
     SpFSTranscript transcript{
-            config::HASH_KEY_SERAPHIS_MEMBERSHIP_PROOF_MESSAGE_V1,
-            project_name.size() +
-                binned_reference_set.get_size_bytes(true) +
-                SpBinnedReferenceSetConfigV1::get_size_bytes()
+            config::HASH_KEY_LEGACY_RING_SIGNATURES_MESSAGE_V1,
+            32 + reference_set_indices.size() * 8
         };
-    transcript.append("project_name", project_name);  //i.e. referenced enotes are members of what project's ledger?
-    transcript.append("binned_reference_set", binned_reference_set);
+    transcript.append("tx_proposal_message", tx_proposal_message);
+    transcript.append("reference_set_indices", reference_set_indices);
 
     sp_hash_to_32(transcript, message_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpInputProposalV1> &input_proposals,
-    std::vector<rct::xmr_amount> &input_amounts_out,
-    std::vector<crypto::secret_key> &blinding_factors_out)
+void check_v1_legacy_input_proposal_semantics_v1(const LegacyInputProposalV1 &input_proposal,
+    const rct::key &wallet_legacy_spend_pubkey)
 {
-    // use input proposals to get amounts/blinding factors
-    blinding_factors_out.clear();
-    input_amounts_out.clear();
-    blinding_factors_out.resize(input_proposals.size());
-    input_amounts_out.reserve(input_proposals.size());
+    //todo (note: legacy key image can't be reproduced since it needs the legacy private spend key)
 
-    for (std::size_t input_index{0}; input_index < input_proposals.size(); ++input_index)
-    {
-        // input image amount commitment blinding factor: t_c + x
-        sc_add(to_bytes(blinding_factors_out[input_index]),
-            to_bytes(input_proposals[input_index].m_core.m_commitment_mask),  // t_c
-            to_bytes(input_proposals[input_index].m_core.m_amount_blinding_factor));  // x
-
-        // input amount: a
-        input_amounts_out.emplace_back(input_proposals[input_index].get_amount());
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpPartialInputV1> &partial_inputs,
-    std::vector<rct::xmr_amount> &input_amounts_out,
-    std::vector<crypto::secret_key> &blinding_factors_out)
-{
-    // use partial inputs to get amounts/blinding factors
-    blinding_factors_out.clear();
-    input_amounts_out.clear();
-    blinding_factors_out.resize(partial_inputs.size());
-    input_amounts_out.reserve(partial_inputs.size());
-
-    for (std::size_t input_index{0}; input_index < partial_inputs.size(); ++input_index)
-    {
-        // input image amount commitment blinding factor: t_c + x
-        sc_add(to_bytes(blinding_factors_out[input_index]),
-            to_bytes(partial_inputs[input_index].m_commitment_mask),  // t_c
-            to_bytes(partial_inputs[input_index].m_input_amount_blinding_factor));  // x
-
-        // input amount: a
-        input_amounts_out.emplace_back(partial_inputs[input_index].m_input_amount);
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_enote_images,
-    const std::vector<SpEnoteImageV1> &sp_enote_images,
-    rct::key &input_images_prefix_out)
-{
-    // input images prefix = H_32({C", KI}((legacy)), {K", C", KI})
-    SpFSTranscript transcript{
-            config::HASH_KEY_SERAPHIS_INPUT_IMAGES_PREFIX_V1,
-            legacy_enote_images.size() * LegacyEnoteImageV2::get_size_bytes() +
-            sp_enote_images.size() * SpEnoteImageV1::get_size_bytes()
-        };
-    transcript.append("legacy_enote_images", legacy_enote_images);
-    transcript.append("sp_enote_images", sp_enote_images);
-
-    sp_hash_to_32(transcript, input_images_prefix_out.bytes);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal,
-    const rct::key &wallet_spend_pubkey_base)
-{
     // 1. the onetime address must be reproducible
     rct::key extended_wallet_spendkey{wallet_spend_pubkey_base};
     extend_seraphis_spendkey_u(input_proposal.m_core.m_enote_view_privkey_u, extended_wallet_spendkey);
@@ -252,17 +128,17 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
         "input proposal v1 semantics check: could not reproduce the amount commitment.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_input_proposal(const SpEnote &enote_core,
+void make_v1_legacy_input_proposal_v1(const rct::key &onetime_address,
+    const rct::key &amount_commitment,
     const crypto::key_image &key_image,
-    const crypto::secret_key &enote_view_privkey_g,
-    const crypto::secret_key &enote_view_privkey_x,
-    const crypto::secret_key &enote_view_privkey_u,
+    const crypto::secret_key &enote_view_privkey,
     const crypto::secret_key &input_amount_blinding_factor,
     const rct::xmr_amount &input_amount,
-    const crypto::secret_key &address_mask,
     const crypto::secret_key &commitment_mask,
     SpInputProposal &proposal_out)
 {
+    //todo
+
     // make an input proposal
     proposal_out.m_enote_core             = enote_core;
     proposal_out.m_key_image              = key_image;
@@ -275,11 +151,12 @@ void make_input_proposal(const SpEnote &enote_core,
     proposal_out.m_commitment_mask        = commitment_mask;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
-    const crypto::secret_key &address_mask,
+void make_v1_legacy_input_proposal_v1(const LegacyEnoteRecord &enote_record,
     const crypto::secret_key &commitment_mask,
-    SpInputProposalV1 &proposal_out)
+    LegacyInputProposalV1 &proposal_out)
 {
+    //todo
+
     // make input proposal from enote record
     make_input_proposal(enote_record.m_enote.m_core,
         enote_record.m_key_image,
@@ -293,112 +170,18 @@ void make_v1_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
         proposal_out.m_core);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_make_v1_input_proposal_v1(const SpEnoteV1 &enote,
-    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
-    const rct::key &input_context,
-    const rct::key &wallet_spend_pubkey,
-    const crypto::secret_key &k_view_balance,
-    const crypto::secret_key &address_mask,
-    const crypto::secret_key &commitment_mask,
-    SpInputProposalV1 &proposal_out)
+void make_v3_legacy_ring_signature_v1(std::vector<std::uint64_t> reference_set,
+    const rct::ctkeyV &referenced_enotes,
+    const std::uint64_t &real_reference_index,
+    const crypto::key_image &key_image,
+    const rct::key &masked_commitment,
+    const crypto::secret_key &reference_view_privkey,
+    const crypto::secret_key &reference_commitment_mask,
+    const crypto::secret_key &legacy_spend_privkey,
+    LegacyRingSignatureV3 &ring_signature_out)
 {
-    // try to extract info from enote then make an input proposal
-    SpEnoteRecordV1 enote_record;
-    if (!try_get_enote_record_v1(enote,
-            enote_ephemeral_pubkey,
-            input_context,
-            wallet_spend_pubkey,
-            k_view_balance,
-            enote_record))
-        return false;
+    //todo
 
-    make_v1_input_proposal_v1(enote_record, address_mask, commitment_mask, proposal_out);
-
-    return true;
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_standard_input_context_v1(const std::vector<SpInputProposalV1> &input_proposals, rct::key &input_context_out)
-{
-    // collect key images
-    std::vector<crypto::key_image> key_images;
-
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
-    {
-        key_images.emplace_back();
-        input_proposal.m_core.get_key_image(key_images.back());
-    }
-
-    // sort the key images
-    std::sort(key_images.begin(), key_images.end());
-
-    // make the input context
-    jamtis::make_jamtis_input_context_standard(key_images, input_context_out);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
-    const rct::key &message,
-    const crypto::secret_key &spendbase_privkey,
-    SpImageProofV1 &image_proof_out)
-{
-    // make image proof
-
-    // the input enote
-    SpEnote input_enote_core;
-    input_proposal.get_enote_core(input_enote_core);
-
-    // the input enote image
-    SpEnoteImage input_enote_image_core;
-    input_proposal.get_enote_image_core(input_enote_image_core);
-
-    // prepare for proof (squashed enote model): x, y, z
-    crypto::secret_key squash_prefix;
-    make_seraphis_squash_prefix(input_enote_core.m_onetime_address,
-        input_enote_core.m_amount_commitment,
-        squash_prefix);  // H_n(Ko,C)
-
-    // t_k + H_n(Ko,C) (k_{mask, recipient} + k_{mask, sender})
-    crypto::secret_key x;
-    sc_mul(to_bytes(x), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_g));
-    sc_add(to_bytes(x), to_bytes(input_proposal.m_address_mask), to_bytes(x));
-    // H_n(Ko,C) (k_{a, recipient} + k_{a, sender})
-    crypto::secret_key y;
-    sc_mul(to_bytes(y), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_x));
-    // H_n(Ko,C) (k_{b, recipient} + k_{b, sender})
-    crypto::secret_key z;
-    sc_add(to_bytes(z), to_bytes(input_proposal.m_enote_view_privkey_u), to_bytes(spendbase_privkey));
-    sc_mul(to_bytes(z), to_bytes(squash_prefix), to_bytes(z));
-
-    // make seraphis composition proof
-    image_proof_out.m_composition_proof = sp_composition_prove(message, input_enote_image_core.m_masked_address, x, y, z);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_v1_image_proofs_v1(const std::vector<SpInputProposalV1> &input_proposals,
-    const rct::key &message,
-    const crypto::secret_key &spendbase_privkey,
-    std::vector<SpImageProofV1> &image_proofs_out)
-{
-    // make multiple image proofs
-    CHECK_AND_ASSERT_THROW_MES(input_proposals.size() > 0, "Tried to make image proofs for 0 inputs.");
-
-    image_proofs_out.clear();
-    image_proofs_out.reserve(input_proposals.size());
-
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
-    {
-        image_proofs_out.emplace_back();
-        make_v1_image_proof_v1(input_proposal.m_core, message, spendbase_privkey, image_proofs_out.back());
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_v1_membership_proof_v1(const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    SpBinnedReferenceSetV1 binned_reference_set,
-    const std::vector<rct::key> &referenced_enotes_squashed,
-    const SpEnote &real_reference_enote,
-    const crypto::secret_key &address_mask,
-    const crypto::secret_key &commitment_mask,
-    SpMembershipProofV1 &membership_proof_out)
-{
     // make membership proof
 
     /// checks and initialization
@@ -483,8 +266,12 @@ void make_v1_membership_proof_v1(const std::size_t ref_set_decomp_n,
     membership_proof_out.m_ref_set_decomp_m     = ref_set_decomp_m;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_membership_proof_v1(SpMembershipProofPrepV1 membership_proof_prep, SpMembershipProofV1 &membership_proof_out)
+void make_v3_legacy_ring_signature_v1(LegacyRingSignaturePrepV1 ring_signature_prep,
+    const crypto::secret_key &legacy_spend_privkey,
+    LegacyRingSignatureV3 &ring_signature_out)
 {
+    //todo
+
     make_v1_membership_proof_v1(membership_proof_prep.m_ref_set_decomp_n,
         membership_proof_prep.m_ref_set_decomp_m,
         std::move(membership_proof_prep.m_binned_reference_set),
@@ -495,28 +282,12 @@ void make_v1_membership_proof_v1(SpMembershipProofPrepV1 membership_proof_prep, 
         membership_proof_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_membership_proof_v1(SpMembershipProofPrepV1 membership_proof_prep,
-    SpAlignableMembershipProofV1 &alignable_membership_proof_out)
+void make_v3_legacy_ring_signatures_v1(std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,
+    const crypto::secret_key &legacy_spend_privkey,
+    std::vector<LegacyRingSignatureV3> &ring_signatures_out)
 {
-    // make alignable membership proof
+    //todo
 
-    // save the masked address to later match the membership proof with its input image
-    make_seraphis_squashed_address_key(
-        membership_proof_prep.m_real_reference_enote.m_onetime_address,
-        membership_proof_prep.m_real_reference_enote.m_amount_commitment,
-        alignable_membership_proof_out.m_masked_address);  //H_n(Ko,C) Ko
-
-    mask_key(membership_proof_prep.m_address_mask,
-        alignable_membership_proof_out.m_masked_address,
-        alignable_membership_proof_out.m_masked_address);  //t_k G + H_n(Ko,C) Ko
-
-    // make the membership proof
-    make_v1_membership_proof_v1(std::move(membership_proof_prep), alignable_membership_proof_out.m_membership_proof);
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_v1_membership_proofs_v1(std::vector<SpMembershipProofPrepV1> membership_proof_preps,
-    std::vector<SpMembershipProofV1> &membership_proofs_out)
-{
     // make multiple membership proofs
     // note: proof preps are assumed to be pre-sorted, so alignable membership proofs are not needed
     membership_proofs_out.clear();
@@ -529,22 +300,10 @@ void make_v1_membership_proofs_v1(std::vector<SpMembershipProofPrepV1> membershi
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_membership_proofs_v1(std::vector<SpMembershipProofPrepV1> membership_proof_preps,
-    std::vector<SpAlignableMembershipProofV1> &alignable_membership_proofs_out)
+void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input)
 {
-    // make multiple alignable membership proofs
-    alignable_membership_proofs_out.clear();
-    alignable_membership_proofs_out.reserve(membership_proof_preps.size());
+    //todo
 
-    for (SpMembershipProofPrepV1 &proof_prep : membership_proof_preps)
-    {
-        alignable_membership_proofs_out.emplace_back();
-        make_v1_membership_proof_v1(std::move(proof_prep), alignable_membership_proofs_out.back());
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input)
-{
     // input amount commitment can be reconstructed
     const rct::key reconstructed_amount_commitment{
             rct::commit(partial_input.m_input_amount, rct::sk2rct(partial_input.m_input_amount_blinding_factor))
@@ -576,11 +335,13 @@ void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input)
         "partial input semantics (v1): image proof is invalid.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
+void make_v1_legacy_input_v1(const LegacyInputProposalV1 &input_proposal,
     const rct::key &proposal_prefix,
     const crypto::secret_key &spendbase_privkey,
-    SpPartialInputV1 &partial_input_out)
+    LegacyInputV1 &input_out)
 {
+    //todo
+
     // check input proposal semantics
     rct::key wallet_spend_pubkey_base;
     make_seraphis_spendbase(spendbase_privkey, wallet_spend_pubkey_base);
@@ -605,11 +366,13 @@ void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
         partial_input_out.m_image_proof);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_proposals,
+void make_v1_legacy_inputs_v1(const std::vector<LegacyInputProposalV1> &input_proposals,
     const rct::key &proposal_prefix,
     const crypto::secret_key &spendbase_privkey,
-    std::vector<SpPartialInputV1> &partial_inputs_out)
+    std::vector<LegacyInputV1> &inputs_out)
 {
+    //todo
+
     CHECK_AND_ASSERT_THROW_MES(input_proposals.size() > 0, "Can't make partial tx inputs without any input proposals.");
 
     partial_inputs_out.clear();
@@ -623,9 +386,11 @@ void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_propo
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secret_key &spendbase_privkey,
-    const std::vector<rct::xmr_amount> in_amounts)
+std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const crypto::secret_key &legacy_spend_privkey,
+    const std::vector<rct::xmr_amount> &input_amounts)
 {
+    //todo
+
     // generate random inputs
     std::vector<SpInputProposalV1> input_proposals;
     input_proposals.reserve(in_amounts.size());
@@ -639,15 +404,16 @@ std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secr
     return input_proposals;
 }
 //-------------------------------------------------------------------------------------------------------------------
-SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_for_enote_at_pos_v1(const SpEnote &real_reference_enote,
+LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_for_enote_at_pos_v1(const rct::ctkey &real_referenced_enote,,
     const std::uint64_t &real_reference_index_in_ledger,
-    const crypto::secret_key &address_mask,
+    const LegacyEnoteImageV2 &real_reference_image,
+    const crypto::secret_key &real_reference_view_privkey,
     const crypto::secret_key &commitment_mask,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
+    const std::uint64_t ring_size,
     const MockLedgerContext &ledger_context)
 {
+    //todo
+
     // generate a mock membership proof prep
 
     /// checks and initialization
@@ -702,15 +468,15 @@ SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_for_enote_at_pos_v1(co
     return proof_prep;
 }
 //-------------------------------------------------------------------------------------------------------------------
-SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_v1(
-    const SpEnote &real_reference_enote,
-    const crypto::secret_key &address_mask,
+LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_v1(const rct::ctkey &real_referenced_enote,
+    const LegacyEnoteImageV2 &real_reference_image,
+    const crypto::secret_key &real_reference_view_privkey,
     const crypto::secret_key &commitment_mask,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
+    const std::uint64_t ring_size,
     MockLedgerContext &ledger_context_inout)
 {
+    //todo
+
     // generate a mock membership proof prep
 
     /// add fake enotes to the ledger (2x the ref set size), with the real one at a random location
@@ -751,15 +517,15 @@ SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_v1(
         ledger_context_inout);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
-    const std::vector<SpEnote> &real_referenced_enotes,
-    const std::vector<crypto::secret_key> &address_masks,
+std::vector<SpMembershipProofPrepV1> gen_mock_legacy_ring_signature_preps_v1(const rct::ctkeyV &real_referenced_enotes,
+    const std::vector<LegacyEnoteImageV2> &real_reference_images,
+    const std::vector<crypto::secret_key> &real_reference_view_privkeys,
     const std::vector<crypto::secret_key> &commitment_masks,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
+    const std::uint64_t ring_size,
     MockLedgerContext &ledger_context_inout)
 {
+    //todo
+
     // make mock membership ref sets from input enotes
     CHECK_AND_ASSERT_THROW_MES(real_referenced_enotes.size() == address_masks.size(),
         "gen mock membership proof preps: input enotes don't line up with address masks.");
@@ -785,13 +551,13 @@ std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
     return proof_preps;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
-    const std::vector<SpInputProposalV1> &input_proposals,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
+std::vector<LegacyRingSignaturePrepV1> gen_mock_legacy_ring_signature_preps_v1(
+    const std::vector<LegacyInputProposalV1> &input_proposals,
+    const std::uint64_t ring_size,
     MockLedgerContext &ledger_context_inout)
 {
+    //todo
+
     // make mock membership ref sets from input proposals
     std::vector<SpEnote> input_enotes;
     std::vector<crypto::secret_key> address_masks;
@@ -816,15 +582,15 @@ std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
         ledger_context_inout);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_mock_sp_membership_proof_preps_for_inputs_v1(
+void make_mock_legacy_ring_signature_preps_for_inputs_v1(
     const std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings,
-    const std::vector<SpInputProposalV1> &input_proposals,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
+    const std::vector<LegacyInputProposalV1> &input_proposals,
+    const std::uint64_t ring_size,
     const MockLedgerContext &ledger_context,
-    std::vector<SpMembershipProofPrepV1> &membership_proof_preps_out)
+    std::vector<LegacyRingSignaturePrepV1> &ring_signature_preps_out)
 {
+    //todo
+
     CHECK_AND_ASSERT_THROW_MES(input_ledger_mappings.size() == input_proposals.size(),
         "make mock membership proof preps: input proposals don't line up with their enotes' ledger indices.");
 

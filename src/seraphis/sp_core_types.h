@@ -74,7 +74,7 @@ struct SpEnote final
     static std::size_t get_size_bytes() { return 32*2; }
 
     /**
-    * brief: gen() - generate a Seraphis ENote (all random)
+    * brief: gen() - generate a seraphis enote (all random)
     */
     void gen();
 };

@@ -42,6 +42,7 @@
 #include "sp_crypto_utils.h"
 #include "tx_binned_reference_set_utils.h"
 #include "tx_builders_inputs.h"
+#include "tx_builders_legacy_inputs.h"
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"

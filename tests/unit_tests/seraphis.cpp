@@ -54,6 +54,7 @@ extern "C"
 #include "seraphis/tx_binned_reference_set_utils.h"
 #include "seraphis/tx_builder_types.h"
 #include "seraphis/tx_builders_inputs.h"
+#include "seraphis/tx_builders_legacy_inputs.h"
 #include "seraphis/tx_builders_mixed.h"
 #include "seraphis/tx_builders_outputs.h"
 #include "seraphis/tx_component_types.h"
@@ -61,6 +62,7 @@ extern "C"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils.h"
 #include "seraphis/tx_extra.h"
+#include "seraphis/tx_legacy_builder_types.h"
 #include "seraphis/tx_legacy_component_types.h"
 #include "seraphis/tx_misc_utils.h"
 #include "seraphis/tx_ref_set_index_mapper_flat.h"
@@ -261,11 +263,13 @@ static bool test_binned_reference_set(const std::uint64_t distribution_min_index
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
+static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
+    const std::size_t ref_set_decomp_n,
     const std::size_t ref_set_decomp_m,
     const sp::SpBinnedReferenceSetConfigV1 &bin_config,
     const std::size_t num_random_memo_elements,
-    const std::vector<rct::xmr_amount> &in_amounts,
+    const std::vector<rct::xmr_amount> &in_legacy_amounts,
+    const std::vector<rct::xmr_amount> &in_sp_amounts,
     const std::vector<rct::xmr_amount> &out_amounts,
     const sp::DiscretizedFee &discretized_transaction_fee,
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
@@ -277,19 +281,28 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
 
     rct::xmr_amount raw_transaction_fee;
     CHECK_AND_ASSERT_THROW_MES(try_get_fee_value(discretized_transaction_fee, raw_transaction_fee),
-        "SpTxSquashedV1: tried to raw make tx with invalid discretized fee.");
+        "SpTxSquashedV1 (unit test): tried to raw make tx with invalid discretized fee.");
 
-    CHECK_AND_ASSERT_THROW_MES(in_amounts.size() > 0, "SpTxSquashedV1: tried to raw make tx without any inputs.");
+    CHECK_AND_ASSERT_THROW_MES(in_legacy_amounts.size() + in_sp_amounts.size() > 0,
+        "SpTxSquashedV1 (unit test): tried to raw make tx without any inputs.");
     CHECK_AND_ASSERT_THROW_MES(out_amounts.size() > 0, "SpTxSquashedV1: tried to raw make tx without any outputs.");
-    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(in_amounts, out_amounts, raw_transaction_fee),
-        "SpTxSquashedV1: tried to raw make tx with unbalanced amounts.");
 
-    // make wallet spendbase privkey (master key)
-    const crypto::secret_key spendbase_privkey{rct::rct2sk(rct::skGen())};
+    std::vector<rct::xmr_amount> all_in_amounts{in_legacy_amounts};
+    all_in_amounts.insert(all_in_amounts.end(), in_sp_amounts.begin(), in_sp_amounts.end());
+    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(all_in_amounts, out_amounts, raw_transaction_fee),
+        "SpTxSquashedV1 (unit test): tried to raw make tx with unbalanced amounts.");
 
-    // make mock inputs
-    // enote, ks, view key stuff, amount, amount blinding factor
-    std::vector<SpInputProposalV1> input_proposals{gen_mock_sp_input_proposals_v1(spendbase_privkey, in_amounts)};
+    // make wallet spendbase privkeys (master keys for legacy and seraphis)
+    const crypto::secret_key legacy_spend_privkey{rct::rct2sk(rct::skGen())};
+    const crypto::secret_key sp_spendbase_privkey{rct::rct2sk(rct::skGen())};
+
+    // make mock legacy input proposals
+    std::vector<LegacyInputProposalV1> legacy_input_proposals{
+            gen_mock_legacy_input_proposals_v1(legacy_spend_privkey, in_legacy_amounts)
+        };
+
+    // make mock seraphis input proposals
+    std::vector<SpInputProposalV1> sp_input_proposals{gen_mock_sp_input_proposals_v1(sp_spendbase_privkey, in_sp_amounts)};
 
     // make mock output proposals
     std::vector<SpOutputProposalV1> output_proposals{
@@ -301,12 +314,18 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
         output_proposals[1].m_enote_ephemeral_pubkey = output_proposals[0].m_enote_ephemeral_pubkey;
 
     // pre-sort inputs and outputs (doing this here makes everything else easier)
-    std::sort(input_proposals.begin(), input_proposals.end());  //note: this is very inefficient for large input counts
+    std::sort(legacy_input_proposals.begin(), legacy_input_proposals.end());
+    std::sort(sp_input_proposals.begin(), sp_input_proposals.end());
     std::sort(output_proposals.begin(), output_proposals.end());
 
-    // make mock membership proof ref sets
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps{
-            gen_mock_sp_membership_proof_preps_v1(input_proposals,
+    // make mock legacy ring signature ref sets
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps{
+            gen_mock_legacy_ring_signature_preps_v1(legacy_input_proposals, legacy_ring_size, ledger_context_inout)
+        };
+
+    // make mock seraphis membership proof ref sets
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps{
+            gen_mock_sp_membership_proof_preps_v1(sp_input_proposals,
                 ref_set_decomp_n,
                 ref_set_decomp_m,
                 bin_config,
@@ -325,26 +344,27 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
     make_versioning_string(semantic_rules_version, version_string);
 
     // tx components
-    std::vector<SpEnoteImageV1> input_images;
+    std::vector<LegacyEnoteImageV2> legacy_input_images;
+    std::vector<SpEnoteImageV1> sp_input_images;
     std::vector<SpEnoteV1> outputs;
     SpBalanceProofV1 balance_proof;
-    std::vector<SpImageProofV1> tx_image_proofs;
-    std::vector<SpAlignableMembershipProofV1> tx_alignable_membership_proofs;
-    std::vector<SpMembershipProofV1> tx_membership_proofs;
+    std::vector<LegacyRingSignatureV3> tx_legacy_ring_signatures;
+    std::vector<SpImageProofV1> tx_sp_image_proofs;
+    std::vector<SpAlignableMembershipProofV1> tx_sp_alignable_membership_proofs;
+    std::vector<SpMembershipProofV1> tx_sp_membership_proofs;
     SpTxSupplementV1 tx_supplement;
 
     // info shuttles for making components
     std::vector<rct::xmr_amount> output_amounts;
     std::vector<crypto::secret_key> output_amount_commitment_blinding_factors;
-    std::vector<crypto::secret_key> image_address_masks;
-    std::vector<crypto::secret_key> image_amount_masks;
     rct::key tx_proposal_message;
-    std::vector<rct::xmr_amount> input_amounts;
-    std::vector<crypto::secret_key> input_image_amount_commitment_blinding_factors;
+    std::vector<rct::xmr_amount> input_legacy_amounts;
+    std::vector<rct::xmr_amount> input_sp_amounts;
+    std::vector<crypto::secret_key> legacy_input_image_amount_commitment_blinding_factors;
+    std::vector<crypto::secret_key> sp_input_image_amount_commitment_blinding_factors;
 
-    input_images.resize(input_proposals.size());
-    image_address_masks.resize(input_proposals.size());
-    image_amount_masks.resize(input_proposals.size());
+    legacy_input_images.reserve(legacy_input_proposals.size());
+    sp_input_images.reserve(sp_input_proposals.size());
 
     // make everything
     make_v1_outputs_v1(output_proposals,
@@ -355,40 +375,51 @@ static void make_sp_txtype_squashed_v1(const std::size_t ref_set_decomp_n,
     for (const SpOutputProposalV1 &output_proposal : output_proposals)
         accumulate_extra_field_elements(output_proposal.m_partial_memo, additional_memo_elements);
     make_tx_extra(std::move(additional_memo_elements), tx_supplement.m_tx_extra);
-    for (std::size_t input_index{0}; input_index < input_proposals.size(); ++input_index)
+    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
     {
-        input_proposals[input_index].get_enote_image_v1(input_images[input_index]);
-        image_address_masks[input_index] = input_proposals[input_index].m_core.m_address_mask;
-        image_amount_masks[input_index] = input_proposals[input_index].m_core.m_commitment_mask;
+        legacy_input_images.emplace_back();
+        legacy_input_proposal.get_enote_image_v2(legacy_input_images.back());
+    }
+    for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
+    {
+        sp_input_images.emplace_back();
+        sp_input_proposal.get_enote_image_v1(sp_input_images.back());
     }
     make_tx_proposal_message_v1(version_string,
-        std::vector<LegacyEnoteImageV2>{}, //todo: legacy inputs
-        input_images,
+        legacy_input_images,
+        sp_input_images,
         outputs,
         tx_supplement,
         discretized_transaction_fee,
         tx_proposal_message);
-    make_v1_image_proofs_v1(input_proposals,
+    make_v3_legacy_ring_signatures_v1(std::move(legacy_ring_signature_preps),
+        legacy_spend_privkey,
+        tx_legacy_ring_signatures);
+    make_v1_image_proofs_v1(sp_input_proposals,
         tx_proposal_message,
-        spendbase_privkey,
-        tx_image_proofs);
-    prepare_input_commitment_factors_for_balance_proof_v1(input_proposals,
-        image_amount_masks,
-        input_amounts,
-        input_image_amount_commitment_blinding_factors);
-    make_v1_balance_proof_v1(input_amounts, //note: must range proof input image commitments in squashed enote model
+        sp_spendbase_privkey,
+        tx_sp_image_proofs);
+    prepare_input_commitment_factors_for_balance_proof_v1(legacy_input_proposals,
+        sp_input_proposals,
+        input_legacy_amounts,
+        input_sp_amounts,
+        legacy_input_image_amount_commitment_blinding_factors,
+        sp_input_image_amount_commitment_blinding_factors);
+    make_v1_balance_proof_v1(input_legacy_amounts,
+        input_sp_amounts, //note: must range proof seraphis input image commitments in squashed enote model
         output_amounts,
         raw_transaction_fee,
-        input_image_amount_commitment_blinding_factors,
+        legacy_input_image_amount_commitment_blinding_factors,
+        sp_input_image_amount_commitment_blinding_factors,
         output_amount_commitment_blinding_factors,
         balance_proof);
-    make_v1_membership_proofs_v1(std::move(membership_proof_preps),
-        tx_alignable_membership_proofs);  //alignable membership proofs could theoretically be user inputs as well
-    align_v1_membership_proofs_v1(input_images, std::move(tx_alignable_membership_proofs), tx_membership_proofs);
+    make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps),
+        tx_sp_alignable_membership_proofs);  //alignable membership proofs could theoretically be user inputs as well
+    align_v1_membership_proofs_v1(sp_input_images, std::move(tx_sp_alignable_membership_proofs), tx_sp_membership_proofs);
 
-    make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2>{}, std::move(input_images), std::move(outputs),
-        std::move(balance_proof), std::vector<LegacyRingSignatureV3>{}, std::move(tx_image_proofs),
-        std::move(tx_membership_proofs), std::move(tx_supplement), discretized_transaction_fee, semantic_rules_version,
+    make_seraphis_tx_squashed_v1(std::move(legacy_input_images), std::move(sp_input_images), std::move(outputs),
+        std::move(balance_proof), std::move(tx_legacy_ring_signatures), std::move(tx_sp_image_proofs),
+        std::move(tx_sp_membership_proofs), std::move(tx_supplement), discretized_transaction_fee, semantic_rules_version,
         tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -1106,13 +1137,15 @@ TEST(seraphis, txtype_squashed_v1)
     sp::MockLedgerContext ledger_context{0, 0};
 
     // prepare input/output amounts
-    std::vector<rct::xmr_amount> in_amounts;
+    std::vector<rct::xmr_amount> in_legacy_amounts;
+    std::vector<rct::xmr_amount> in_sp_amounts;
     std::vector<rct::xmr_amount> out_amounts;
 
     for (int i{0}; i < num_ins_outs; ++i)
     {
-        in_amounts.push_back(3);  //initial tx_fee = num_ins_outs
-        out_amounts.push_back(2);
+        in_legacy_amounts.push_back(1);  //initial tx_fee = num_ins_outs
+        in_sp_amounts.push_back(3);
+        out_amounts.push_back(3);
     }
 
     // set fee
@@ -1124,7 +1157,7 @@ TEST(seraphis, txtype_squashed_v1)
     const rct::xmr_amount extra_fee_amount{real_transaction_fee - num_ins_outs};
 
     if (extra_fee_amount > 0)
-        in_amounts.push_back(extra_fee_amount);
+        in_sp_amounts.push_back(extra_fee_amount);
 
     // make txs
     std::vector<sp::SpTxSquashedV1> txs;
@@ -1137,12 +1170,14 @@ TEST(seraphis, txtype_squashed_v1)
         txs.emplace_back();
         make_sp_txtype_squashed_v1(2,
             2,
+            2,
             sp::SpBinnedReferenceSetConfigV1{
                 .m_bin_radius = 1,
                 .m_num_bin_members = 2
             },
             3,
-            in_amounts,
+            in_legacy_amounts,
+            in_sp_amounts,
             out_amounts,
             discretized_transaction_fee,
             sp::SpTxSquashedV1::SemanticRulesVersion::MOCK,

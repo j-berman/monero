@@ -132,8 +132,7 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
                 m_enote_store.m_tracked_legacy_onetime_address_duplicates.at(
                     mapped_enote_record.second.m_record.m_enote.onetime_address()
                 ),
-                [&mapped_legacy_contextual_enote_records](const rct::key &identifier)
-                    -> const SpEnoteOriginStatus&
+                [&mapped_legacy_contextual_enote_records](const rct::key &identifier) -> const SpEnoteOriginStatus&
                 {
                     CHECK_AND_ASSERT_THROW_MES(mapped_legacy_contextual_enote_records.find(identifier) !=
                             mapped_legacy_contextual_enote_records.end(),
@@ -142,8 +141,7 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
 
                     return mapped_legacy_contextual_enote_records.at(identifier).m_origin_context.m_origin_status;
                 },
-                [&mapped_legacy_contextual_enote_records](const rct::key &identifier)
-                    -> rct::xmr_amount
+                [&mapped_legacy_contextual_enote_records](const rct::key &identifier) -> rct::xmr_amount
                 {
                     CHECK_AND_ASSERT_THROW_MES(mapped_legacy_contextual_enote_records.find(identifier) != 
                             mapped_legacy_contextual_enote_records.end(),

@@ -279,7 +279,6 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
 
 
     /// 2. set block information
-
     // a. block range (cap on the lowest of: chain height, seraphis-only range begins, chunk size)
     chunk_out.m_start_height = chunk_start_height;
     chunk_out.m_end_height =
@@ -333,7 +332,7 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
             m_blocks_of_tx_key_images.end(),
         "onchain chunk find-received scanning (mock ledger context): end of chunk not known in key images map (bug).");
 
-    // a. initialize output count to the total number of seraphis enotes in the ledger before the first block to scan
+    // a. initialize output count to the total number of legacy enotes in the ledger before the first block to scan
     std::uint64_t total_output_count_before_tx{0};
 
     if (chunk_out.m_start_height > 0)
@@ -444,7 +443,6 @@ void MockLedgerContext::get_onchain_chunk_sp_impl(const std::uint64_t chunk_star
 
 
     /// 2. set block information
-
     // a. block range
     chunk_out.m_start_height = chunk_start_height;
     chunk_out.m_end_height = std::min(get_chain_height() + 1, chunk_start_height + chunk_max_size);
