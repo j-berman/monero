@@ -42,10 +42,11 @@
 #include "tx_input_selection_output_context.h"
 
 //third party headers
+#include "boost/container/map.hpp"
 #include "boost/multiprecision/cpp_int.hpp"
 
 //standard headers
-#include <list>
+#include <unordered_map>
 #include <vector>
 
 //forward declarations
@@ -53,6 +54,15 @@
 
 namespace sp
 {
+
+enum class InputSelectionType
+{
+    LEGACY,
+    SERAPHIS
+};
+
+using input_set_tracker_t =
+    std::unordered_map<InputSelectionType, boost::multimap<rct::xmr_amount, ContextualRecordVariant>>;
 
 class InputSelectorV1
 {
@@ -68,8 +78,8 @@ public:
 //member functions
     /// select an available input
     virtual bool try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
-        const std::list<ContextualRecordVariant> &already_added_inputs,
-        const std::list<ContextualRecordVariant> &already_excluded_inputs,
+        const input_set_tracker_t &already_added_inputs,
+        const input_set_tracker_t &already_excluded_inputs,
         ContextualRecordVariant &selected_input_out) const = 0;
 };
 
@@ -94,6 +104,6 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
     const rct::xmr_amount fee_per_tx_weight,
     const FeeCalculator &tx_fee_calculator,
     rct::xmr_amount &final_fee_out,
-    std::list<ContextualRecordVariant> &contextual_enote_records_out);
+    input_set_tracker_t &input_set_out);
 
 } //namespace sp

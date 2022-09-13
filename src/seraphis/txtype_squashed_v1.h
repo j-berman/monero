@@ -82,7 +82,7 @@ struct SpTxSquashedV1 final
     std::vector<LegacyEnoteImageV2> m_legacy_input_images;
     /// seraphis tx input images (spent seraphis enotes)
     std::vector<SpEnoteImageV1> m_sp_input_images;
-    /// tx outputs (new e-notes)
+    /// tx outputs (new enotes)
     std::vector<SpEnoteV1> m_outputs;
     /// balance proof (balance proof and range proofs)
     SpBalanceProofV1 m_balance_proof;

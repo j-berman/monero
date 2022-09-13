@@ -131,24 +131,24 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualIntermediateEnoteRecor
         for (const rct::key &identifier : identifiers_of_known_enotes)
         {
             // key image is known if there is a full record associated with this intermediate record's onetime address
-            if (m_mapped_legacy_contextual_enote_records.find(identifier) !=
+            if (m_mapped_legacy_contextual_enote_records.find(identifier) ==
                 m_mapped_legacy_contextual_enote_records.end())
-            {
-                CHECK_AND_ASSERT_THROW_MES(identifier == *(identifiers_of_known_enotes.begin()),
-                    "add intermediate record (mock enote store): key image is known but there are intermediate "
-                    "records with this onetime address (a given onetime address should have only intermediate or only "
-                    "full legacy records).");
+                continue;
 
-                LegacyContextualEnoteRecordV1 temp_full_record{};
+            CHECK_AND_ASSERT_THROW_MES(identifier == *(identifiers_of_known_enotes.begin()),
+                "add intermediate record (mock enote store): key image is known but there are intermediate "
+                "records with this onetime address (a given onetime address should have only intermediate or only "
+                "full legacy records).");
 
-                get_legacy_enote_record(new_record.m_record,
-                    m_mapped_legacy_contextual_enote_records.at(identifier).m_record.m_key_image,
-                    temp_full_record.m_record);
-                temp_full_record.m_origin_context = new_record.m_origin_context;
+            LegacyContextualEnoteRecordV1 temp_full_record{};
 
-                this->add_record(temp_full_record);
-                return;
-            }
+            get_legacy_enote_record(new_record.m_record,
+                m_mapped_legacy_contextual_enote_records.at(identifier).m_record.m_key_image,
+                temp_full_record.m_record);
+            temp_full_record.m_origin_context = new_record.m_origin_context;
+
+            this->add_record(temp_full_record);
+            return;
         }
     }
 
@@ -214,7 +214,8 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualEnoteRecordV1 &new_rec
         //       any updates should be handled by the seraphis scanning process
     }
 
-    // 3. if this enote is located in the intermediate enote record map, update with its origin context
+    // 3. if this enote is located in the intermediate enote record map, update the full record with the intermediate
+    //    record's origin context
     if (m_mapped_legacy_intermediate_contextual_enote_records.find(new_record_identifier) !=
         m_mapped_legacy_intermediate_contextual_enote_records.end())
     {

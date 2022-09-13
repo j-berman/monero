@@ -61,7 +61,7 @@
 // 3. if (c' == c) then the proof is valid
 //
 // note: G_0 = G, G_1 = X, G_2 = U (for Seraphis paper notation)
-// note: in practice, K is a masked address from a Seraphis e-note-image, and KI is the corresponding linking tag
+// note: in practice, K is a masked address from a Seraphis enote image, and KI is the corresponding linking tag
 // note: assume key image KI is in the prime subgroup (canonical bytes) and non-identity
 //   - WARNING: the caller must validate KI (and check non-identity); either...
 //     - 1) l*KI == identity

@@ -162,7 +162,7 @@ struct SpInputProposal final
 
 ////
 // SpOutputProposal
-// - for creating an e-note to send an amount to someone
+// - for creating an enote to send an amount to someone
 ///
 struct SpOutputProposal final
 {
