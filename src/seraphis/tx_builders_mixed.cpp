@@ -453,21 +453,21 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
         };
 
     rct::xmr_amount reported_final_fee;
-    std::list<ContextualRecordVariant> contextual_inputs;
+    input_set_tracker_t selected_input_set;
     if (!try_get_input_set_v1(output_set_context,
             max_inputs,
             local_user_input_selector,
             fee_per_tx_weight,
             tx_fee_calculator,
             reported_final_fee,
-            contextual_inputs))
+            selected_input_set))
         return false;
 
     // 2. separate into legacy and seraphis inputs
     std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
     std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
 
-    split_contextual_enote_record_variants(contextual_inputs, legacy_contextual_inputs, sp_contextual_inputs);
+    split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
     CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
     // a. handle legacy inputs (TODO)

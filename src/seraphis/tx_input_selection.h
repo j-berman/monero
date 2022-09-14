@@ -62,7 +62,7 @@ enum class InputSelectionType
 };
 
 using input_set_tracker_t =
-    std::unordered_map<InputSelectionType, boost::multimap<rct::xmr_amount, ContextualRecordVariant>>;
+    std::unordered_map<InputSelectionType, boost::container::multimap<rct::xmr_amount, ContextualRecordVariant>>;
 
 class InputSelectorV1
 {
@@ -88,15 +88,13 @@ public:
     - note: this algorithm will fail to find a possible solution if there are combinations that lead to 0-change successes,
       but the combination that was found has non-zero change that doesn't cover the differential fee of adding a change
       output (and there are no solutions that can cover that additional change output differential fee)
-        - only a brute force search can find the success solution(s) to this problem (e.g. if step (4) fails, you could
-          fall-back to brute force search on the 0-change case; however, such cases will be extremely rare if they ever
-          actually occur, so it probably isn't worthwhile to implement)
-    - note2: this algorithm naively treats all ContextualRecordVariant types as having equivalent fee costs in some cases,
-      which means some solutions based around optimizing input types won't be found except by chance
-        - these solutions can be found if a sophisticated sorting algorithm is implemented that takes into account the
-          differential fee of each list element, however the performance cost may be significant when there are large
-          numbers of candidate inputs, so it was not implemented here; the failure cases introduced are very unlikely
-          to be observed in practice
+        - only an O(N!) brute force search can find the success solution(s) to this problem (e.g. if step (4) fails, you could
+          fall-back to brute force search on the 0-change case); however, failure cases will be extremely rare if they ever
+          actually occur, so it probably isn't worthwhile to implement
+    - note2: this algorithm has a 'select range of inputs' trial pass that is implemented naively - only ranges of same-type
+      excluded inputs are considered; a no-fail algorithm would use brute force to test all possible combinations of excluded
+      inputs; brute force is O(N^2) instead of O(N) (for max inputs allowed N), so it was not implemented here for efficiency
+        - the naive approach will have lower rates of false negatives as the proportion of seraphis enotes increases
 */
 bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_context,
     const std::size_t max_inputs_allowed,

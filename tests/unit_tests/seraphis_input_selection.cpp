@@ -96,7 +96,7 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
 
     // try to get an input set
     rct::xmr_amount final_fee;
-    std::list<sp::ContextualRecordVariant> inputs_selected;
+    sp::input_set_tracker_t selected_input_set;
     const bool result{
             sp::try_get_input_set_v1(output_set_context,
                 max_inputs_allowed,
@@ -104,8 +104,14 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
                 fee_per_tx_weight,
                 tx_fee_calculator,
                 final_fee,
-                inputs_selected)
+                selected_input_set)
         };
+
+    std::list<sp::LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
+    std::list<sp::SpContextualEnoteRecordV1> sp_contextual_inputs;
+
+    split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
+    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
     // check results
 
@@ -117,12 +123,12 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
         return;
 
     // 3. inputs selected have expected amounts in expected order
-    CHECK_AND_ASSERT_THROW_MES(inputs_selected.size() == input_amounts_expected.size(),
+    CHECK_AND_ASSERT_THROW_MES(sp_contextual_inputs.size() == input_amounts_expected.size(),
         "selected inputs quantity mismatch");
 
     std::size_t input_index{0};
     boost::multiprecision::uint128_t total_input_amount{0};
-    for (const sp::ContextualRecordVariant &input_selected : inputs_selected)
+    for (const sp::SpContextualEnoteRecordV1 &input_selected : sp_contextual_inputs)
     {
         CHECK_AND_ASSERT_THROW_MES(input_selected.get_amount() == input_amounts_expected[input_index],
             "selected inputs expected amount mismatch");
@@ -134,7 +140,7 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
     // 4. total input amount is sufficient to cover outputs + fee
 
     // a. test zero-change case
-    const std::size_t num_inputs{inputs_selected.size()};
+    const std::size_t num_inputs{sp_contextual_inputs.size()};
     const std::size_t num_outputs_nochange{output_amounts.size()};
     const rct::xmr_amount fee_nochange{
             tx_fee_calculator.get_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_nochange)

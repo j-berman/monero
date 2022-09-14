@@ -70,8 +70,8 @@ public:
 //member functions
     /// select the next available input
     bool try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
-        const std::list<ContextualRecordVariant> &already_added_inputs,
-        const std::list<ContextualRecordVariant> &already_excluded_inputs,
+        const input_set_tracker_t &already_added_inputs,
+        const input_set_tracker_t &already_excluded_inputs,
         ContextualRecordVariant &selected_input_out) const override;
 
 //member variables
@@ -102,8 +102,8 @@ public:
     /// NOTE: this is a mock-up; a real input selector would contain many complicated mechanisms, e.g. the option to ignore
     ///       locked enotes, heuristics to avoid input timing correlations, etc.
     bool try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
-        const std::list<ContextualRecordVariant> &already_added_inputs,
-        const std::list<ContextualRecordVariant> &already_excluded_inputs,
+        const input_set_tracker_t &already_added_inputs,
+        const input_set_tracker_t &already_excluded_inputs,
         ContextualRecordVariant &selected_input_out) const override;
 
 //member variables

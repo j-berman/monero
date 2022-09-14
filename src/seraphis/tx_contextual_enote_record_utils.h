@@ -36,6 +36,7 @@
 //local headers
 #include "ringct/rctTypes.h"
 #include "tx_contextual_enote_record_types.h"
+#include "tx_input_selection.h"
 
 //third party headers
 
@@ -59,7 +60,7 @@ bool legacy_enote_has_highest_amount_amoung_duplicates(const rct::key &searched_
     const std::function<rct::xmr_amount(const rct::key&)> &get_record_amount_for_identifier_func);
 
 //todo
-void split_contextual_enote_record_variants(const std::list<ContextualRecordVariant> &contextual_record_variants,
+void split_selected_input_set(const input_set_tracker_t &input_set,
     std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_records_out,
     std::list<SpContextualEnoteRecordV1> &sp_contextual_records_out);
 

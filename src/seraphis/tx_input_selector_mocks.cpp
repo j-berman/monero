@@ -34,6 +34,7 @@
 //local headers
 #include "tx_contextual_enote_record_types.h"
 #include "tx_contextual_enote_record_utils.h"
+#include "tx_input_selection.h"
 
 //third party headers
 #include "boost/multiprecision/cpp_int.hpp"
@@ -49,10 +50,15 @@ namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
 bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
-    const std::list<ContextualRecordVariant> &already_added_inputs,
-    const std::list<ContextualRecordVariant> &already_excluded_inputs,
+    const input_set_tracker_t &already_added_inputs,
+    const input_set_tracker_t &already_excluded_inputs,
     ContextualRecordVariant &selected_input_out) const
 {
+    CHECK_AND_ASSERT_THROW_MES(already_added_inputs.find(InputSelectionType::SERAPHIS) != already_added_inputs.end(),
+        "try select input (mock simple v1): seraphis input type doesn't exist in added inputs.");
+    CHECK_AND_ASSERT_THROW_MES(already_excluded_inputs.find(InputSelectionType::SERAPHIS) != already_excluded_inputs.end(),
+        "try select input (mock simple v1): seraphis input type doesn't exist in excluded inputs.");
+
     // note: the simple input selector only has sp contextual records
     for (const SpContextualEnoteRecordV1 &contextual_enote_record : m_enote_store.m_contextual_enote_records)
     {
@@ -62,23 +68,27 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
 
         // prepare record finder
         auto record_finder =
-            [&contextual_enote_record](const ContextualRecordVariant &comparison_record) -> bool
+            [&contextual_enote_record](const std::pair<rct::xmr_amount, ContextualRecordVariant> &comparison_record) -> bool
             {
-                if (!comparison_record.is_type<SpContextualEnoteRecordV1>())
+                if (!comparison_record.second.is_type<SpContextualEnoteRecordV1>())
                     return false;
 
                 return SpContextualEnoteRecordV1::same_destination(contextual_enote_record,
-                    comparison_record.get_contextual_record<SpContextualEnoteRecordV1>());
+                    comparison_record.second.get_contextual_record<SpContextualEnoteRecordV1>());
             };
 
-        // ignore already added inputs
-        if (std::find_if(already_added_inputs.begin(), already_added_inputs.end(), record_finder) !=
-                already_added_inputs.end())
+        // ignore already added seraphis inputs
+        if (std::find_if(already_added_inputs.at(InputSelectionType::SERAPHIS).begin(),
+                    already_added_inputs.at(InputSelectionType::SERAPHIS).end(),
+                    record_finder) !=
+                already_added_inputs.at(InputSelectionType::SERAPHIS).end())
             continue;
 
-        // ignore already excluded inputs
-        if (std::find_if(already_excluded_inputs.begin(), already_excluded_inputs.end(), record_finder) !=
-                already_excluded_inputs.end())
+        // ignore already excluded seraphis inputs
+        if (std::find_if(already_excluded_inputs.at(InputSelectionType::SERAPHIS).begin(),
+                    already_excluded_inputs.at(InputSelectionType::SERAPHIS).end(),
+                    record_finder) !=
+                already_excluded_inputs.at(InputSelectionType::SERAPHIS).end())
             continue;
 
         selected_input_out = contextual_enote_record;
@@ -89,10 +99,19 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
-    const std::list<ContextualRecordVariant> &already_added_inputs,
-    const std::list<ContextualRecordVariant> &already_excluded_inputs,
+    const input_set_tracker_t &already_added_inputs,
+    const input_set_tracker_t &already_excluded_inputs,
     ContextualRecordVariant &selected_input_out) const
 {
+    CHECK_AND_ASSERT_THROW_MES(already_added_inputs.find(InputSelectionType::LEGACY) != already_added_inputs.end(),
+        "try select input (mock v1): legacy input type doesn't exist in added inputs.");
+    CHECK_AND_ASSERT_THROW_MES(already_excluded_inputs.find(InputSelectionType::LEGACY) != already_excluded_inputs.end(),
+        "try select input (mock v1): legacy input type doesn't exist in excluded inputs.");
+    CHECK_AND_ASSERT_THROW_MES(already_added_inputs.find(InputSelectionType::SERAPHIS) != already_added_inputs.end(),
+        "try select input (mock v1): seraphis input type doesn't exist in added inputs.");
+    CHECK_AND_ASSERT_THROW_MES(already_excluded_inputs.find(InputSelectionType::SERAPHIS) != already_excluded_inputs.end(),
+        "try select input (mock v1): seraphis input type doesn't exist in excluded inputs.");
+
     // 1. try to select from legacy enotes
     const std::unordered_map<rct::key, LegacyContextualEnoteRecordV1> &mapped_legacy_contextual_enote_records{
             m_enote_store.m_mapped_legacy_contextual_enote_records
@@ -105,23 +124,27 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
 
         // prepare record finder
         auto record_finder =
-            [&mapped_enote_record](const ContextualRecordVariant &comparison_record) -> bool
+            [&mapped_enote_record](const std::pair<rct::xmr_amount, ContextualRecordVariant> &comparison_record) -> bool
             {
-                if (!comparison_record.is_type<LegacyContextualEnoteRecordV1>())
+                if (!comparison_record.second.is_type<LegacyContextualEnoteRecordV1>())
                     return false;
 
                 return LegacyContextualEnoteRecordV1::same_destination(mapped_enote_record.second,
-                    comparison_record.get_contextual_record<LegacyContextualEnoteRecordV1>());
+                    comparison_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>());
             };
 
-        // ignore already added inputs
-        if (std::find_if(already_added_inputs.begin(), already_added_inputs.end(), record_finder) !=
-                already_added_inputs.end())
+        // ignore already added legacy inputs
+        if (std::find_if(already_added_inputs.at(InputSelectionType::LEGACY).begin(),
+                    already_added_inputs.at(InputSelectionType::LEGACY).end(),
+                    record_finder) !=
+                already_added_inputs.at(InputSelectionType::LEGACY).end())
             continue;
 
-        // ignore already excluded inputs
-        if (std::find_if(already_excluded_inputs.begin(), already_excluded_inputs.end(), record_finder) !=
-                already_excluded_inputs.end())
+        // ignore already excluded legacy inputs
+        if (std::find_if(already_excluded_inputs.at(InputSelectionType::LEGACY).begin(),
+                    already_excluded_inputs.at(InputSelectionType::LEGACY).end(),
+                    record_finder) !=
+                already_excluded_inputs.at(InputSelectionType::LEGACY).end())
             continue;
 
         // if this legacy enote shares a onetime address with any other legacy enotes, only proceed if this one
@@ -165,23 +188,27 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
 
         // prepare record finder
         auto record_finder =
-            [&mapped_enote_record](const ContextualRecordVariant &comparison_record) -> bool
+            [&mapped_enote_record](const std::pair<rct::xmr_amount, ContextualRecordVariant> &comparison_record) -> bool
             {
-                if (!comparison_record.is_type<SpContextualEnoteRecordV1>())
+                if (!comparison_record.second.is_type<SpContextualEnoteRecordV1>())
                     return false;
 
                 return SpContextualEnoteRecordV1::same_destination(mapped_enote_record.second,
-                    comparison_record.get_contextual_record<SpContextualEnoteRecordV1>());
+                    comparison_record.second.get_contextual_record<SpContextualEnoteRecordV1>());
             };
 
-        // ignore already added inputs
-        if (std::find_if(already_added_inputs.begin(), already_added_inputs.end(), record_finder) !=
-                already_added_inputs.end())
+        // ignore already added seraphis inputs
+        if (std::find_if(already_added_inputs.at(InputSelectionType::SERAPHIS).begin(),
+                    already_added_inputs.at(InputSelectionType::SERAPHIS).end(),
+                    record_finder) !=
+                already_added_inputs.at(InputSelectionType::SERAPHIS).end())
             continue;
 
-        // ignore already excluded inputs
-        if (std::find_if(already_excluded_inputs.begin(), already_excluded_inputs.end(), record_finder) !=
-                already_excluded_inputs.end())
+        // ignore already excluded seraphis inputs
+        if (std::find_if(already_excluded_inputs.at(InputSelectionType::SERAPHIS).begin(),
+                    already_excluded_inputs.at(InputSelectionType::SERAPHIS).end(),
+                    record_finder) !=
+                already_excluded_inputs.at(InputSelectionType::SERAPHIS).end())
             continue;
 
         selected_input_out = mapped_enote_record.second;
