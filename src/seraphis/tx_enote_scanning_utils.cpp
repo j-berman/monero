@@ -272,32 +272,32 @@ bool try_find_legacy_enotes_in_tx(const rct::key &legacy_base_spend_pubkey,
         // view scan the enote (in try block in case enote is malformed)
         try
         {
-            if (try_get_legacy_basic_enote_record(enotes_in_tx[enote_index],
-                rct::pk2rct(legacy_enote_ephemeral_pubkeys[ephemeral_pubkey_index]),
-                enote_index,
-                unlock_time,
-                temp_DH_derivation,
-                legacy_base_spend_pubkey,
-                legacy_subaddress_map,
-                hwdev,
-                temp_contextual_record.m_record))
-            {
-                temp_contextual_record.m_origin_context =
-                    SpEnoteOriginContextV1{
-                            .m_block_height = block_height,
-                            .m_block_timestamp = block_timestamp,
-                            .m_transaction_id = transaction_id,
-                            .m_enote_ledger_index = total_enotes_before_tx + enote_index,
-                            .m_origin_status = origin_status,
-                            .m_memo = tx_memo
-                        };
+            if (!try_get_legacy_basic_enote_record(enotes_in_tx[enote_index],
+                    rct::pk2rct(legacy_enote_ephemeral_pubkeys[ephemeral_pubkey_index]),
+                    enote_index,
+                    unlock_time,
+                    temp_DH_derivation,
+                    legacy_base_spend_pubkey,
+                    legacy_subaddress_map,
+                    hwdev,
+                    temp_contextual_record.m_record))
+                continue;
 
-                // note: it is possible for enotes with duplicate onetime addresses to be added here; it is assumed the
-                //       upstream caller will be able to handle that case without problems
-                basic_records_per_tx_inout[transaction_id].emplace_back(temp_contextual_record);
+            temp_contextual_record.m_origin_context =
+                SpEnoteOriginContextV1{
+                        .m_block_height = block_height,
+                        .m_block_timestamp = block_timestamp,
+                        .m_transaction_id = transaction_id,
+                        .m_enote_ledger_index = total_enotes_before_tx + enote_index,
+                        .m_origin_status = origin_status,
+                        .m_memo = tx_memo
+                    };
 
-                found_an_enote = true;
-            }
+            // note: it is possible for enotes with duplicate onetime addresses to be added here; it is assumed the
+            //       upstream caller will be able to handle that case without problems
+            basic_records_per_tx_inout[transaction_id].emplace_back(temp_contextual_record);
+
+            found_an_enote = true;
         } catch (...) {}
     }
 
@@ -339,28 +339,28 @@ bool try_find_sp_enotes_in_tx(const crypto::x25519_secret_key &xk_find_received,
         // find-receive scan the enote (in try block in case enote is malformed)
         try
         {
-            if (try_get_basic_enote_record_v1(enotes_in_tx[enote_index],
-                tx_supplement.m_output_enote_ephemeral_pubkeys[ephemeral_pubkey_index],
-                input_context,
-                temp_DH_derivation,
-                temp_contextual_record.m_record))
-            {
-                temp_contextual_record.m_origin_context =
-                    SpEnoteOriginContextV1{
-                            .m_block_height = block_height,
-                            .m_block_timestamp = block_timestamp,
-                            .m_transaction_id = transaction_id,
-                            .m_enote_ledger_index = total_enotes_before_tx + enote_index,
-                            .m_origin_status = origin_status,
-                            .m_memo = tx_supplement.m_tx_extra
-                        };
+            if (!try_get_basic_enote_record_v1(enotes_in_tx[enote_index],
+                    tx_supplement.m_output_enote_ephemeral_pubkeys[ephemeral_pubkey_index],
+                    input_context,
+                    temp_DH_derivation,
+                    temp_contextual_record.m_record))
+                continue;
 
-                // note: it is possible for enotes with duplicate onetime addresses to be added here; it is assumed the
-                //       upstream caller will be able to handle that case without problems
-                basic_records_per_tx_inout[transaction_id].emplace_back(temp_contextual_record);
+            temp_contextual_record.m_origin_context =
+                SpEnoteOriginContextV1{
+                        .m_block_height = block_height,
+                        .m_block_timestamp = block_timestamp,
+                        .m_transaction_id = transaction_id,
+                        .m_enote_ledger_index = total_enotes_before_tx + enote_index,
+                        .m_origin_status = origin_status,
+                        .m_memo = tx_supplement.m_tx_extra
+                    };
 
-                found_an_enote = true;
-            }
+            // note: it is possible for enotes with duplicate onetime addresses to be added here; it is assumed the
+            //       upstream caller will be able to handle that case without problems
+            basic_records_per_tx_inout[transaction_id].emplace_back(temp_contextual_record);
+
+            found_an_enote = true;
         } catch (...) {}
     }
 
@@ -436,16 +436,16 @@ void process_chunk_intermediate_legacy(const rct::key &legacy_base_spend_pubkey,
 
             try
             {
-                if (try_get_legacy_intermediate_enote_record(
-                    contextual_basic_record.get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
-                    legacy_base_spend_pubkey,
-                    legacy_view_privkey,
-                    new_enote_record))
-                {
-                    process_chunk_new_intermediate_record_update_legacy(new_enote_record,
-                        contextual_basic_record.origin_context(),
-                        found_enote_records_inout);
-                }
+                if (!try_get_legacy_intermediate_enote_record(
+                        contextual_basic_record.get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
+                        legacy_base_spend_pubkey,
+                        legacy_view_privkey,
+                        new_enote_record))
+                    continue;
+
+                process_chunk_new_intermediate_record_update_legacy(new_enote_record,
+                    contextual_basic_record.origin_context(),
+                    found_enote_records_inout);
             } catch (...) {}
         }
     }
@@ -471,19 +471,19 @@ void process_chunk_intermediate_sp(const rct::key &wallet_spend_pubkey,
 
             try
             {
-                if (try_get_intermediate_enote_record_v1(
-                    contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
-                    wallet_spend_pubkey,
-                    xk_unlock_amounts,
-                    xk_find_received,
-                    s_generate_address,
-                    cipher_context,
-                    new_enote_record))
-                {
-                    process_chunk_new_intermediate_record_update_sp(new_enote_record,
-                        contextual_basic_record.origin_context(),
-                        found_enote_records_inout);
-                }
+                if (!try_get_intermediate_enote_record_v1(
+                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
+                        wallet_spend_pubkey,
+                        xk_unlock_amounts,
+                        xk_find_received,
+                        s_generate_address,
+                        cipher_context,
+                        new_enote_record))
+                    continue;
+
+                process_chunk_new_intermediate_record_update_sp(new_enote_record,
+                    contextual_basic_record.origin_context(),
+                    found_enote_records_inout);
             } catch (...) {}
         }
     }
@@ -538,19 +538,19 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
 
             try
             {
-                if (try_get_legacy_enote_record(
-                    contextual_basic_record.get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
-                    legacy_base_spend_pubkey,
-                    legacy_spend_privkey,
-                    legacy_view_privkey,
-                    new_enote_record))
-                {
-                    process_chunk_new_record_update_legacy(new_enote_record,
-                        contextual_basic_record.origin_context(),
-                        chunk_contextual_key_images,
-                        found_enote_records_inout,
-                        found_spent_key_images_inout);
-                }
+                if (!try_get_legacy_enote_record(
+                        contextual_basic_record.get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
+                        legacy_base_spend_pubkey,
+                        legacy_spend_privkey,
+                        legacy_view_privkey,
+                        new_enote_record))
+                    continue;
+
+                process_chunk_new_record_update_legacy(new_enote_record,
+                    contextual_basic_record.origin_context(),
+                    chunk_contextual_key_images,
+                    found_enote_records_inout,
+                    found_spent_key_images_inout);
             } catch (...) {}
         }
     }
@@ -617,23 +617,23 @@ void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
 
             try
             {
-                if (try_get_enote_record_v1_plain(
-                    contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
-                    wallet_spend_pubkey,
-                    k_view_balance,
-                    xk_unlock_amounts,
-                    xk_find_received,
-                    s_generate_address,
-                    cipher_context,
-                    new_enote_record))
-                {
-                    process_chunk_new_record_update_sp(new_enote_record,
-                        contextual_basic_record.origin_context(),
-                        chunk_contextual_key_images,
-                        found_enote_records_inout,
-                        found_spent_key_images_inout,
-                        txs_have_spent_enotes);
-                }
+                if (!try_get_enote_record_v1_plain(
+                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
+                        wallet_spend_pubkey,
+                        k_view_balance,
+                        xk_unlock_amounts,
+                        xk_find_received,
+                        s_generate_address,
+                        cipher_context,
+                        new_enote_record))
+                    continue;
+
+                process_chunk_new_record_update_sp(new_enote_record,
+                    contextual_basic_record.origin_context(),
+                    chunk_contextual_key_images,
+                    found_enote_records_inout,
+                    found_spent_key_images_inout,
+                    txs_have_spent_enotes);
             } catch (...) {}
         }
     }
@@ -660,29 +660,29 @@ void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
 
                 try
                 {
-                    if (try_get_enote_record_v1_selfsend(
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record.m_enote,
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
-                            .m_enote_ephemeral_pubkey,
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
-                            .m_input_context,
-                        wallet_spend_pubkey,
-                        k_view_balance,
-                        s_generate_address,
-                        new_enote_record))
-                    {
-                        process_chunk_new_record_update_sp(new_enote_record,
-                            contextual_basic_record.origin_context(),
-                            chunk_contextual_key_images,
-                            found_enote_records_inout,
-                            found_spent_key_images_inout,
-                            txs_have_spent_enotes_selfsend_passthrough);
+                    if (!try_get_enote_record_v1_selfsend(
+                            contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record.m_enote,
+                            contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
+                                .m_enote_ephemeral_pubkey,
+                            contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
+                                .m_input_context,
+                            wallet_spend_pubkey,
+                            k_view_balance,
+                            s_generate_address,
+                            new_enote_record))
+                        continue;
 
-                        // record all legacy key images attached to this self-spend for the caller to deal with
-                        collect_legacy_key_images_from_tx(contextual_basic_record.origin_context().m_transaction_id,
-                            chunk_contextual_key_images,
-                            legacy_key_images_in_sp_selfspends_inout);
-                    }
+                    process_chunk_new_record_update_sp(new_enote_record,
+                        contextual_basic_record.origin_context(),
+                        chunk_contextual_key_images,
+                        found_enote_records_inout,
+                        found_spent_key_images_inout,
+                        txs_have_spent_enotes_selfsend_passthrough);
+
+                    // record all legacy key images attached to this self-spend for the caller to deal with
+                    collect_legacy_key_images_from_tx(contextual_basic_record.origin_context().m_transaction_id,
+                        chunk_contextual_key_images,
+                        legacy_key_images_in_sp_selfspends_inout);
                 } catch (...) {}
             }
         }

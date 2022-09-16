@@ -437,19 +437,17 @@ void make_v1_membership_proof_v1(const std::size_t ref_set_decomp_n,
     /// prepare to make proof
 
     // find the real referenced enote
-    std::size_t real_spend_index_in_set{};  //l
-    bool found_real{false};
+    std::size_t real_spend_index_in_set{ref_set_size};  //l
 
     for (std::size_t ref_index{0}; ref_index < ref_set_size; ++ref_index)
     {
         if (real_Q == referenced_enotes_squashed[ref_index])  //Q[l]
         {
             real_spend_index_in_set = ref_index;
-            found_real = true;
             break;
         }
     }
-    CHECK_AND_ASSERT_THROW_MES(found_real,
+    CHECK_AND_ASSERT_THROW_MES(real_spend_index_in_set < ref_set_size,
         "make membership proof: could not find enote for membership proof in reference set.");
 
     // proof offset (only one in the squashed enote model)
@@ -661,10 +659,7 @@ SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_for_enote_at_pos_v1(co
     SpMembershipProofPrepV1 proof_prep;
 
     // 1) flat index mapper for mock-up
-    const SpRefSetIndexMapperFlat flat_index_mapper{
-            0,
-            ledger_context.max_sp_enote_index()
-        };
+    const SpRefSetIndexMapperFlat flat_index_mapper{0, ledger_context.max_sp_enote_index()};
 
     // 2) generator seed
     rct::key generator_seed;
