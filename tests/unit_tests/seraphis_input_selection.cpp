@@ -29,6 +29,7 @@
 #include "crypto/crypto.h"
 #include "misc_log_ex.h"
 #include "ringct/rctTypes.h"
+#include "seraphis/legacy_enote_types.h"
 #include "seraphis/tx_contextual_enote_record_types.h"
 #include "seraphis/tx_contextual_enote_record_utils.h"
 #include "seraphis/tx_enote_record_types.h"
@@ -47,14 +48,31 @@
 
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void prepare_enote_store(const std::vector<rct::xmr_amount> &amounts,
+static void prepare_enote_store(const std::vector<rct::xmr_amount> &legacy_amounts,
+    const std::vector<rct::xmr_amount> &sp_amounts,
     sp::SpEnoteStoreMockSimpleV1 &enote_store_inout)
 {
-    for (const rct::xmr_amount amount : amounts)
+    for (const rct::xmr_amount legacy_amount : legacy_amounts)
+    {
+        sp::LegacyEnoteRecord temp_record{};
+        sp::LegacyEnoteV4 temp_enote;
+        temp_enote.gen();
+        temp_record.m_enote = temp_enote;
+        temp_record.m_amount = legacy_amount;
+        temp_record.m_key_image = rct::rct2ki(rct::pkGen());
+
+        enote_store_inout.add_record(
+                sp::LegacyContextualEnoteRecordV1{
+                    .m_record = temp_record
+                }
+            );
+    }
+
+    for (const rct::xmr_amount sp_amount : sp_amounts)
     {
         sp::SpEnoteRecordV1 temp_record{};
         temp_record.m_enote.gen();
-        temp_record.m_amount = amount;
+        temp_record.m_amount = sp_amount;
         temp_record.m_key_image = rct::rct2ki(rct::pkGen());
 
         enote_store_inout.add_record(
@@ -66,21 +84,24 @@ static void prepare_enote_store(const std::vector<rct::xmr_amount> &amounts,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amounts,
+static void input_selection_test_full(const std::vector<rct::xmr_amount> &stored_legacy_amounts,
+    const std::vector<rct::xmr_amount> &stored_sp_amounts,
     const std::vector<rct::xmr_amount> &output_amounts,
     const std::size_t num_additional_outputs_with_change,
     const rct::xmr_amount fee_per_tx_weight,
     const sp::FeeCalculator &tx_fee_calculator,
     const std::size_t max_inputs_allowed,
-    const std::vector<rct::xmr_amount> &input_amounts_expected,
+    const std::vector<rct::xmr_amount> &input_legacy_amounts_expected,
+    const std::vector<rct::xmr_amount> &input_sp_amounts_expected,
     const bool expected_result)
 {
     CHECK_AND_ASSERT_THROW_MES(output_amounts.size() > 0, "insuffient output amounts");
-    CHECK_AND_ASSERT_THROW_MES(input_amounts_expected.size() <= max_inputs_allowed, "too many expected input amounts");
+    CHECK_AND_ASSERT_THROW_MES(input_legacy_amounts_expected.size() + input_sp_amounts_expected.size() <= max_inputs_allowed,
+        "too many expected input amounts");
 
     // prepare enote storage (inputs will be selected from this)
     sp::SpEnoteStoreMockSimpleV1 enote_store;
-    prepare_enote_store(stored_amounts, enote_store);
+    prepare_enote_store(stored_legacy_amounts, stored_sp_amounts, enote_store);
 
     // make input selector
     const sp::InputSelectorMockSimpleV1 input_selector{enote_store};
@@ -111,7 +132,6 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
     std::list<sp::SpContextualEnoteRecordV1> sp_contextual_inputs;
 
     split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
-    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
     // check results
 
@@ -123,24 +143,35 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
         return;
 
     // 3. inputs selected have expected amounts in expected order
-    CHECK_AND_ASSERT_THROW_MES(sp_contextual_inputs.size() == input_amounts_expected.size(),
-        "selected inputs quantity mismatch");
+    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == input_legacy_amounts_expected.size(),
+        "selected legacy inputs quantity mismatch");
+    CHECK_AND_ASSERT_THROW_MES(sp_contextual_inputs.size() == input_sp_amounts_expected.size(),
+        "selected sp inputs quantity mismatch");
 
     std::size_t input_index{0};
     boost::multiprecision::uint128_t total_input_amount{0};
-    for (const sp::SpContextualEnoteRecordV1 &input_selected : sp_contextual_inputs)
+    for (const sp::LegacyContextualEnoteRecordV1 &legacy_input_selected : legacy_contextual_inputs)
     {
-        CHECK_AND_ASSERT_THROW_MES(input_selected.get_amount() == input_amounts_expected[input_index],
-            "selected inputs expected amount mismatch");
+        CHECK_AND_ASSERT_THROW_MES(legacy_input_selected.get_amount() == input_legacy_amounts_expected[input_index],
+            "selected legacy inputs expected amount mismatch");
         ++input_index;
 
-        total_input_amount += input_selected.get_amount();
+        total_input_amount += legacy_input_selected.get_amount();
+    }
+    input_index = 0;
+    for (const sp::SpContextualEnoteRecordV1 &sp_input_selected : sp_contextual_inputs)
+    {
+        CHECK_AND_ASSERT_THROW_MES(sp_input_selected.get_amount() == input_sp_amounts_expected[input_index],
+            "selected sp inputs expected amount mismatch");
+        ++input_index;
+
+        total_input_amount += sp_input_selected.get_amount();
     }
 
     // 4. total input amount is sufficient to cover outputs + fee
 
     // a. test zero-change case
-    const std::size_t num_inputs{sp_contextual_inputs.size()};
+    const std::size_t num_inputs{legacy_contextual_inputs.size() + sp_contextual_inputs.size()};
     const std::size_t num_outputs_nochange{output_amounts.size()};
     const rct::xmr_amount fee_nochange{
             tx_fee_calculator.get_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_nochange)
@@ -169,6 +200,41 @@ static void input_selection_test(const std::vector<rct::xmr_amount> &stored_amou
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void input_selection_test_single(const std::vector<rct::xmr_amount> &stored_amounts,
+    const std::vector<rct::xmr_amount> &output_amounts,
+    const std::size_t num_additional_outputs_with_change,
+    const rct::xmr_amount fee_per_tx_weight,
+    const sp::FeeCalculator &tx_fee_calculator,
+    const std::size_t max_inputs_allowed,
+    const std::vector<rct::xmr_amount> &input_amounts_expected,
+    const bool expected_result)
+{
+    // test legacy-only inputs
+    input_selection_test_full(stored_amounts,
+        {},
+        output_amounts,
+        num_additional_outputs_with_change,
+        fee_per_tx_weight,
+        tx_fee_calculator,
+        max_inputs_allowed,
+        input_amounts_expected,
+        {},
+        expected_result);
+
+    // test seraphis-only inputs
+    input_selection_test_full({},
+        stored_amounts,
+        output_amounts,
+        num_additional_outputs_with_change,
+        fee_per_tx_weight,
+        tx_fee_calculator,
+        max_inputs_allowed,
+        {},
+        input_amounts_expected,
+        expected_result);
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis_input_selection, trivial)
 {
     //test(stored_enotes, out_amnts, +outs_w_change, fee/wght, fee_calc, max_ins, expect_in_amnts, result)
@@ -177,34 +243,34 @@ TEST(seraphis_input_selection, trivial)
     const sp::FeeCalculatorMockTrivial fee_calculator;
 
     // one input, one output
-    EXPECT_NO_THROW(input_selection_test({2}, {1}, 0, 1, fee_calculator, 1, {2}, true));
+    EXPECT_NO_THROW(input_selection_test_single({2}, {1}, 0, 1, fee_calculator, 1, {2}, true));
 
     // one input, two outputs
-    EXPECT_NO_THROW(input_selection_test({3}, {1, 1}, 0, 1, fee_calculator, 1, {3}, true));
+    EXPECT_NO_THROW(input_selection_test_single({3}, {1, 1}, 0, 1, fee_calculator, 1, {3}, true));
 
     // two inputs, one output
-    EXPECT_NO_THROW(input_selection_test({1, 1}, {1}, 0, 1, fee_calculator, 2, {1, 1}, true));
+    EXPECT_NO_THROW(input_selection_test_single({1, 1}, {1}, 0, 1, fee_calculator, 2, {1, 1}, true));
 
     // two inputs, two outputs
-    EXPECT_NO_THROW(input_selection_test({2, 1}, {1, 1}, 0, 1, fee_calculator, 2, {1, 2}, true));
+    EXPECT_NO_THROW(input_selection_test_single({2, 1}, {1, 1}, 0, 1, fee_calculator, 2, {1, 2}, true));
 
     // search for input
-    EXPECT_NO_THROW(input_selection_test({0, 0, 2, 1}, {1}, 0, 1, fee_calculator, 2, {2}, true));
+    EXPECT_NO_THROW(input_selection_test_single({0, 0, 2, 1}, {1}, 0, 1, fee_calculator, 2, {2}, true));
 
     // search for input (overfill the amount)
-    EXPECT_NO_THROW(input_selection_test({0, 0, 1, 2}, {1}, 0, 1, fee_calculator, 2, {1, 2}, true));
+    EXPECT_NO_THROW(input_selection_test_single({0, 0, 1, 2}, {1}, 0, 1, fee_calculator, 2, {1, 2}, true));
 
     // search for input (overfill the amount)
-    EXPECT_NO_THROW(input_selection_test({0, 0, 1, 3}, {1}, 0, 1, fee_calculator, 2, {1, 3}, true));
+    EXPECT_NO_THROW(input_selection_test_single({0, 0, 1, 3}, {1}, 0, 1, fee_calculator, 2, {1, 3}, true));
 
     // no solution: max inputs limit
-    EXPECT_NO_THROW(input_selection_test({1, 1}, {1}, 0, 1, fee_calculator, 1, {}, false));
+    EXPECT_NO_THROW(input_selection_test_single({1, 1}, {1}, 0, 1, fee_calculator, 1, {}, false));
 
     // no solution: insufficient funds
-    EXPECT_NO_THROW(input_selection_test({0, 1}, {1}, 0, 1, fee_calculator, 2, {}, false));
+    EXPECT_NO_THROW(input_selection_test_single({0, 1}, {1}, 0, 1, fee_calculator, 2, {}, false));
 
     // replacement: max inputs constrain which can be selected
-    EXPECT_NO_THROW(input_selection_test({0, 2, 1, 1, 3}, {3}, 0, 1, fee_calculator, 2, {2, 3}, true));
+    EXPECT_NO_THROW(input_selection_test_single({0, 2, 1, 1, 3}, {3}, 0, 1, fee_calculator, 2, {2, 3}, true));
 }
 //-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis_input_selection, simple)
@@ -215,12 +281,12 @@ TEST(seraphis_input_selection, simple)
     const sp::FeeCalculatorMockSimple fee_calculator;
 
     // one input, one output
-    EXPECT_NO_THROW(input_selection_test({1}, {0}, 1, 1, fee_calculator, 1, {}, false));
-    EXPECT_NO_THROW(input_selection_test({2}, {0}, 1, 1, fee_calculator, 1, {2}, true));
+    EXPECT_NO_THROW(input_selection_test_single({1}, {0}, 1, 1, fee_calculator, 1, {}, false));
+    EXPECT_NO_THROW(input_selection_test_single({2}, {0}, 1, 1, fee_calculator, 1, {2}, true));
 
     // one input, one output (with change)
-    EXPECT_NO_THROW(input_selection_test({3}, {0}, 1, 1, fee_calculator, 1, {}, false));
-    EXPECT_NO_THROW(input_selection_test({4}, {0}, 1, 1, fee_calculator, 1, {4}, true));
+    EXPECT_NO_THROW(input_selection_test_single({3}, {0}, 1, 1, fee_calculator, 1, {}, false));
+    EXPECT_NO_THROW(input_selection_test_single({4}, {0}, 1, 1, fee_calculator, 1, {4}, true));
 
     // IMPORTANT FAILURE CASE
     // A solution exists but won't be found (requires a brute force search that wasn't implemented).
@@ -231,7 +297,7 @@ TEST(seraphis_input_selection, simple)
     // 2. 3 - 2 = change of '1', so try the 'with change' pass
     //    a. the other 'no change' pass solution is '2', which would permit a zero-change final solution
     // 3. the 'with change' solution is '3', but 'with change' solutions must have non-zero change, so we failed
-    EXPECT_NO_THROW(input_selection_test({3, 2}, {0}, 1, 1, fee_calculator, 1, {}, false));
+    EXPECT_NO_THROW(input_selection_test_single({3, 2}, {0}, 1, 1, fee_calculator, 1, {}, false));
 }
 //-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis_input_selection, inputs_stepped)
@@ -248,17 +314,17 @@ TEST(seraphis_input_selection, inputs_stepped)
     // fee [2 in, 1 out, 3 weight]: 6
     // fee [3 in, 1 out, 3 weight]: 6
     // fee [4 in, 1 out, 3 weight]: 9
-    EXPECT_NO_THROW(input_selection_test({2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 2, {}, false));  //input limit
-    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 3, {2, 2, 2}, true));
+    EXPECT_NO_THROW(input_selection_test_single({2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 2, {}, false));  //input limit
+    EXPECT_NO_THROW(input_selection_test_single({1, 1, 2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 3, {2, 2, 2}, true));
 
     // don't fall back on accumulation if there is a simpler solution
-    EXPECT_NO_THROW(input_selection_test({2, 2, 2, 10}, {0}, 1, 3, fee_calculator_2step, 3, {10}, true));
+    EXPECT_NO_THROW(input_selection_test_single({2, 2, 2, 10}, {0}, 1, 3, fee_calculator_2step, 3, {10}, true));
 
     // removal: an included input gets excluded when differential fee jumps up
-    EXPECT_NO_THROW(input_selection_test({1, 2, 5}, {2}, 1, 3, fee_calculator_2step, 3, {5}, true));
+    EXPECT_NO_THROW(input_selection_test_single({1, 2, 5}, {2}, 1, 3, fee_calculator_2step, 3, {5}, true));
 
     // need change output: excluded input gets re-selected to satisfy change amount
-    EXPECT_NO_THROW(input_selection_test({1, 2, 5, 5}, {1}, 1, 3, fee_calculator_2step, 3, {2, 5, 5}, true));
+    EXPECT_NO_THROW(input_selection_test_single({1, 2, 5, 5}, {1}, 1, 3, fee_calculator_2step, 3, {2, 5, 5}, true));
 
     // replacement: an included input gets replaced by an excluded input
     // fee [0 in, 1 out, 3 weight]: 3
@@ -267,6 +333,23 @@ TEST(seraphis_input_selection, inputs_stepped)
     // fee [3 in, 1 out, 3 weight]: 6
     // fee [4 in, 1 out, 3 weight]: 6
     // {1} -> {1, 1} -> {1, 1} (exclude {2, 3}) -> {1, 3} (exclude {2, 1}) -> {3, 2} (exclude {1, 1})
-    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 3}, {2}, 1, 3, fee_calculator_3step, 3, {2, 3}, true));
+    EXPECT_NO_THROW(input_selection_test_single({1, 1, 2, 3}, {2}, 1, 3, fee_calculator_3step, 3, {2, 3}, true));
+}
+//-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_input_selection, dual_type)
+{
+    const sp::FeeCalculatorMockSimple fee_calculator;
+
+    // random
+    input_selection_test_full({0, 1, 0, 4, 2, 3, 10, 2},
+        {5, 2, 3, 6, 1, 1, 5},
+        {24},
+        1,
+        1,
+        fee_calculator,
+        5,
+        {4, 10},
+        {5, 5, 6},
+        true);
 }
 //-------------------------------------------------------------------------------------------------------------------

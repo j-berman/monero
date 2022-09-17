@@ -99,9 +99,15 @@ static bool onchain_sp_enote_is_locked(const std::uint64_t enote_origin_height,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+void SpEnoteStoreMockSimpleV1::add_record(const LegacyContextualEnoteRecordV1 &new_record)
+{
+    m_legacy_contextual_enote_records.emplace_back(new_record);
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockSimpleV1::add_record(const SpContextualEnoteRecordV1 &new_record)
 {
-    m_contextual_enote_records.emplace_back(new_record);
+    m_sp_contextual_enote_records.emplace_back(new_record);
 }
 //-------------------------------------------------------------------------------------------------------------------
 SpEnoteStoreMockV1::SpEnoteStoreMockV1(const std::uint64_t refresh_height,

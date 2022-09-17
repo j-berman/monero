@@ -74,8 +74,38 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
     const input_set_tracker_t &already_excluded_inputs,
     ContextualRecordVariant &selected_input_out) const
 {
-    // note: the simple input selector only has sp contextual records
-    for (const SpContextualEnoteRecordV1 &contextual_enote_record : m_enote_store.m_contextual_enote_records)
+    // try to select a legacy input
+    for (const LegacyContextualEnoteRecordV1 &contextual_enote_record : m_enote_store.m_legacy_contextual_enote_records)
+    {
+        // only consider unspent enotes
+        if (!contextual_enote_record.has_spent_status(SpEnoteSpentStatus::UNSPENT))
+            continue;
+
+        // prepare record finder
+        auto record_finder =
+            [&contextual_enote_record](const std::pair<rct::xmr_amount, ContextualRecordVariant> &comparison_record) -> bool
+            {
+                if (!comparison_record.second.is_type<LegacyContextualEnoteRecordV1>())
+                    return false;
+
+                return LegacyContextualEnoteRecordV1::same_destination(contextual_enote_record,
+                    comparison_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>());
+            };
+
+        // ignore already added legacy inputs
+        if (pred_has_match(already_added_inputs, InputSelectionType::LEGACY, record_finder))
+            continue;
+
+        // ignore already excluded legacy inputs
+        if (pred_has_match(already_excluded_inputs, InputSelectionType::LEGACY, record_finder))
+            continue;
+
+        selected_input_out = contextual_enote_record;
+        return true;
+    }
+
+    // try to select a seraphis input
+    for (const SpContextualEnoteRecordV1 &contextual_enote_record : m_enote_store.m_sp_contextual_enote_records)
     {
         // only consider unspent enotes
         if (!contextual_enote_record.has_spent_status(SpEnoteSpentStatus::UNSPENT))
