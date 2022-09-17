@@ -90,7 +90,7 @@ void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_messag
     transcript.append("reference_set_indices", reference_set_indices);
 
     sp_hash_to_32(transcript, message_out.bytes);
-}
+}/*
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_legacy_input_proposal_semantics_v1(const LegacyInputProposalV1 &input_proposal,
     const rct::key &wallet_legacy_spend_pubkey)
@@ -614,6 +614,6 @@ void make_mock_legacy_ring_signature_preps_for_inputs_v1(
                         ledger_context)
             );
     }
-}
+}*/
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

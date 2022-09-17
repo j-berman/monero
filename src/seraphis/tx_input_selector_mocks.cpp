@@ -37,6 +37,7 @@
 #include "tx_input_selection.h"
 
 //third party headers
+#include "boost/container/map.hpp"
 #include "boost/multiprecision/cpp_int.hpp"
 
 //standard headers
@@ -49,16 +50,30 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static bool pred_has_match(const boost::container::multimap<rct::xmr_amount, ContextualRecordVariant> &input_set,
+    const std::function<bool(const std::pair<rct::xmr_amount, ContextualRecordVariant> &comparison_record)> &predicate)
+{
+    return std::find_if(input_set.begin(), input_set.end(), predicate) != input_set.end();
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static bool pred_has_match(const input_set_tracker_t &input_set,
+    const InputSelectionType input_type,
+    const std::function<bool(const std::pair<rct::xmr_amount, ContextualRecordVariant> &comparison_record)> &predicate)
+{
+    if (input_set.find(input_type) == input_set.end())
+        return false;
+
+    return pred_has_match(input_set.at(input_type), predicate);
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision::uint128_t desired_total_amount,
     const input_set_tracker_t &already_added_inputs,
     const input_set_tracker_t &already_excluded_inputs,
     ContextualRecordVariant &selected_input_out) const
 {
-    CHECK_AND_ASSERT_THROW_MES(already_added_inputs.find(InputSelectionType::SERAPHIS) != already_added_inputs.end(),
-        "try select input (mock simple v1): seraphis input type doesn't exist in added inputs.");
-    CHECK_AND_ASSERT_THROW_MES(already_excluded_inputs.find(InputSelectionType::SERAPHIS) != already_excluded_inputs.end(),
-        "try select input (mock simple v1): seraphis input type doesn't exist in excluded inputs.");
-
     // note: the simple input selector only has sp contextual records
     for (const SpContextualEnoteRecordV1 &contextual_enote_record : m_enote_store.m_contextual_enote_records)
     {
@@ -78,17 +93,11 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
             };
 
         // ignore already added seraphis inputs
-        if (std::find_if(already_added_inputs.at(InputSelectionType::SERAPHIS).begin(),
-                    already_added_inputs.at(InputSelectionType::SERAPHIS).end(),
-                    record_finder) !=
-                already_added_inputs.at(InputSelectionType::SERAPHIS).end())
+        if (pred_has_match(already_added_inputs, InputSelectionType::SERAPHIS, record_finder))
             continue;
 
         // ignore already excluded seraphis inputs
-        if (std::find_if(already_excluded_inputs.at(InputSelectionType::SERAPHIS).begin(),
-                    already_excluded_inputs.at(InputSelectionType::SERAPHIS).end(),
-                    record_finder) !=
-                already_excluded_inputs.at(InputSelectionType::SERAPHIS).end())
+        if (pred_has_match(already_excluded_inputs, InputSelectionType::SERAPHIS, record_finder))
             continue;
 
         selected_input_out = contextual_enote_record;
@@ -103,15 +112,6 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
     const input_set_tracker_t &already_excluded_inputs,
     ContextualRecordVariant &selected_input_out) const
 {
-    CHECK_AND_ASSERT_THROW_MES(already_added_inputs.find(InputSelectionType::LEGACY) != already_added_inputs.end(),
-        "try select input (mock v1): legacy input type doesn't exist in added inputs.");
-    CHECK_AND_ASSERT_THROW_MES(already_excluded_inputs.find(InputSelectionType::LEGACY) != already_excluded_inputs.end(),
-        "try select input (mock v1): legacy input type doesn't exist in excluded inputs.");
-    CHECK_AND_ASSERT_THROW_MES(already_added_inputs.find(InputSelectionType::SERAPHIS) != already_added_inputs.end(),
-        "try select input (mock v1): seraphis input type doesn't exist in added inputs.");
-    CHECK_AND_ASSERT_THROW_MES(already_excluded_inputs.find(InputSelectionType::SERAPHIS) != already_excluded_inputs.end(),
-        "try select input (mock v1): seraphis input type doesn't exist in excluded inputs.");
-
     // 1. try to select from legacy enotes
     const std::unordered_map<rct::key, LegacyContextualEnoteRecordV1> &mapped_legacy_contextual_enote_records{
             m_enote_store.m_mapped_legacy_contextual_enote_records
@@ -134,17 +134,11 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
             };
 
         // ignore already added legacy inputs
-        if (std::find_if(already_added_inputs.at(InputSelectionType::LEGACY).begin(),
-                    already_added_inputs.at(InputSelectionType::LEGACY).end(),
-                    record_finder) !=
-                already_added_inputs.at(InputSelectionType::LEGACY).end())
+        if (pred_has_match(already_added_inputs, InputSelectionType::LEGACY, record_finder))
             continue;
 
         // ignore already excluded legacy inputs
-        if (std::find_if(already_excluded_inputs.at(InputSelectionType::LEGACY).begin(),
-                    already_excluded_inputs.at(InputSelectionType::LEGACY).end(),
-                    record_finder) !=
-                already_excluded_inputs.at(InputSelectionType::LEGACY).end())
+        if (pred_has_match(already_excluded_inputs, InputSelectionType::LEGACY, record_finder))
             continue;
 
         // if this legacy enote shares a onetime address with any other legacy enotes, only proceed if this one
@@ -198,17 +192,11 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
             };
 
         // ignore already added seraphis inputs
-        if (std::find_if(already_added_inputs.at(InputSelectionType::SERAPHIS).begin(),
-                    already_added_inputs.at(InputSelectionType::SERAPHIS).end(),
-                    record_finder) !=
-                already_added_inputs.at(InputSelectionType::SERAPHIS).end())
+        if (pred_has_match(already_added_inputs, InputSelectionType::SERAPHIS, record_finder))
             continue;
 
         // ignore already excluded seraphis inputs
-        if (std::find_if(already_excluded_inputs.at(InputSelectionType::SERAPHIS).begin(),
-                    already_excluded_inputs.at(InputSelectionType::SERAPHIS).end(),
-                    record_finder) !=
-                already_excluded_inputs.at(InputSelectionType::SERAPHIS).end())
+        if (pred_has_match(already_excluded_inputs, InputSelectionType::SERAPHIS, record_finder))
             continue;
 
         selected_input_out = mapped_enote_record.second;

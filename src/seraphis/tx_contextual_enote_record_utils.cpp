@@ -89,32 +89,33 @@ void split_selected_input_set(const input_set_tracker_t &input_set,
     std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_records_out,
     std::list<SpContextualEnoteRecordV1> &sp_contextual_records_out)
 {
-    CHECK_AND_ASSERT_THROW_MES(input_set.find(InputSelectionType::LEGACY) != input_set.end(),
-        "split selected input set: legacy input type doesn't exist in input set.");
-    CHECK_AND_ASSERT_THROW_MES(input_set.find(InputSelectionType::SERAPHIS) != input_set.end(),
-        "split selected input set: seraphis input type doesn't exist in input set.");
-
     legacy_contextual_records_out.clear();
     sp_contextual_records_out.clear();
 
-    for (const auto &mapped_contextual_enote_record : input_set.at(InputSelectionType::LEGACY))
+    if (input_set.find(InputSelectionType::LEGACY) != input_set.end())
     {
-        CHECK_AND_ASSERT_THROW_MES(mapped_contextual_enote_record.second.is_type<LegacyContextualEnoteRecordV1>(),
-            "splitting an input set (legacy): record is supposed to be legacy but is not.");
+        for (const auto &mapped_contextual_enote_record : input_set.at(InputSelectionType::LEGACY))
+        {
+            CHECK_AND_ASSERT_THROW_MES(mapped_contextual_enote_record.second.is_type<LegacyContextualEnoteRecordV1>(),
+                "splitting an input set (legacy): record is supposed to be legacy but is not.");
 
-        legacy_contextual_records_out.emplace_back(
-                mapped_contextual_enote_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>()
-            );
+            legacy_contextual_records_out.emplace_back(
+                    mapped_contextual_enote_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>()
+                );
+        }
     }
 
-    for (const auto &mapped_contextual_enote_record : input_set.at(InputSelectionType::SERAPHIS))
+    if (input_set.find(InputSelectionType::SERAPHIS) != input_set.end())
     {
-        CHECK_AND_ASSERT_THROW_MES(mapped_contextual_enote_record.second.is_type<SpContextualEnoteRecordV1>(),
-            "splitting an input set (legacy): record is supposed to be seraphis but is not.");
+        for (const auto &mapped_contextual_enote_record : input_set.at(InputSelectionType::SERAPHIS))
+        {
+            CHECK_AND_ASSERT_THROW_MES(mapped_contextual_enote_record.second.is_type<SpContextualEnoteRecordV1>(),
+                "splitting an input set (legacy): record is supposed to be seraphis but is not.");
 
-        sp_contextual_records_out.emplace_back(
-                mapped_contextual_enote_record.second.get_contextual_record<SpContextualEnoteRecordV1>()
-            );
+            sp_contextual_records_out.emplace_back(
+                    mapped_contextual_enote_record.second.get_contextual_record<SpContextualEnoteRecordV1>()
+                );
+        }
     }
 }
 //-------------------------------------------------------------------------------------------------------------------

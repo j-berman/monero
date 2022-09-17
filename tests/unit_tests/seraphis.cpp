@@ -278,7 +278,7 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
 {
     /// build a tx from base components
     using namespace sp;
-
+/*
     rct::xmr_amount raw_transaction_fee;
     CHECK_AND_ASSERT_THROW_MES(try_get_fee_value(discretized_transaction_fee, raw_transaction_fee),
         "SpTxSquashedV1 (unit test): tried to raw make tx with invalid discretized fee.");
@@ -420,7 +420,7 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
     make_seraphis_tx_squashed_v1(std::move(legacy_input_images), std::move(sp_input_images), std::move(outputs),
         std::move(balance_proof), std::move(tx_legacy_ring_signatures), std::move(tx_sp_image_proofs),
         std::move(tx_sp_membership_proofs), std::move(tx_supplement), discretized_transaction_fee, semantic_rules_version,
-        tx_out);
+        tx_out);*/
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -1126,7 +1126,7 @@ TEST(seraphis, discretized_fees)
     discretized_fee.m_fee_level = static_cast<sp::discretized_fee_level_t>(-1);
     EXPECT_FALSE(sp::try_get_fee_value(discretized_fee, fee_value));
 }
-//-------------------------------------------------------------------------------------------------------------------
+/*/-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis, txtype_squashed_v1)
 {
     // demo making SpTxTypeSquasedV1 with raw tx builder API
@@ -1198,3 +1198,4 @@ TEST(seraphis, txtype_squashed_v1)
     EXPECT_FALSE(sp::validate_txs(tx_ptrs, tx_validation_context));
 }
 //-------------------------------------------------------------------------------------------------------------------
+*/

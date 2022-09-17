@@ -186,7 +186,7 @@ TEST(seraphis_input_selection, trivial)
     EXPECT_NO_THROW(input_selection_test({1, 1}, {1}, 0, 1, fee_calculator, 2, {1, 1}, true));
 
     // two inputs, two outputs
-    EXPECT_NO_THROW(input_selection_test({2, 1}, {1, 1}, 0, 1, fee_calculator, 2, {2, 1}, true));
+    EXPECT_NO_THROW(input_selection_test({2, 1}, {1, 1}, 0, 1, fee_calculator, 2, {1, 2}, true));
 
     // search for input
     EXPECT_NO_THROW(input_selection_test({0, 0, 2, 1}, {1}, 0, 1, fee_calculator, 2, {2}, true));
@@ -252,13 +252,13 @@ TEST(seraphis_input_selection, inputs_stepped)
     EXPECT_NO_THROW(input_selection_test({1, 1, 2, 2, 2}, {0}, 1, 3, fee_calculator_2step, 3, {2, 2, 2}, true));
 
     // don't fall back on accumulation if there is a simpler solution
-    EXPECT_NO_THROW(input_selection_test({2, 2, 2, 10}, {0}, 1, 3, fee_calculator_2step, 3, {2, 10}, true));
+    EXPECT_NO_THROW(input_selection_test({2, 2, 2, 10}, {0}, 1, 3, fee_calculator_2step, 3, {10}, true));
 
     // removal: an included input gets excluded when differential fee jumps up
     EXPECT_NO_THROW(input_selection_test({1, 2, 5}, {2}, 1, 3, fee_calculator_2step, 3, {5}, true));
 
     // need change output: excluded input gets re-selected to satisfy change amount
-    EXPECT_NO_THROW(input_selection_test({1, 2, 5, 5}, {1}, 1, 3, fee_calculator_2step, 3, {5, 5, 2}, true));
+    EXPECT_NO_THROW(input_selection_test({1, 2, 5, 5}, {1}, 1, 3, fee_calculator_2step, 3, {2, 5, 5}, true));
 
     // replacement: an included input gets replaced by an excluded input
     // fee [0 in, 1 out, 3 weight]: 3
@@ -267,6 +267,6 @@ TEST(seraphis_input_selection, inputs_stepped)
     // fee [3 in, 1 out, 3 weight]: 6
     // fee [4 in, 1 out, 3 weight]: 6
     // {1} -> {1, 1} -> {1, 1} (exclude {2, 3}) -> {1, 3} (exclude {2, 1}) -> {3, 2} (exclude {1, 1})
-    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 3}, {2}, 1, 3, fee_calculator_3step, 3, {3, 2}, true));
+    EXPECT_NO_THROW(input_selection_test({1, 1, 2, 3}, {2}, 1, 3, fee_calculator_3step, 3, {2, 3}, true));
 }
 //-------------------------------------------------------------------------------------------------------------------
