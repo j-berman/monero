@@ -560,7 +560,7 @@ static bool try_update_excluded_inputs_selection_v1(const boost::multiprecision:
 
     // add the new input to the excluded pile - we will try to move it into the added pile in later passthroughs
     excluded_inputs_inout[input_selection_type(requested_input)].insert(
-            {requested_input.get_amount(), std::move(requested_input)}
+            input_set_tracker_t::mapped_type::value_type{requested_input.get_amount(), std::move(requested_input)}
         );
 
     return true;
