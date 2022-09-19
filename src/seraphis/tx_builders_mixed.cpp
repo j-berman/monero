@@ -98,12 +98,12 @@ static bool same_key_image(const SpPartialInputV1 &partial_input, const SpInputP
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_proposal_message_v1(const std::string &version_string,
+void make_tx_proposal_prefix_v1(const std::string &version_string,
     const std::vector<crypto::key_image> &input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const rct::xmr_amount transaction_fee,
-    rct::key &proof_message_out)
+    rct::key &proposal_prefix_out)
 {
     static const std::string project_name{CRYPTONOTE_NAME};
 
@@ -123,37 +123,37 @@ void make_tx_proposal_message_v1(const std::string &version_string,
     transcript.append("tx_supplement", tx_supplement);
     transcript.append("transaction_fee", transaction_fee);
 
-    sp_hash_to_32(transcript, proof_message_out.bytes);
+    sp_hash_to_32(transcript, proposal_prefix_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_proposal_message_v1(const std::string &version_string,
+void make_tx_proposal_prefix_v1(const std::string &version_string,
     const std::vector<crypto::key_image> &input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const DiscretizedFee &transaction_fee,
-    rct::key &proof_message_out)
+    rct::key &proposal_prefix_out)
 {
     // get raw fee value
     rct::xmr_amount raw_transaction_fee;
     CHECK_AND_ASSERT_THROW_MES(try_get_fee_value(transaction_fee, raw_transaction_fee),
-        "make image proof message (v1): could not extract raw fee from discretized fee.");
+        "make image proposal prefix (v1): could not extract raw fee from discretized fee.");
 
-    // get proof message
-    make_tx_proposal_message_v1(version_string,
+    // get proposal prefix
+    make_tx_proposal_prefix_v1(version_string,
         input_key_images,
         output_enotes,
         tx_supplement,
         raw_transaction_fee,
-        proof_message_out);
+        proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_proposal_message_v1(const std::string &version_string,
+void make_tx_proposal_prefix_v1(const std::string &version_string,
     const std::vector<LegacyEnoteImageV2> &input_legacy_enote_images,
     const std::vector<SpEnoteImageV1> &input_sp_enote_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const DiscretizedFee &transaction_fee,
-    rct::key &proof_message_out)
+    rct::key &proposal_prefix_out)
 {
     // get key images from enote images
     std::vector<crypto::key_image> input_key_images;
@@ -165,21 +165,21 @@ void make_tx_proposal_message_v1(const std::string &version_string,
     for (const SpEnoteImageV1 &sp_enote_image : input_sp_enote_images)
         input_key_images.emplace_back(sp_enote_image.m_core.m_key_image);
 
-    // get proof message
-    make_tx_proposal_message_v1(version_string,
+    // get proposal prefix
+    make_tx_proposal_prefix_v1(version_string,
         input_key_images,
         output_enotes,
         tx_supplement,
         transaction_fee,
-        proof_message_out);
+        proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_proposal_message_v1(const std::string &version_string,
+void make_tx_proposal_prefix_v1(const std::string &version_string,
     const std::vector<crypto::key_image> &input_key_images,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
-    rct::key &proof_message_out)
+    rct::key &proposal_prefix_out)
 {
     // extract info from output proposals
     std::vector<SpEnoteV1> output_enotes;
@@ -196,22 +196,22 @@ void make_tx_proposal_message_v1(const std::string &version_string,
     // collect full memo
     finalize_tx_extra_v1(partial_memo, output_proposals, tx_supplement.m_tx_extra);
 
-    // get proof message
-    make_tx_proposal_message_v1(version_string,
+    // get proposal prefix
+    make_tx_proposal_prefix_v1(version_string,
         input_key_images,
         output_enotes,
         tx_supplement,
         transaction_fee,
-        proof_message_out);
+        proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_proposal_message_v1(const std::string &version_string,
+void make_tx_proposal_prefix_v1(const std::string &version_string,
     //todo: legacy partial inputs
     const std::vector<SpPartialInputV1> &partial_inputs,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
-    rct::key &proof_message_out)
+    rct::key &proposal_prefix_out)
 {
     // get key images from partial inputs
     std::vector<crypto::key_image> input_key_images;
@@ -220,22 +220,22 @@ void make_tx_proposal_message_v1(const std::string &version_string,
     for (const SpPartialInputV1 &partial_input : partial_inputs)
         input_key_images.emplace_back(partial_input.m_input_image.m_core.m_key_image);
 
-    // get proof message
-    make_tx_proposal_message_v1(version_string,
+    // get proposal prefix
+    make_tx_proposal_prefix_v1(version_string,
         input_key_images,
         output_proposals,
         partial_memo,
         transaction_fee,
-        proof_message_out);
+        proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_tx_proposal_message_v1(const std::string &version_string,
+void make_tx_proposal_prefix_v1(const std::string &version_string,
     //todo: legacy input proposals
     const std::vector<SpInputProposalV1> &input_proposals,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
-    rct::key &proof_message_out)
+    rct::key &proposal_prefix_out)
 {
     // get key images from input proposals
     std::vector<crypto::key_image> input_key_images;
@@ -244,13 +244,13 @@ void make_tx_proposal_message_v1(const std::string &version_string,
     for (const SpInputProposalV1 &input_proposal : input_proposals)
         input_key_images.emplace_back(input_proposal.m_core.m_key_image);
 
-    // get proof message
-    make_tx_proposal_message_v1(version_string,
+    // get proposal prefix
+    make_tx_proposal_prefix_v1(version_string,
         input_key_images,
         output_proposals,
         partial_memo,
         transaction_fee,
-        proof_message_out);
+        proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
@@ -688,7 +688,7 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
 
     // 6. check: inputs and proposal must have consistent proposal prefixes
     rct::key proposal_prefix;
-    make_tx_proposal_message_v1(version_string,
+    make_tx_proposal_prefix_v1(version_string,
         partial_inputs,
         output_proposals,
         partial_memo,

@@ -229,6 +229,70 @@ static void collect_legacy_key_images_from_tx(const rct::key &requested_tx_id,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static std::unordered_set<rct::key> process_chunk_full_sp_selfsend_pass(
+    const std::unordered_set<rct::key> &txs_have_spent_enotes,
+    const rct::key &wallet_spend_pubkey,
+    const crypto::secret_key &k_view_balance,
+    const crypto::secret_key &s_generate_address,
+    const std::unordered_map<rct::key, std::list<ContextualBasicRecordVariant>> &chunk_basic_records_per_tx,
+    const std::list<SpContextualKeyImageSetV1> &chunk_contextual_key_images,
+    std::unordered_map<crypto::key_image, SpContextualEnoteRecordV1> &found_enote_records_inout,
+    std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images_inout,
+    std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &legacy_key_images_in_sp_selfspends_inout)
+{
+    // for each tx in this chunk that spends one of our enotes, check if any of the basic records attached to that
+    //   tx contains a self-send enote owned by us
+    // if any self-send enotes identified here are also spent in txs in this chunk, return those tx's ids so this function
+    //   can be called in a loop (those txs will contain self-send enotes that need to be scanned, and may in turn be spent
+    //   in this chunk)
+    std::unordered_set<rct::key> txs_have_spent_enotes_fresh;
+    SpEnoteRecordV1 new_enote_record;
+
+    for (const rct::key &tx_with_spent_enotes : txs_have_spent_enotes)
+    {
+        CHECK_AND_ASSERT_THROW_MES(chunk_basic_records_per_tx.find(tx_with_spent_enotes) !=
+                chunk_basic_records_per_tx.end(),
+            "enote scan process chunk (self-send passthroughs): tx with spent enotes not found in records map (bug).");
+
+        for (const ContextualBasicRecordVariant &contextual_basic_record :
+            chunk_basic_records_per_tx.at(tx_with_spent_enotes))
+        {
+            if (!contextual_basic_record.is_type<SpContextualBasicEnoteRecordV1>())
+                continue;
+
+            try
+            {
+                if (!try_get_enote_record_v1_selfsend(
+                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record.m_enote,
+                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
+                            .m_enote_ephemeral_pubkey,
+                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
+                            .m_input_context,
+                        wallet_spend_pubkey,
+                        k_view_balance,
+                        s_generate_address,
+                        new_enote_record))
+                    continue;
+
+                process_chunk_new_record_update_sp(new_enote_record,
+                    contextual_basic_record.origin_context(),
+                    chunk_contextual_key_images,
+                    found_enote_records_inout,
+                    found_spent_key_images_inout,
+                    txs_have_spent_enotes_fresh);
+
+                // record all legacy key images attached to this self-spend for the caller to deal with
+                collect_legacy_key_images_from_tx(contextual_basic_record.origin_context().m_transaction_id,
+                    chunk_contextual_key_images,
+                    legacy_key_images_in_sp_selfspends_inout);
+            } catch (...) {}
+        }
+    }
+
+    return txs_have_spent_enotes_fresh;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 bool try_find_legacy_enotes_in_tx(const rct::key &legacy_base_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
@@ -639,56 +703,20 @@ void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
     }
 
     // 3. check for owned enotes in this chunk (self-send passes)
-    // - for each tx in this chunk that spends one of our enotes, check if any of the basic records attached to that
-    //   tx contains a self-send enote owned by us
-    // - loop in case any self-send enotes acquired in this chunk are also spent in this chunk
-    std::unordered_set<rct::key> txs_have_spent_enotes_selfsend_passthrough;
+    std::unordered_set<rct::key> txs_have_spent_enotes_selfsend_passthrough{std::move(txs_have_spent_enotes)};
 
-    while (txs_have_spent_enotes.size() > 0)
+    while (txs_have_spent_enotes_selfsend_passthrough.size() > 0)
     {
-        for (const rct::key &tx_with_spent_enotes : txs_have_spent_enotes)
-        {
-            CHECK_AND_ASSERT_THROW_MES(chunk_basic_records_per_tx.find(tx_with_spent_enotes) !=
-                    chunk_basic_records_per_tx.end(),
-                "enote scan process chunk (self-send passthroughs): tx with spent enotes not found in records map (bug).");
-
-            for (const ContextualBasicRecordVariant &contextual_basic_record :
-                chunk_basic_records_per_tx.at(tx_with_spent_enotes))
-            {
-                if (!contextual_basic_record.is_type<SpContextualBasicEnoteRecordV1>())
-                    continue;
-
-                try
-                {
-                    if (!try_get_enote_record_v1_selfsend(
-                            contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record.m_enote,
-                            contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
-                                .m_enote_ephemeral_pubkey,
-                            contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
-                                .m_input_context,
-                            wallet_spend_pubkey,
-                            k_view_balance,
-                            s_generate_address,
-                            new_enote_record))
-                        continue;
-
-                    process_chunk_new_record_update_sp(new_enote_record,
-                        contextual_basic_record.origin_context(),
-                        chunk_contextual_key_images,
-                        found_enote_records_inout,
-                        found_spent_key_images_inout,
-                        txs_have_spent_enotes_selfsend_passthrough);
-
-                    // record all legacy key images attached to this self-spend for the caller to deal with
-                    collect_legacy_key_images_from_tx(contextual_basic_record.origin_context().m_transaction_id,
-                        chunk_contextual_key_images,
-                        legacy_key_images_in_sp_selfspends_inout);
-                } catch (...) {}
-            }
-        }
-
-        txs_have_spent_enotes = std::move(txs_have_spent_enotes_selfsend_passthrough);
-        txs_have_spent_enotes_selfsend_passthrough.clear();
+        txs_have_spent_enotes_selfsend_passthrough =
+            process_chunk_full_sp_selfsend_pass(txs_have_spent_enotes_selfsend_passthrough,
+                wallet_spend_pubkey,
+                k_view_balance,
+                s_generate_address,
+                chunk_basic_records_per_tx,
+                chunk_contextual_key_images,
+                found_enote_records_inout,
+                found_spent_key_images_inout,
+                legacy_key_images_in_sp_selfspends_inout);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------

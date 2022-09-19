@@ -242,13 +242,13 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
 *   - check Seraphis composition proofs
 * param: legacy_ring_signatures -
 * param: legacy_input_images -
-* param: tx_proposal_message -
+* param: tx_proposal_prefix -
 * param: tx_validation_context -
 * return: true/false on validation result
 */
 bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
     const std::vector<LegacyEnoteImageV2> &legacy_input_images,
-    const rct::key &tx_proposal_message,
+    const rct::key &tx_proposal_prefix,
     const TxValidationContext &tx_validation_context);
 /**
 * brief: validate_sp_composition_proofs_v1 - check that spending tx inputs is authorized by their owners,
@@ -256,11 +256,11 @@ bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3>
 *   - check Seraphis composition proofs
 * param: sp_image_proofs -
 * param: sp_input_images -
-* param: tx_proposal_message -
+* param: tx_proposal_prefix -
 * return: true/false on validation result
 */
 bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &sp_image_proofs,
     const std::vector<SpEnoteImageV1> &sp_input_images,
-    const rct::key &tx_proposal_message);
+    const rct::key &tx_proposal_prefix);
 
 } //namespace sp

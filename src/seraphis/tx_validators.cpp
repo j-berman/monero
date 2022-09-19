@@ -317,7 +317,7 @@ bool validate_sp_semantics_layout_v1(const std::vector<LegacyRingSignatureV3> &l
         return false;
 
     // legacy and seraphis input images should not have any matching key images
-    // note: this is just a sanity check, it should be impossible to return false here if the proofs are valid
+    // note: this is just a sanity check, it should not be possible to return false here if the proofs are valid
     if (legacy_input_images.size() > 0)
     {
         for (const SpEnoteImageV1 &sp_input_image : sp_input_images)
@@ -502,7 +502,7 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
 //-------------------------------------------------------------------------------------------------------------------
 bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
     const std::vector<LegacyEnoteImageV2> &legacy_input_images,
-    const rct::key &tx_proposal_message,
+    const rct::key &tx_proposal_prefix,
     const TxValidationContext &tx_validation_context)
 {
     // sanity check
@@ -527,7 +527,7 @@ bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3>
 
         // make legacy input proof message
         rct::key ring_signature_message;
-        make_tx_legacy_ring_signature_message_v1(tx_proposal_message,
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
             legacy_ring_signatures[legacy_input_index].m_reference_set,
             ring_signature_message);
 
@@ -544,7 +544,7 @@ bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3>
 //-------------------------------------------------------------------------------------------------------------------
 bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &sp_image_proofs,
     const std::vector<SpEnoteImageV1> &sp_input_images,
-    const rct::key &tx_proposal_message)
+    const rct::key &tx_proposal_prefix)
 {
     // sanity check
     if (sp_image_proofs.size() != sp_input_images.size())
@@ -554,7 +554,7 @@ bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &sp_ima
     for (std::size_t input_index{0}; input_index < sp_input_images.size(); ++input_index)
     {
         if (!sp::sp_composition_verify(sp_image_proofs[input_index].m_composition_proof,
-                tx_proposal_message,
+                tx_proposal_prefix,
                 sp_input_images[input_index].m_core.m_masked_address,
                 sp_input_images[input_index].m_core.m_key_image))
             return false;

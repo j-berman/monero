@@ -211,22 +211,22 @@ std::size_t SpTxSquashedV1::get_weight() const
 //-------------------------------------------------------------------------------------------------------------------
 void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
 {
-    // tx_hash = H_32(tx_proposal_message, input images, proofs)
+    // tx_hash = H_32(tx_proposal_prefix, input images, proofs)
 
-    // 1. image proofs message
+    // 1. tx proposal
     // H_32(crypto project name, version string, input key images, output enotes, enote ephemeral pubkeys, memos, fee)
     std::string version_string;
     version_string.reserve(3);
     make_versioning_string(m_tx_semantic_rules_version, version_string);
 
-    rct::key tx_proposal_message;
-    make_tx_proposal_message_v1(version_string,
+    rct::key tx_proposal_prefix;
+    make_tx_proposal_prefix_v1(version_string,
         m_legacy_input_images,
         m_sp_input_images,
         m_outputs,
         m_tx_supplement,
         m_tx_fee,
-        tx_proposal_message);
+        tx_proposal_prefix);
 
     // 2. input images (note: key images are represented in the tx hash twice (image proofs message and input images))
     // H_32({C", KI}((legacy)), {K", C", KI})
@@ -243,9 +243,9 @@ void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
         tx_proofs_prefix);
 
     // 4. tx hash
-    // tx_hash = H_32(tx_proposal_message, input images, proofs)
+    // tx_hash = H_32(tx_proposal_prefix, input images, proofs)
     SpFSTranscript transcript{config::HASH_KEY_SERAPHIS_TRANSACTION_TYPE_SQUASHED_V1, 3*sizeof(rct::key)};
-    transcript.append("tx_proposal_message", tx_proposal_message);
+    transcript.append("tx_proposal_prefix", tx_proposal_prefix);
     transcript.append("input_images_prefix", input_images_prefix);
     transcript.append("tx_proofs_prefix", tx_proofs_prefix);
 
@@ -587,24 +587,24 @@ bool validate_tx_input_proofs<SpTxSquashedV1>(const SpTxSquashedV1 &tx, const Tx
     version_string.reserve(3);
     make_versioning_string(tx.m_tx_semantic_rules_version, version_string);
 
-    rct::key tx_proposal_message;
-    make_tx_proposal_message_v1(version_string,
+    rct::key tx_proposal_prefix;
+    make_tx_proposal_prefix_v1(version_string,
         tx.m_legacy_input_images,
         tx.m_sp_input_images,
         tx.m_outputs,
         tx.m_tx_supplement,
         tx.m_tx_fee,
-        tx_proposal_message);
+        tx_proposal_prefix);
 
     // ownership, membership, and key image validity of legacy inputs
     if (!validate_sp_legacy_input_proofs_v1(tx.m_legacy_ring_signatures,
             tx.m_legacy_input_images,
-            tx_proposal_message,
+            tx_proposal_prefix,
             tx_validation_context))
         return false;
 
     // ownership proof (and proof that key images are well-formed)
-    if (!validate_sp_composition_proofs_v1(tx.m_sp_image_proofs, tx.m_sp_input_images, tx_proposal_message))
+    if (!validate_sp_composition_proofs_v1(tx.m_sp_image_proofs, tx.m_sp_input_images, tx_proposal_prefix))
         return false;
 
     return true;
@@ -720,7 +720,7 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
 
     // proposal prefix
     rct::key proposal_prefix;
-    make_tx_proposal_message_v1(version_string,
+    make_tx_proposal_prefix_v1(version_string,
         sp_input_proposals,
         output_proposals,
         partial_memo,

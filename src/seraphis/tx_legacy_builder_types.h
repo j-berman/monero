@@ -92,6 +92,8 @@ struct LegacyInputProposalV1 final
 ///
 struct LegacyRingSignaturePrepV1 final
 {
+    /// tx proposal prefix (message to sign in the proof)
+    rct::key m_proposal_prefix;
     /// ledger indices of legacy enotes referenced by the proof
     std::vector<std::uint64_t> m_reference_set;
     /// the referenced enotes ({Ko, C"}((legacy)) representation)
@@ -104,6 +106,12 @@ struct LegacyRingSignaturePrepV1 final
     crypto::secret_key m_reference_view_privkey;
     /// commitment mask applied to the reference amount commitment to produce the image's masked commitment
     crypto::secret_key m_reference_commitment_mask;
+
+    /// less-than operator for sorting
+    bool operator<(const LegacyRingSignaturePrepV1 &other_prep) const
+    {
+        return m_reference_image < other_prep.m_reference_image;
+    }
 };
 
 ////

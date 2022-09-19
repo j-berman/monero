@@ -77,10 +77,10 @@ void make_v1_legacy_input_proposal_v1(const LegacyEnoteRecord &enote_record,
     const crypto::secret_key &commitment_mask,
     LegacyInputProposalV1 &proposal_out);
 //todo
-void make_v3_legacy_ring_signature_v1(std::vector<std::uint64_t> reference_set,
+void make_v3_legacy_ring_signature_v1(const rct::key &tx_proposal_prefix,
+    std::vector<std::uint64_t> reference_set,
     const rct::ctkeyV &referenced_enotes,
-    const std::uint64_t &real_reference_index,
-    const crypto::key_image &key_image,
+    const std::uint64_t real_reference_index,
     const rct::key &masked_commitment,
     const crypto::secret_key &reference_view_privkey,
     const crypto::secret_key &reference_commitment_mask,
@@ -94,13 +94,15 @@ void make_v3_legacy_ring_signatures_v1(std::vector<LegacyRingSignaturePrepV1> ri
     std::vector<LegacyRingSignatureV3> &ring_signatures_out);
 //todo
 void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input);
-void make_v1_legacy_input_v1(const LegacyInputProposalV1 &input_proposal,
-    const rct::key &proposal_prefix,
-    const crypto::secret_key &spendbase_privkey,
+void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
+    const LegacyInputProposalV1 &input_proposal,
+    LegacyRingSignaturePrepV1 ring_signature_prep,
+    const crypto::secret_key &legacy_spend_privkey,
     LegacyInputV1 &input_out);
-void make_v1_legacy_inputs_v1(const std::vector<LegacyInputProposalV1> &input_proposals,
-    const rct::key &proposal_prefix,
-    const crypto::secret_key &spendbase_privkey,
+void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
+    const std::vector<LegacyInputProposalV1> &input_proposals,
+    std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,
+    const crypto::secret_key &legacy_spend_privkey,
     std::vector<LegacyInputV1> &inputs_out);
 //todo
 std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const crypto::secret_key &legacy_spend_privkey,

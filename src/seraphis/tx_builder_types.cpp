@@ -124,7 +124,7 @@ void SpTxProposalV1::get_proposal_prefix(const std::string &version_string,
     check_v1_output_proposal_set_semantics_v1(output_proposals);
 
     // make the proposal prefix
-    make_tx_proposal_message_v1(version_string,
+    make_tx_proposal_prefix_v1(version_string,
         m_input_proposals,
         output_proposals,
         m_partial_memo,

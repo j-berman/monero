@@ -29,39 +29,33 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_builders_inputs.h"
+#include "tx_builders_legacy_inputs.h"
 
 //local headers
-#include "common/varint.h"
 #include "crypto/crypto.h"
-#include "crypto/x25519.h"
 extern "C"
 {
 #include "crypto/crypto-ops.h"
 }
 #include "cryptonote_config.h"
-#include "grootle.h"
+#include "device/device.hpp"
 #include "jamtis_enote_utils.h"
+#include "legacy_decoy_selector_flat.h"
 #include "misc_language.h"
 #include "misc_log_ex.h"
 #include "mock_ledger_context.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctSigs.h"
 #include "ringct/rctTypes.h"
 #include "seraphis_config_temp.h"
-#include "sp_composition_proof.h"
-#include "sp_core_enote_utils.h"
 #include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
 #include "sp_transcript.h"
-#include "tx_binned_reference_set.h"
-#include "tx_binned_reference_set_utils.h"
-#include "tx_builder_types.h"
-#include "tx_component_types.h"
+#include "tx_legacy_builder_types.h"
 #include "tx_legacy_component_types.h"
 #include "tx_misc_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
-#include "tx_ref_set_index_mapper_flat.h"
 
 //third party headers
 
@@ -77,6 +71,30 @@ extern "C"
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void prepare_clsag_proof_keys(const rct::ctkeyV &referenced_enotes,
+    const rct::key &masked_commitment,
+    rct::keyV referenced_onetime_addresses_out,
+    rct::keyV referenced_amount_commitments_out,
+    rct::keyV nominal_commitments_to_zero_out)
+{
+    referenced_onetime_addresses_out.clear();
+    referenced_amount_commitments_out.clear();
+    nominal_commitments_to_zero_out.clear();
+    referenced_onetime_addresses_out.reserve(referenced_enotes.size());
+    referenced_amount_commitments_out.reserve(referenced_enotes.size());
+    nominal_commitments_to_zero_out.reserve(referenced_enotes.size());
+
+    for (const rct::ctkey referenced_enote : referenced_enotes)
+    {
+        referenced_onetime_addresses_out.emplace_back(referenced_enote.dest);
+        referenced_amount_commitments_out.emplace_back(referenced_enote.mask);
+        nominal_commitments_to_zero_out.emplace_back();
+        rct::subKeys(nominal_commitments_to_zero_out.back(), referenced_enote.mask, masked_commitment);
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_message,
     const std::vector<std::uint64_t> &reference_set_indices,
     rct::key &message_out)
@@ -90,42 +108,31 @@ void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_messag
     transcript.append("reference_set_indices", reference_set_indices);
 
     sp_hash_to_32(transcript, message_out.bytes);
-}/*
+}
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_legacy_input_proposal_semantics_v1(const LegacyInputProposalV1 &input_proposal,
     const rct::key &wallet_legacy_spend_pubkey)
 {
-    //todo (note: legacy key image can't be reproduced since it needs the legacy private spend key)
-
     // 1. the onetime address must be reproducible
-    rct::key extended_wallet_spendkey{wallet_spend_pubkey_base};
-    extend_seraphis_spendkey_u(input_proposal.m_core.m_enote_view_privkey_u, extended_wallet_spendkey);
+    // Ko ?= k_v_stuff + k^s G
+    rct::key onetime_address_reproduced{wallet_legacy_spend_pubkey};
+    mask_key(input_proposal.m_enote_view_privkey, onetime_address_reproduced, onetime_address_reproduced);
 
-    rct::key onetime_address_reproduced{extended_wallet_spendkey};
-    extend_seraphis_spendkey_x(input_proposal.m_core.m_enote_view_privkey_x, onetime_address_reproduced);
-    mask_key(input_proposal.m_core.m_enote_view_privkey_g, onetime_address_reproduced, onetime_address_reproduced);
+    CHECK_AND_ASSERT_THROW_MES(onetime_address_reproduced == input_proposal.m_onetime_address,
+        "legacy input proposal v1 semantics check: could not reproduce the one-time address.");
 
-    CHECK_AND_ASSERT_THROW_MES(onetime_address_reproduced == input_proposal.m_core.m_enote_core.m_onetime_address,
-        "input proposal v1 semantics check: could not reproduce the one-time address.");
-
-    // 2. the key image must be reproducible and canonical
-    crypto::key_image key_image_reproduced;
-    make_seraphis_key_image(input_proposal.m_core.m_enote_view_privkey_x,
-        rct::rct2pk(extended_wallet_spendkey),
-        key_image_reproduced);
-
-    CHECK_AND_ASSERT_THROW_MES(key_image_reproduced == input_proposal.m_core.m_key_image,
-        "input proposal v1 semantics check: could not reproduce the key image.");
-    CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(rct::ki2rct(key_image_reproduced)),
-        "input proposal v1 semantics check: the key image is not canonical.");
+    // 2. the key image must canonical (note: legacy key image can't be reproduced in a semantics checker because it needs
+    //    the legacy private spend key [assumed not available in semantics checkers])
+    CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(rct::ki2rct(input_proposal.m_key_image)),
+        "legacy input proposal v1 semantics check: the key image is not canonical.");
 
     // 3. the amount commitment must be reproducible
     const rct::key amount_commitment_reproduced{
-            rct::commit(input_proposal.m_core.m_amount, rct::sk2rct(input_proposal.m_core.m_amount_blinding_factor))
+            rct::commit(input_proposal.m_amount, rct::sk2rct(input_proposal.m_amount_blinding_factor))
         };
 
-    CHECK_AND_ASSERT_THROW_MES(amount_commitment_reproduced == input_proposal.m_core.m_enote_core.m_amount_commitment,
-        "input proposal v1 semantics check: could not reproduce the amount commitment.");
+    CHECK_AND_ASSERT_THROW_MES(amount_commitment_reproduced == input_proposal.m_amount_commitment,
+        "legacy input proposal v1 semantics check: could not reproduce the amount commitment.");
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_legacy_input_proposal_v1(const rct::key &onetime_address,
@@ -135,19 +142,15 @@ void make_v1_legacy_input_proposal_v1(const rct::key &onetime_address,
     const crypto::secret_key &input_amount_blinding_factor,
     const rct::xmr_amount &input_amount,
     const crypto::secret_key &commitment_mask,
-    SpInputProposal &proposal_out)
+    LegacyInputProposalV1 &proposal_out)
 {
-    //todo
-
     // make an input proposal
-    proposal_out.m_enote_core             = enote_core;
+    proposal_out.m_onetime_address        = onetime_address;
+    proposal_out.m_amount_commitment      = amount_commitment;
     proposal_out.m_key_image              = key_image;
-    proposal_out.m_enote_view_privkey_g   = enote_view_privkey_g;
-    proposal_out.m_enote_view_privkey_x   = enote_view_privkey_x;
-    proposal_out.m_enote_view_privkey_u   = enote_view_privkey_u;
+    proposal_out.m_enote_view_privkey     = enote_view_privkey;
     proposal_out.m_amount_blinding_factor = input_amount_blinding_factor;
     proposal_out.m_amount                 = input_amount;
-    proposal_out.m_address_mask           = address_mask;
     proposal_out.m_commitment_mask        = commitment_mask;
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -155,234 +158,225 @@ void make_v1_legacy_input_proposal_v1(const LegacyEnoteRecord &enote_record,
     const crypto::secret_key &commitment_mask,
     LegacyInputProposalV1 &proposal_out)
 {
-    //todo
-
     // make input proposal from enote record
-    make_input_proposal(enote_record.m_enote.m_core,
+    make_input_proposal(enote_record.m_enote.onetime_address(),
+        enote_record.m_enote.amount_commitment(),
         enote_record.m_key_image,
-        enote_record.m_enote_view_privkey_g,
-        enote_record.m_enote_view_privkey_x,
-        enote_record.m_enote_view_privkey_u,
+        enote_record.m_enote_view_privkey,
         enote_record.m_amount_blinding_factor,
         enote_record.m_amount,
-        address_mask,
         commitment_mask,
-        proposal_out.m_core);
+        proposal_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v3_legacy_ring_signature_v1(std::vector<std::uint64_t> reference_set,
+void make_v3_legacy_ring_signature_v1(const rct::key &tx_proposal_prefix,
+    std::vector<std::uint64_t> reference_set,
     const rct::ctkeyV &referenced_enotes,
-    const std::uint64_t &real_reference_index,
-    const crypto::key_image &key_image,
+    const std::uint64_t real_reference_index,
     const rct::key &masked_commitment,
     const crypto::secret_key &reference_view_privkey,
     const crypto::secret_key &reference_commitment_mask,
     const crypto::secret_key &legacy_spend_privkey,
     LegacyRingSignatureV3 &ring_signature_out)
 {
-    //todo
+    // make ring signature
 
-    // make membership proof
+    /// checks
 
-    /// checks and initialization
+    // reference sets
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(reference_set.begin(), reference_set.end()),
+        "make v3 legacy ring signature: reference set indices are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(!std::adjacent_find(reference_set.begin(), reference_set.end()),
+        "make v3 legacy ring signature: reference set indices are not unique.");
+    CHECK_AND_ASSERT_THROW_MES(reference_set.size() == referenced_enotes.size(),
+        "make v3 legacy ring signature: reference set indices don't match referenced enotes.");
+    CHECK_AND_ASSERT_THROW_MES(real_reference_index < referenced_enotes.size(),
+        "make v3 legacy ring signature: real reference index is outside range of referenced enotes.");
 
-    // misc
-    const std::size_t ref_set_size{ref_set_size_from_decomp(ref_set_decomp_n, ref_set_decomp_m)};
+    // reference onetime address is reproducible
+    rct::key onetime_address_reproduced{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    rct::addKeys1(onetime_address_reproduced, rct::sk2rct(reference_view_privkey), onetime_address_reproduced);
 
-    CHECK_AND_ASSERT_THROW_MES(referenced_enotes_squashed.size() == ref_set_size,
-        "make membership proof: ref set size doesn't match number of referenced enotes.");
-    CHECK_AND_ASSERT_THROW_MES(binned_reference_set.reference_set_size() == ref_set_size,
-        "make membership proof: ref set size doesn't number of references in the binned reference set.");
+    CHECK_AND_ASSERT_THROW_MES(onetime_address_reproduced == referenced_enotes[real_reference_index].dest,
+        "make v3 legacy ring signature: could not reproduce onetime address.");
 
-    // make the real reference's squashed representation for later
-    rct::key transformed_address;
-    make_seraphis_squashed_address_key(real_reference_enote.m_onetime_address,
-        real_reference_enote.m_amount_commitment,
-        transformed_address);  //H_n(Ko,C) Ko
+    // masked commitment is reproducible
+    rct::key masked_commitment_reproduced{referenced_enotes[real_reference_index].mask};
+    mask_key(reference_commitment_mask, masked_commitment_reproduced, masked_commitment_reproduced);
 
-    rct::key real_Q;
-    rct::addKeys(real_Q, transformed_address, real_reference_enote.m_amount_commitment);  //Hn(Ko, C) Ko + C
-
-    // check binned reference set generator
-    rct::key masked_address;
-    mask_key(address_mask, transformed_address, masked_address);  //K" = t_k G + H_n(Ko,C) Ko
-
-    rct::key masked_commitment;
-    mask_key(commitment_mask, real_reference_enote.m_amount_commitment, masked_commitment);  //C" = t_c G + C
-
-    rct::key generator_seed_reproduced;
-    make_binned_ref_set_generator_seed_v1(masked_address, masked_commitment, generator_seed_reproduced);
-
-    CHECK_AND_ASSERT_THROW_MES(generator_seed_reproduced == binned_reference_set.m_bin_generator_seed,
-        "make membership proof: unable to reproduce binned reference set generator seed.");
+    CHECK_AND_ASSERT_THROW_MES(masked_commitment_reproduced == masked_commitment,
+        "make v3 legacy ring signature: could not reproduce masked commitment (pseudo-output commitment).");
 
 
     /// prepare to make proof
 
-    // find the real referenced enote
-    std::size_t real_spend_index_in_set{};  //l
-    bool found_real{false};
+    // prepare proof pubkeys
+    rct::keyV referenced_onetime_addresses;
+    rct::keyV referenced_amount_commitments
+    rct::keyV nominal_commitments_to_zero;
 
-    for (std::size_t ref_index{0}; ref_index < ref_set_size; ++ref_index)
-    {
-        if (real_Q == referenced_enotes_squashed[ref_index])  //Q[l]
-        {
-            real_spend_index_in_set = ref_index;
-            found_real = true;
-            break;
-        }
-    }
-    CHECK_AND_ASSERT_THROW_MES(found_real,
-        "make membership proof: could not find enote for membership proof in reference set.");
+    prepare_clsag_proof_keys(referenced_enotes,
+        masked_commitment,
+        referenced_onetime_addresses,
+        referenced_amount_commitments,
+        nominal_commitments_to_zero);
 
-    // proof offset (only one in the squashed enote model)
-    const rct::key image_offset{rct::addKeys(masked_address, masked_commitment)};  //Q" = K" + C"
-
-    // secret key of: Q[l] - Q" = -(t_k + t_c) G
-    static const rct::key MINUS_ONE{minus_one()};
-
-    crypto::secret_key image_mask;
-    sc_add(to_bytes(image_mask), to_bytes(address_mask), to_bytes(commitment_mask));  // t_k + t_c
-    sc_mul(to_bytes(image_mask), to_bytes(image_mask), MINUS_ONE.bytes);  // -(t_k + t_c)
+    // prepare signing key
+    crypto::secret_key signing_privkey;
+    sc_add(to_bytes(signing_privkey), to_bytes(reference_view_privkey), to_bytes(legacy_spend_privkey));
 
     // proof message
     rct::key message;
-    make_tx_membership_proof_message_v1(binned_reference_set, message);
+    make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix, reference_set, message);
 
 
-    /// make grootle proof
-    membership_proof_out.m_grootle_proof = grootle_prove(referenced_enotes_squashed,
-        real_spend_index_in_set,
-        image_offset,
-        image_mask,
-        ref_set_decomp_n,
-        ref_set_decomp_m,
+    /// make clsag proof
+    membership_proof_out.m_clsag_proof = CLSAG_Gen(message,
+        referenced_onetime_addresses,
+        rct::sk2rct(signing_privkey),
+        nominal_commitments_to_zero,
+        reference_commitment_mask,
+        referenced_amount_commitments,
+        masked_commitment,
+        real_reference_index,
+        hw::get_device("default"),
         message);
 
 
-    /// copy miscellaneous components
-    membership_proof_out.m_binned_reference_set = std::move(binned_reference_set);
-    membership_proof_out.m_ref_set_decomp_n     = ref_set_decomp_n;
-    membership_proof_out.m_ref_set_decomp_m     = ref_set_decomp_m;
+    /// save the reference set
+    membership_proof_out.m_reference_set = std::move(reference_set);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v3_legacy_ring_signature_v1(LegacyRingSignaturePrepV1 ring_signature_prep,
     const crypto::secret_key &legacy_spend_privkey,
     LegacyRingSignatureV3 &ring_signature_out)
 {
-    //todo
-
-    make_v1_membership_proof_v1(membership_proof_prep.m_ref_set_decomp_n,
-        membership_proof_prep.m_ref_set_decomp_m,
-        std::move(membership_proof_prep.m_binned_reference_set),
-        membership_proof_prep.m_referenced_enotes_squashed,
-        membership_proof_prep.m_real_reference_enote,
-        membership_proof_prep.m_address_mask,
-        membership_proof_prep.m_commitment_mask,
-        membership_proof_out);
+    make_v3_legacy_ring_signature_v1(ring_signature_prep.m_proposal_prefix,
+        std::move(ring_signature_prep.m_reference_set),
+        ring_signature_prep.m_referenced_enotes,
+        ring_signature_prep.m_real_reference_index,
+        ring_signature_prep.m_reference_image.m_masked_commitment,
+        ring_signature_prep.m_reference_view_privkey,
+        ring_signature_prep.m_reference_commitment_mask,
+        legacy_spend_privkey,
+        ring_signature_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v3_legacy_ring_signatures_v1(std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,
     const crypto::secret_key &legacy_spend_privkey,
     std::vector<LegacyRingSignatureV3> &ring_signatures_out)
 {
-    //todo
-
-    // make multiple membership proofs
-    // note: proof preps are assumed to be pre-sorted, so alignable membership proofs are not needed
-    membership_proofs_out.clear();
-    membership_proofs_out.reserve(membership_proof_preps.size());
-
-    for (SpMembershipProofPrepV1 &proof_prep : membership_proof_preps)
+    // only allow signatures on the same tx proposal
+    for (const LegacyRingSignaturePrepV1 &signature_prep : ring_signature_preps)
     {
-        membership_proofs_out.emplace_back();
-        make_v1_membership_proof_v1(std::move(proof_prep), membership_proofs_out.back());
+        CHECK_AND_ASSERT_THROW_MES(signature_prep.m_proposal_prefix == ring_signature_preps.begin().m_proposal_prefix,
+            "make v3 legacy ring signatures: inconsistent proposal prefixes.");
+    }
+
+    // sort ring signature preps
+    std::sort(ring_signature_preps.begin(), ring_signature_preps.end());
+
+    // make multiple ring signatures
+    ring_signatures_out.clear();
+    ring_signatures_out.reserve(membership_proof_preps.size());
+
+    for (LegacyRingSignaturePrepV1 &signature_prep : ring_signature_preps)
+    {
+        ring_signatures_out.emplace_back();
+        make_v1_membership_proof_v1(std::move(signature_prep), legacy_spend_privkey, ring_signatures_out.back());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input)
 {
-    //todo
-
-    // input amount commitment can be reconstructed
-    const rct::key reconstructed_amount_commitment{
-            rct::commit(partial_input.m_input_amount, rct::sk2rct(partial_input.m_input_amount_blinding_factor))
+    // masked commitment can be reconstructed
+    const rct::key masked_commitment_reproduced{
+            rct::commit(input.m_input_amount, rct::sk2rct(input.m_input_masked_commitment_blinding_factor))
         };
 
-    CHECK_AND_ASSERT_THROW_MES(reconstructed_amount_commitment == partial_input.m_input_enote_core.m_amount_commitment,
-        "partial input semantics (v1): could not reconstruct amount commitment.");
+    CHECK_AND_ASSERT_THROW_MES(masked_commitment_reproduced == input.m_input_image.m_masked_commitment,
+        "legacy input semantics (v1): could not reproduce masked commitment (pseudo-output commitment).");
 
-    // input image masked address and commitment can be reconstructed
-    rct::key reconstructed_masked_address;
-    rct::key reconstructed_masked_commitment;
-    make_seraphis_enote_image_masked_keys(partial_input.m_input_enote_core.m_onetime_address,
-        partial_input.m_input_enote_core.m_amount_commitment,
-        partial_input.m_address_mask,
-        partial_input.m_commitment_mask,
-        reconstructed_masked_address,
-        reconstructed_masked_commitment);
+    // key image is consistent between input image and cached value in the ring signature
+    CHECK_AND_ASSERT_THROW_MES(input.m_input_image.m_key_image == input.m_ring_signature.m_clsag_proof.I,
+        "legacy input semantics (v1): key image is not consistent between input image and ring signature.");
 
-    CHECK_AND_ASSERT_THROW_MES(reconstructed_masked_address == partial_input.m_input_image.m_core.m_masked_address,
-        "partial input semantics (v1): could not reconstruct masked address.");
-    CHECK_AND_ASSERT_THROW_MES(reconstructed_masked_commitment == partial_input.m_input_image.m_core.m_masked_commitment,
-        "partial input semantics (v1): could not reconstruct masked address.");
+    // ring signature reference indices are sorted and unique and match with the cached reference enotes
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(input.m_ring_signature.m_reference_set.begin(),
+            input.m_ring_signature.m_reference_set.end()),
+        "legacy input semantics (v1): reference set indices are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(!std::adjacent_find(input.m_ring_signature.m_reference_set.begin(),
+            input.m_ring_signature.m_reference_set.end()),
+        "legacy input semantics (v1): reference set indices are not unique.");
+    CHECK_AND_ASSERT_THROW_MES(input.m_ring_signature.m_reference_set.size() == input.m_ring_members.size(),
+        "legacy input semantics (v1): reference set indices don't match referenced enotes.");
 
-    // image proof is valid
-    CHECK_AND_ASSERT_THROW_MES(sp_composition_verify(partial_input.m_image_proof.m_composition_proof,
-            partial_input.m_proposal_prefix,
-            reconstructed_masked_address,
-            partial_input.m_input_image.m_core.m_key_image),
-        "partial input semantics (v1): image proof is invalid.");
+    // ring signature message
+    rct::key ring_signature_message;
+    make_tx_legacy_ring_signature_message_v1(input.m_proposal_prefix,
+        input.m_ring_signature.m_reference_set,
+        ring_signature_message);
+
+    // ring signature is valid
+    CHECK_AND_ASSERT_THROW_MES(rct::verRctCLSAGSimple(ring_signature_message,
+            input.m_ring_signature.m_clsag_proof,
+            input.m_ring_members,
+            input.m_input_image.m_masked_commitment),
+        "legacy input semantics (v1): ring signature is invalid.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_legacy_input_v1(const LegacyInputProposalV1 &input_proposal,
-    const rct::key &proposal_prefix,
-    const crypto::secret_key &spendbase_privkey,
+void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
+    const LegacyInputProposalV1 &input_proposal,
+    LegacyRingSignaturePrepV1 ring_signature_prep,
+    const crypto::secret_key &legacy_spend_privkey,
     LegacyInputV1 &input_out)
 {
-    //todo
-
     // check input proposal semantics
-    rct::key wallet_spend_pubkey_base;
-    make_seraphis_spendbase(spendbase_privkey, wallet_spend_pubkey_base);
+    const rct::key wallet_legacy_spend_pubkey{rct::scalarmultBase(rct:sk2rct(legacy_spend_privkey))};
+    check_v1_legacy_input_proposal_semantics_v1(input_proposal, wallet_legacy_spend_pubkey);
 
-    check_v1_input_proposal_semantics_v1(input_proposal, wallet_spend_pubkey_base);
+    // ring signature prep must line up with specified proposal prefix
+    CHECK_AND_ASSERT_THROW_MES(proposal_prefix == ring_signature_prep.m_proposal_prefix,
+        "make v1 legacy input: ring signature prep does not have desired proposal prefix.");
 
     // prepare input image
-    input_proposal.get_enote_image_v1(partial_input_out.m_input_image);
+    input_proposal.get_enote_image_v2(input_out.m_input_image);
 
     // copy misc. proposal info
-    partial_input_out.m_address_mask                 = input_proposal.m_core.m_address_mask;
-    partial_input_out.m_commitment_mask              = input_proposal.m_core.m_commitment_mask;
-    partial_input_out.m_proposal_prefix              = proposal_prefix;
-    partial_input_out.m_input_amount                 = input_proposal.get_amount();
-    partial_input_out.m_input_amount_blinding_factor = input_proposal.m_core.m_amount_blinding_factor;
-    input_proposal.m_core.get_enote_core(partial_input_out.m_input_enote_core);
+    input_out.m_input_amount    = input_proposal.m_amount;
+    sc_add(to_bytes(input_out.m_input_masked_commitment_blinding_factor),
+        to_bytes(input_proposal.m_commitment_mask),
+        to_bytes(input_proposal.m_amount_blinding_factor));
+    input_out.m_ring_members    = ring_signature_prep.m_referenced_enotes;
+    input_out.m_proposal_prefix = proposal_prefix;
 
-    // construct image proof
-    make_v1_image_proof_v1(input_proposal.m_core,
-        partial_input_out.m_proposal_prefix,
-        spendbase_privkey,
-        partial_input_out.m_image_proof);
+    // construct ring signature
+    make_v3_legacy_ring_signature_v1(std::move(ring_signature_prep), legacy_spend_privkey, input_out.m_ring_signature);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_legacy_inputs_v1(const std::vector<LegacyInputProposalV1> &input_proposals,
-    const rct::key &proposal_prefix,
-    const crypto::secret_key &spendbase_privkey,
+void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
+    const std::vector<LegacyInputProposalV1> &input_proposals,
+    std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,
+    const crypto::secret_key &legacy_spend_privkey,
     std::vector<LegacyInputV1> &inputs_out)
 {
-    //todo
+    // checks
+    CHECK_AND_ASSERT_THROW_MES(input_proposals.size() > 0, "Can't make legacy tx inputs without any input proposals.");
+    CHECK_AND_ASSERT_THROW_MES(input_proposals.size() == ring_signature_preps.size(),
+        "make v1 legacy inputs: input proposals don't line up with ring signature preps.");
 
-    CHECK_AND_ASSERT_THROW_MES(input_proposals.size() > 0, "Can't make partial tx inputs without any input proposals.");
-
-    partial_inputs_out.clear();
-    partial_inputs_out.reserve(input_proposals.size());
+    inputs_out.clear();
+    inputs_out.reserve(input_proposals.size());
 
     // make all inputs
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
+    for (std::size_t input_index{0}; input_index < input_proposals.size(); ++input_index)
     {
-        partial_inputs_out.emplace_back();
-        make_v1_partial_input_v1(input_proposal, proposal_prefix, spendbase_privkey, partial_inputs_out.back());
+        inputs_out.emplace_back();
+        make_v1_legacy_input_v1(proposal_prefix,
+            input_proposals[input_index],
+            std::move(ring_signature_preps[input_index]),
+            legacy_spend_privkey,
+            inputs_out.back());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -614,6 +608,6 @@ void make_mock_legacy_ring_signature_preps_for_inputs_v1(
                         ledger_context)
             );
     }
-}*/
+}
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

@@ -32,7 +32,6 @@
 #include "tx_builders_inputs.h"
 
 //local headers
-#include "common/varint.h"
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
 extern "C"
