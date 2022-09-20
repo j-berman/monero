@@ -117,6 +117,10 @@ bool MockOffchainContext::key_image_exists_v1_impl(const crypto::key_image &key_
 bool MockOffchainContext::try_get_offchain_chunk_sp_impl(const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkNonLedgerV1 &chunk_out) const
 {
+    // no chunk if no txs to scan
+    if (m_output_contents.size() == 0)
+        return false;
+
     // find-received scan each tx in the unconfirmed chache
     chunk_out.m_basic_records_per_tx.clear();
     chunk_out.m_contextual_key_images.clear();

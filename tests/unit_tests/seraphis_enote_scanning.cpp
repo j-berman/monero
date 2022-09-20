@@ -1690,6 +1690,83 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_5)
         {SpEnoteSpentStatus::SPENT_ONCHAIN, SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 13);
 }
 //-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_enote_scanning, basic_ledger_tx_passing_6)
+{
+    using namespace sp;
+    using namespace jamtis;
+
+    /// setup
+
+    // 1. config
+    const std::size_t max_inputs{1000};
+    const std::size_t fee_per_tx_weight{0};  // 0 fee here
+    const std::size_t ref_set_decomp_n{2};
+    const std::size_t ref_set_decomp_m{2};
+
+    const RefreshLedgerEnoteStoreConfig refresh_config{
+            .m_reorg_avoidance_depth = 1,
+            .m_max_chunk_size = 5,
+            .m_max_partialscan_attempts = 0
+        };
+
+    const FeeCalculatorMockTrivial fee_calculator;  //just do a trivial calculator here (fee = fee/weight * 1 weight)
+
+    const SpBinnedReferenceSetConfigV1 bin_config{
+            .m_bin_radius = 1,
+            .m_num_bin_members = 2
+        };
+
+    // 2. user keys
+    jamtis_mock_keys user_keys_A;
+    make_jamtis_mock_keys(user_keys_A);
+
+    // 3. user addresses
+    JamtisDestinationV1 destination_A;
+    make_random_address_for_user(user_keys_A, destination_A);
+
+
+    /// test
+
+    // 6. pass funds back and forth to the same account, with a max chunk size > 1 so multiple self-sends can be sent
+    //    and spent within a single chunk
+    MockLedgerContext ledger_context{0, 0};
+    SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
+    const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
+    send_coinbase_amounts_to_users({{16, 0, 0, 0}}, {destination_A}, ledger_context);
+
+    for (std::size_t iteration{0}; iteration < 12; ++iteration)
+    {
+        // refresh enote store for input selection
+        refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
+
+        ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN}, {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 16);
+
+        // churn some of user A's funds
+        rct::xmr_amount amnt1 = crypto::rand_range<rct::xmr_amount>(1, 16);
+
+        transfer_funds_single_mock_v1_unconfirmed(user_keys_A,
+            input_selector_A,
+            fee_calculator,
+            fee_per_tx_weight,
+            max_inputs,
+            {
+                {amnt1, destination_A, TxExtra{}}
+            },
+            ref_set_decomp_n,
+            ref_set_decomp_m,
+            bin_config,
+            ledger_context);
+        ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+        // full refresh of user A
+        SpEnoteStoreMockV1 enote_store_A_full_refresh{0, 0, 0};
+        refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A_full_refresh);
+
+        ASSERT_TRUE(enote_store_A_full_refresh.get_balance({SpEnoteOriginStatus::ONCHAIN},
+            {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 16);
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

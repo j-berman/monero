@@ -519,7 +519,7 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
             continue;
 
 
-        /// refresh the enote store with new ledger context
+        /// close the scanning session
 
         // 1. sanity checks
         CHECK_AND_ASSERT_THROW_MES(initial_refresh_height <= alignment_marker.m_block_height + 1,

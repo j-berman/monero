@@ -563,6 +563,10 @@ void MockLedgerContext::get_onchain_chunk_sp_impl(const std::uint64_t chunk_star
 bool MockLedgerContext::try_get_unconfirmed_chunk_sp_impl(const crypto::x25519_secret_key &xk_find_received,
     EnoteScanningChunkNonLedgerV1 &chunk_out) const
 {
+    // no chunk if no txs to scan
+    if (m_unconfirmed_tx_output_contents.size() == 0)
+        return false;
+
     // find-received scan each tx in the unconfirmed chache
     chunk_out.m_basic_records_per_tx.clear();
     chunk_out.m_contextual_key_images.clear();
