@@ -532,44 +532,52 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &input_amounts,
+void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &legacy_input_amounts,
+    const std::vector<rct::xmr_amount> &sp_input_amounts,
     const std::vector<rct::xmr_amount> &output_amounts,
     const rct::xmr_amount transaction_fee,
-    const std::vector<crypto::secret_key> &input_image_amount_commitment_blinding_factors,
+    const std::vector<crypto::secret_key> &legacy_input_image_amount_commitment_blinding_factors,
+    const std::vector<crypto::secret_key> &sp_input_image_amount_commitment_blinding_factors,
     const std::vector<crypto::secret_key> &output_amount_commitment_blinding_factors,
     SpBalanceProofV1 &balance_proof_out)
 {
     // for squashed enote model
 
     // 1. check balance
-    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(input_amounts, output_amounts, transaction_fee),
+    std::vector<rct::xmr_amount> all_in_amounts{legacy_input_amounts};
+    all_in_amounts.insert(all_in_amounts.end(), sp_input_amounts.begin(), sp_input_amounts.end());
+
+    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(all_in_amounts, output_amounts, transaction_fee),
         "Amounts don't balance when making balance proof.");
 
-    // 2. combine inputs and outputs
-    std::vector<rct::xmr_amount> amounts;
-    std::vector<crypto::secret_key> blinding_factors;
-    amounts.reserve(input_amounts.size() + output_amounts.size());
-    blinding_factors.reserve(input_amounts.size() + output_amounts.size());
+    // 2. combine seraphis inputs and outputs for range proof (legacy input masked commitments are not range proofed)
+    std::vector<rct::xmr_amount> range_proof_amounts{sp_input_amounts};
+    std::vector<crypto::secret_key> range_proof_blinding_factors{sp_input_image_amount_commitment_blinding_factors};
 
-    amounts = input_amounts;
-    amounts.insert(amounts.end(), output_amounts.begin(), output_amounts.end());
-    blinding_factors = input_image_amount_commitment_blinding_factors;
-    blinding_factors.insert(blinding_factors.end(),
+    range_proof_amounts.insert(range_proof_amounts.end(), output_amounts.begin(), output_amounts.end());
+    range_proof_blinding_factors.insert(range_proof_blinding_factors.end(),
         output_amount_commitment_blinding_factors.begin(),
         output_amount_commitment_blinding_factors.end());
 
     // 3. make range proofs
     BulletproofPlus2 range_proofs;
 
-    rct::keyV amount_commitment_blinding_factors;
-    auto vec_wiper = convert_skv_to_rctv(blinding_factors, amount_commitment_blinding_factors);
-    make_bpp2_rangeproofs(amounts, amount_commitment_blinding_factors, range_proofs);
+    rct::keyV range_proof_amount_commitment_blinding_factors;
+    auto vec_wiper = convert_skv_to_rctv(range_proof_blinding_factors, range_proof_amount_commitment_blinding_factors);
+    make_bpp2_rangeproofs(range_proof_amounts, range_proof_amount_commitment_blinding_factors, range_proofs);
 
     balance_proof_out.m_bpp2_proof = std::move(range_proofs);
 
     // 4. set the remainder blinding factor
+    // blinding_factor = sum(legacy input blinding factors) + sum(sp input blinding factors) - sum(output blinding factors)
+    std::vector<crypto::secret_key> collected_input_blinding_factors{sp_input_image_amount_commitment_blinding_factors};
     crypto::secret_key remainder_blinding_factor;
-    subtract_secret_key_vectors(input_image_amount_commitment_blinding_factors,
+
+    collected_input_blinding_factors.insert(collected_input_blinding_factors.end(),
+        legacy_input_image_amount_commitment_blinding_factors.begin(),
+        legacy_input_image_amount_commitment_blinding_factors.end());
+
+    subtract_secret_key_vectors(collected_input_blinding_factors,
         output_amount_commitment_blinding_factors,
         remainder_blinding_factor);
 
@@ -717,9 +725,11 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
         "making partial tx: could not extract a fee value from the discretized fee.");
 
     // 3. make balance proof
-    make_v1_balance_proof_v1(input_amounts,
+    make_v1_balance_proof_v1({},  //legacy input amounts (todo)
+        input_amounts,
         output_amounts,
         raw_transaction_fee,
+        {},  //legacy input masked commitment blinding factors (todo)
         input_image_amount_commitment_blinding_factors,
         output_amount_commitment_blinding_factors,
         partial_tx_out.m_balance_proof);

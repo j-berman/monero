@@ -177,18 +177,22 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out);
 /**
 * brief: make_v1_balance_proof_v1 - make v1 tx balance proof (BP+ for range proofs; balance check is sum-to-zero)
-*   - range proofs: for input image amount commitments and output commitments (squashed enote model)
-* param: input_amounts -
+*   - range proofs: for seraphis input image amount commitments and output commitments (squashed enote model)
+* param: legacy_input_amounts -
+* param: sp_input_amounts -
 * param: output_amounts -
 * param: transaction_fee -
-* param: input_image_amount_commitment_blinding_factors -
+* param: legacy_input_image_amount_commitment_blinding_factors -
+* param: sp_input_image_amount_commitment_blinding_factors -
 * param: output_amount_commitment_blinding_factors -
 * outparam: balance_proof_out -
 */
-void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &input_amounts,
+void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &legacy_input_amounts,
+    const std::vector<rct::xmr_amount> &sp_input_amounts,
     const std::vector<rct::xmr_amount> &output_amounts,
     const rct::xmr_amount transaction_fee,
-    const std::vector<crypto::secret_key> &input_image_amount_commitment_blinding_factors,
+    const std::vector<crypto::secret_key> &legacy_input_image_amount_commitment_blinding_factors,
+    const std::vector<crypto::secret_key> &sp_input_image_amount_commitment_blinding_factors,
     const std::vector<crypto::secret_key> &output_amount_commitment_blinding_factors,
     SpBalanceProofV1 &balance_proof_out);
 /**

@@ -72,7 +72,8 @@ class MockLedgerContext final
 public:
 //constructors
     /// define tx era ranges (legacy: [0, first seraphis only); seraphis: [first seraphis allowed,) )
-    /// note: blocks with mock legacy coinbase txs are only allowed before the first seraphis-only block
+    /// NOTE: blocks with mock legacy coinbase txs are allowed before the first seraphis-only block, but in practice
+    //        legacy coinbase should stop appearing at the first seraphis-allowed block
     MockLedgerContext(const std::uint64_t first_seraphis_allowed_block, const std::uint64_t first_seraphis_only_block);
 
 //member functions

@@ -72,6 +72,7 @@ extern "C"
 #include "boost/multiprecision/cpp_int.hpp"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -318,20 +319,6 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
     std::sort(sp_input_proposals.begin(), sp_input_proposals.end());
     std::sort(output_proposals.begin(), output_proposals.end());
 
-    // make mock legacy ring signature ref sets
-    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps{
-            gen_mock_legacy_ring_signature_preps_v1(legacy_input_proposals, legacy_ring_size, ledger_context_inout)
-        };
-
-    // make mock seraphis membership proof ref sets
-    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps{
-            gen_mock_sp_membership_proof_preps_v1(sp_input_proposals,
-                ref_set_decomp_n,
-                ref_set_decomp_m,
-                bin_config,
-                ledger_context_inout)
-        };
-
     // make mock memo elements
     std::vector<ExtraFieldElement> additional_memo_elements;
     additional_memo_elements.resize(num_random_memo_elements);
@@ -392,6 +379,12 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
         tx_supplement,
         discretized_transaction_fee,
         tx_proposal_prefix);
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps{
+            gen_mock_legacy_ring_signature_preps_v1(tx_proposal_prefix,
+                legacy_input_proposals,
+                legacy_ring_size,
+                ledger_context_inout)
+        };
     make_v3_legacy_ring_signatures_v1(std::move(legacy_ring_signature_preps),
         legacy_spend_privkey,
         tx_legacy_ring_signatures);
@@ -399,11 +392,11 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
         tx_proposal_prefix,
         sp_spendbase_privkey,
         tx_sp_image_proofs);
-    prepare_input_commitment_factors_for_balance_proof_v1(legacy_input_proposals,
-        sp_input_proposals,
+    prepare_legacy_input_commitment_factors_for_balance_proof_v1(legacy_input_proposals,
         input_legacy_amounts,
+        legacy_input_image_amount_commitment_blinding_factors);
+    prepare_input_commitment_factors_for_balance_proof_v1(sp_input_proposals,
         input_sp_amounts,
-        legacy_input_image_amount_commitment_blinding_factors,
         sp_input_image_amount_commitment_blinding_factors);
     make_v1_balance_proof_v1(input_legacy_amounts,
         input_sp_amounts, //note: must range proof seraphis input image commitments in squashed enote model
@@ -413,6 +406,13 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
         sp_input_image_amount_commitment_blinding_factors,
         output_amount_commitment_blinding_factors,
         balance_proof);
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps{
+            gen_mock_sp_membership_proof_preps_v1(sp_input_proposals,
+                ref_set_decomp_n,
+                ref_set_decomp_m,
+                bin_config,
+                ledger_context_inout)
+        };
     make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps),
         tx_sp_alignable_membership_proofs);  //alignable membership proofs could theoretically be user inputs as well
     align_v1_membership_proofs_v1(sp_input_images, std::move(tx_sp_alignable_membership_proofs), tx_sp_membership_proofs);
@@ -1134,7 +1134,7 @@ TEST(seraphis, txtype_squashed_v1)
     const std::size_t num_ins_outs{11};
 
     // fake ledger context for this test
-    sp::MockLedgerContext ledger_context{0, 0};
+    sp::MockLedgerContext ledger_context{0, 10000};
 
     // prepare input/output amounts
     std::vector<rct::xmr_amount> in_legacy_amounts;

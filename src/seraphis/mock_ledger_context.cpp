@@ -607,7 +607,7 @@ std::uint64_t MockLedgerContext::add_legacy_coinbase_impl(const rct::key &tx_id,
     /// checks
 
     // a. can only add blocks with a mock legacy coinbase tx prior to first seraphis-enabled block
-    CHECK_AND_ASSERT_THROW_MES(get_chain_height() + 1 < m_first_seraphis_allowed_block,
+    CHECK_AND_ASSERT_THROW_MES(get_chain_height() + 1 < m_first_seraphis_only_block,
         "mock tx ledger (adding legacy coinbase tx): chain height is above last block that can have a legacy coinbase tx.");
 
     // b. accumulated output count is consistent

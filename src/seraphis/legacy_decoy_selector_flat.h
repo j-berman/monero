@@ -67,7 +67,8 @@ public:
     /// request a set of ring members
     void get_ring_members(const std::uint64_t real_ring_member_index,
         const std::uint64_t num_ring_members,
-        std::vector<std::uint64_t> &ring_members_out) const override;
+        std::vector<std::uint64_t> &ring_members_out,
+        std::uint64_t &real_ring_member_index_in_ref_set_out) const override;
 
 //member variables
 private:

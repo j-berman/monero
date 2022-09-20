@@ -79,7 +79,7 @@ static bool validate_sp_amount_balance_equality_check_v1(const std::vector<Legac
     rct::keyV input_image_amount_commitments;
     rct::keyV output_commitments;
     input_image_amount_commitments.reserve(legacy_input_images.size() + sp_input_images.size());
-    output_commitments.reserve(outputs.size() + 1 + (remainder_blinding_factor == rct::zero() ? 0 : 1));
+    output_commitments.reserve(outputs.size() + 2);
 
     for (const LegacyEnoteImageV2 &legacy_input_image : legacy_input_images)
         input_image_amount_commitments.emplace_back(legacy_input_image.m_masked_commitment);

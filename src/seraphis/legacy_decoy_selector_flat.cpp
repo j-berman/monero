@@ -38,6 +38,7 @@
 //third party headers
 
 //standard headers
+#include <algorithm>
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -56,7 +57,8 @@ LegacyDecoySelectorFlat::LegacyDecoySelectorFlat(const std::uint64_t min_index, 
 //-------------------------------------------------------------------------------------------------------------------
 void LegacyDecoySelectorFlat::get_ring_members(const std::uint64_t real_ring_member_index,
         const std::uint64_t num_ring_members,
-        std::vector<std::uint64_t> &ring_members_out) const
+        std::vector<std::uint64_t> &ring_members_out,
+        std::uint64_t &real_ring_member_index_in_ref_set_out) const
 {
     CHECK_AND_ASSERT_THROW_MES(real_ring_member_index >= m_min_index,
         "legacy decoy selector (flat): real ring member index below available index range.");
@@ -65,6 +67,7 @@ void LegacyDecoySelectorFlat::get_ring_members(const std::uint64_t real_ring_mem
     CHECK_AND_ASSERT_THROW_MES(num_ring_members <= m_max_index - m_min_index,
         "legacy decoy selector (flat): insufficient available legacy enotes to have unique ring members.");
 
+    // fill in ring members
     ring_members_out.clear();
     ring_members_out.reserve(num_ring_members);
     ring_members_out.emplace_back(real_ring_member_index);
@@ -78,6 +81,20 @@ void LegacyDecoySelectorFlat::get_ring_members(const std::uint64_t real_ring_mem
         while (std::find(ring_members_out.begin(), ring_members_out.end(), new_ring_member) != ring_members_out.end());
 
         ring_members_out.emplace_back(new_ring_member);
+    }
+
+    // sort reference set
+    std::sort(ring_members_out.begin(), ring_members_out.end());
+
+    // find location in reference set where the real reference sits
+    real_ring_member_index_in_ref_set_out = 0;
+
+    for (const std::uint64_t reference : ring_members_out)
+    {
+        if (reference == real_ring_member_index)
+            return;
+
+        ++real_ring_member_index_in_ref_set_out;
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
