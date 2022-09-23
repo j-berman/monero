@@ -41,6 +41,7 @@
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_input_selection.h"
+#include "tx_legacy_builder_types.h"
 #include "tx_legacy_component_types.h"
 #include "txtype_squashed_v1.h"
 
@@ -58,22 +59,26 @@ namespace sp
 
 /**
 * brief: make_tx_proposal_prefix_v1 - hash representing a tx proposal
-*   - H_32(crypto project name, version string, input key images, output enotes, enote ephemeral pubkeys, memos, fee)
+*   - H_32(crypto project name, version string, legacy input key images, sp input key images, output enotes,
+*               tx supplement, fee)
 * param: version_string -
-* param: input_key_images -
+* param: legacy_input_key_images -
+* param: sp_input_key_images -
 * param: output_enotes -
 * param: tx_supplement -
 * param: transaction_fee -
 * outparam: proposal_prefix_out - hash representing a tx proposal
 */
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    const std::vector<crypto::key_image> &input_key_images,
+    const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const rct::xmr_amount transaction_fee,
     rct::key &proposal_prefix_out);
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    const std::vector<crypto::key_image> &input_key_images,
+    const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const DiscretizedFee &transaction_fee,
@@ -86,21 +91,22 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
     const DiscretizedFee &transaction_fee,
     rct::key &proposal_prefix_out);
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    const std::vector<crypto::key_image> &input_key_images,
+    const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
     rct::key &proposal_prefix_out);
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    //todo: legacy partial inputs
-    const std::vector<SpPartialInputV1> &partial_inputs,
+    const std::vector<LegacyInputV1> &legacy_inputs,
+    const std::vector<SpPartialInputV1> &sp_partial_inputs,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
     rct::key &proposal_prefix_out);
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    //todo: legacy input proposals
-    const std::vector<SpInputProposalV1> &input_proposals,
+    const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
@@ -125,27 +131,32 @@ void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
 *   - outputs should have unique and canonical onetime addresses
 *   - self-send payment proposals should have destinations owned by the user
 *   - amount commitments are consistent with masks/amounts recorded in the proposal
+*   - input proposals have valid semantics
 *   - the tx supplement should have valid semantics
 * param: tx_proposal -
-* param: wallet_spend_pubkey -
+* param: legacy_spend_pubkey -
+* param: jamtis_spend_pubkey -
 * param: k_view_balance -
 */
 void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &legacy_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance);
 /**
 * brief: make_v1_tx_proposal_v1 - make v1 tx proposal
 * param: normal_payment_proposals -
 * param: selfsend_payment_proposals -
 * param: tx_fee -
-* param: input_proposals -
+* param: legacy_input_proposals -
+* param: sp_input_proposals -
 * param: additional_memo_elements -
 * outparam: tx_proposal_out -
 */
 void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     const DiscretizedFee &tx_fee,
-    std::vector<SpInputProposalV1> input_proposals,
+    std::vector<LegacyInputProposalV1> legacy_input_proposals,
+    std::vector<SpInputProposalV1> sp_input_proposals,
     std::vector<ExtraFieldElement> additional_memo_elements,
     SpTxProposalV1 &tx_proposal_out);
 /**
@@ -161,7 +172,8 @@ void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_
 * param: partial_memo_for_tx -
 * param: k_view_balance -
 * outparam: tx_proposal_out -
-* outparam: input_ledger_mappings_out -
+* outparam: legacy_input_ledger_mappings_out -
+* outparam: sp_input_ledger_mappings_out -
 */
 bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
     const jamtis::JamtisDestinationV1 &dummy_address,
@@ -174,7 +186,8 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     TxExtra partial_memo_for_tx,
     const crypto::secret_key &k_view_balance,
     SpTxProposalV1 &tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out);
+    std::unordered_map<crypto::key_image, std::uint64_t> &legacy_input_ledger_mappings_out,
+    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out);
 /**
 * brief: make_v1_balance_proof_v1 - make v1 tx balance proof (BP+ for range proofs; balance check is sum-to-zero)
 *   - range proofs: for seraphis input image amount commitments and output commitments (squashed enote model)
@@ -197,12 +210,14 @@ void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &legacy_input_a
     SpBalanceProofV1 &balance_proof_out);
 /**
 * brief: balance_check_in_out_amnts_v1 - verify that input amounts equal output amounts + fee
-* param: input_proposals -
+* param: legacy_input_proposals -
+* param: sp_input_proposals -
 * param: output_proposals -
 * param: discretized_transaction_fee -
 * return: true if amounts balance between inputs and outputs (plus fee)
 */
-bool balance_check_in_out_amnts_v1(const std::vector<SpInputProposalV1> &input_proposals,
+bool balance_check_in_out_amnts_v1(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const DiscretizedFee &discretized_transaction_fee);
 /**
@@ -217,21 +232,25 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
 /**
 * brief: make_v1_partial_tx_v1 - make v1 partial transaction (everything ready for a full tx except membership proofs)
 * param: tx_proposal -
-* param: partial_inputs -
+* param: legacy_inputs -
+* param: sp_partial_inputs -
 * param: version_string -
 * param: k_view_balance -
 * outparam: partial_tx_out -
 */
-void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
+void make_v1_partial_tx_v1(std::vector<LegacyInputV1> legacy_inputs,
+    std::vector<SpPartialInputV1> sp_partial_inputs,
     std::vector<SpOutputProposalV1> output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &tx_fee,
     const std::string &version_string,
     SpPartialTxV1 &partial_tx_out);
 void make_v1_partial_tx_v1(const SpTxProposalV1 &tx_proposal,
-    std::vector<SpPartialInputV1> partial_inputs,
+    std::vector<LegacyInputV1> legacy_inputs,
+    std::vector<SpPartialInputV1> sp_partial_inputs,
     const std::string &version_string,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &legacy_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpPartialTxV1 &partial_tx_out);
 

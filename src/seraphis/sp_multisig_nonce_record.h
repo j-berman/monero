@@ -54,6 +54,7 @@ namespace sp
 ////
 // Multisig prep struct
 // - store multisig participant's MuSig2-style signature opening nonces for an arbitrary base point J
+// - IMPORTANT: these are stored *(1/8) so another person can efficiently mul8 and be confident the result is canonical
 //
 // WARNINGS:
 // - must only use a 'prep' to make ONE 'partial signature', after that the opening nonce privkeys should be deleted

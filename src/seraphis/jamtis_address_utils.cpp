@@ -101,7 +101,7 @@ void make_jamtis_address_privkey(const crypto::secret_key &s_generate_address,
     sp_derive_x25519_key(to_bytes(s_generate_address), transcript, address_privkey_out.data);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_jamtis_address_spend_key(const rct::key &wallet_spend_pubkey,
+void make_jamtis_address_spend_key(const rct::key &spend_pubkey,
     const crypto::secret_key &s_generate_address,
     const address_index_t j,
     rct::key &address_spendkey_out)
@@ -114,26 +114,26 @@ void make_jamtis_address_spend_key(const rct::key &wallet_spend_pubkey,
     make_jamtis_spendkey_extension_x(s_generate_address, j, address_extension_key_x);  //k^j_x
     make_jamtis_spendkey_extension_g(s_generate_address, j, address_extension_key_g);  //k^j_g
 
-    address_spendkey_out = wallet_spend_pubkey;  //K_s
+    address_spendkey_out = spend_pubkey;  //K_s
     extend_seraphis_spendkey_u(address_extension_key_u, address_spendkey_out);      //k^j_u U + K_s
     extend_seraphis_spendkey_x(address_extension_key_x, address_spendkey_out);      //k^j_x X + k^j_u U + K_s
     mask_key(address_extension_key_g, address_spendkey_out, address_spendkey_out);  //k^j_g G + k^j_x X + k^j_u U + K_s
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool test_jamtis_nominal_spend_key(const rct::key &wallet_spend_pubkey,
+bool test_jamtis_nominal_spend_key(const rct::key &spend_pubkey,
     const crypto::secret_key &s_generate_address,
     const address_index_t j,
     const rct::key &nominal_spend_key)
 {
     // get the spend key of the address at the uncovered index: K_1
     rct::key address_spendkey;
-    make_jamtis_address_spend_key(wallet_spend_pubkey, s_generate_address, j, address_spendkey);
+    make_jamtis_address_spend_key(spend_pubkey, s_generate_address, j, address_spendkey);
 
     // check if the nominal spend key matches the real spend key: K'_1 ?= K_1
     return nominal_spend_key == address_spendkey;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_key_image_jamtis_style(const rct::key &wallet_spend_pubkey,
+void make_seraphis_key_image_jamtis_style(const rct::key &spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const crypto::secret_key &spendkey_extension_x,
     const crypto::secret_key &spendkey_extension_u,
@@ -144,7 +144,7 @@ void make_seraphis_key_image_jamtis_style(const rct::key &wallet_spend_pubkey,
     // KI = ((H_n("..u..", q, C) + k^j_u + k_m)/(H_n("..x..", q, C) + k^j_x + k_vb)) U
 
     // k_m U = K_s - k_vb X
-    rct::key master_pubkey{wallet_spend_pubkey};  //K_s = k_vb X + k_m U
+    rct::key master_pubkey{spend_pubkey};  //K_s = k_vb X + k_m U
     reduce_seraphis_spendkey_x(k_view_balance, master_pubkey);  //k_m U
 
     // k_b U = H_n("..u..", q, C) U + k^j_u U + k_m U

@@ -231,7 +231,7 @@ static void collect_legacy_key_images_from_tx(const rct::key &requested_tx_id,
 //-------------------------------------------------------------------------------------------------------------------
 static std::unordered_set<rct::key> process_chunk_full_sp_selfsend_pass(
     const std::unordered_set<rct::key> &txs_have_spent_enotes,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const crypto::secret_key &s_generate_address,
     const std::unordered_map<rct::key, std::list<ContextualBasicRecordVariant>> &chunk_basic_records_per_tx,
@@ -268,7 +268,7 @@ static std::unordered_set<rct::key> process_chunk_full_sp_selfsend_pass(
                             .m_enote_ephemeral_pubkey,
                         contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
                             .m_input_context,
-                        wallet_spend_pubkey,
+                        jamtis_spend_pubkey,
                         k_view_balance,
                         s_generate_address,
                         new_enote_record))
@@ -515,7 +515,7 @@ void process_chunk_intermediate_legacy(const rct::key &legacy_base_spend_pubkey,
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void process_chunk_intermediate_sp(const rct::key &wallet_spend_pubkey,
+void process_chunk_intermediate_sp(const rct::key &jamtis_spend_pubkey,
     const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
@@ -537,7 +537,7 @@ void process_chunk_intermediate_sp(const rct::key &wallet_spend_pubkey,
             {
                 if (!try_get_intermediate_enote_record_v1(
                         contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
-                        wallet_spend_pubkey,
+                        jamtis_spend_pubkey,
                         xk_unlock_amounts,
                         xk_find_received,
                         s_generate_address,
@@ -620,7 +620,7 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
+void process_chunk_full_sp(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::x25519_secret_key &xk_find_received,
@@ -683,7 +683,7 @@ void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
             {
                 if (!try_get_enote_record_v1_plain(
                         contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
-                        wallet_spend_pubkey,
+                        jamtis_spend_pubkey,
                         k_view_balance,
                         xk_unlock_amounts,
                         xk_find_received,
@@ -709,7 +709,7 @@ void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
     {
         txs_have_spent_enotes_selfsend_passthrough =
             process_chunk_full_sp_selfsend_pass(txs_have_spent_enotes_selfsend_passthrough,
-                wallet_spend_pubkey,
+                jamtis_spend_pubkey,
                 k_view_balance,
                 s_generate_address,
                 chunk_basic_records_per_tx,

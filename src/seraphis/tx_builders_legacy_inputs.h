@@ -72,7 +72,7 @@ void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_messag
     rct::key &message_out);
 //todo
 void check_v1_legacy_input_proposal_semantics_v1(const LegacyInputProposalV1 &input_proposal,
-    const rct::key &wallet_legacy_spend_pubkey);
+    const rct::key &legacy_spend_pubkey);
 void make_v1_legacy_input_proposal_v1(const rct::key &onetime_address,
     const rct::key &amount_commitment,
     const crypto::key_image &key_image,

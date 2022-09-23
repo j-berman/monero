@@ -49,6 +49,7 @@
 #include "sp_transcript.h"
 #include "tx_builder_types.h"
 #include "tx_builders_inputs.h"
+#include "tx_builders_legacy_inputs.h"
 #include "tx_builders_outputs.h"
 #include "tx_component_types.h"
 #include "tx_contextual_enote_record_utils.h"
@@ -92,14 +93,45 @@ static auto convert_skv_to_rctv(const std::vector<crypto::secret_key> &skv, rct:
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static bool same_key_image(const LegacyInputV1 &input, const LegacyInputProposalV1 &input_proposal)
+{
+    return input.m_input_image.m_key_image == input_proposal.m_key_image;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static bool same_key_image(const SpPartialInputV1 &partial_input, const SpInputProposalV1 &input_proposal)
 {
     return partial_input.m_input_image.m_core.m_key_image == input_proposal.m_core.m_key_image;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void collect_legacy_ring_signature_ring_members(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
+    const std::vector<rct::ctkeyV> &legacy_ring_signature_rings,
+    std::unordered_map<std::uint64_t, rct::ctkey> &legacy_reference_set_proof_elements_out)
+{
+    // map legacy ring members onto their on-chain legacy enote indices
+    CHECK_AND_ASSERT_THROW_MES(legacy_ring_signatures.size() == legacy_ring_signature_rings.size(),
+        "collect legacy ring signature ring members: legacy ring signatures don't line up with legacy ring signature rings.");
+
+    for (std::size_t legacy_input_index{0}; legacy_input_index < legacy_ring_signatures.size(); ++legacy_input_index)
+    {
+        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signatures[legacy_input_index].m_reference_set.size() ==
+                legacy_ring_signature_rings[legacy_input_index].size(),
+            "collect legacy ring signature ring members: a reference set doesn't line up with the corresponding ring.");
+
+        for (std::size_t ring_index{0}; ring_index < legacy_ring_signature_rings[legacy_input_index].size(); ++ring_index)
+        {
+            legacy_reference_set_proof_elements_out[
+                    legacy_ring_signatures[legacy_input_index].m_reference_set[ring_index]
+                ] = legacy_ring_signature_rings[legacy_input_index][ring_index];
+        }
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    const std::vector<crypto::key_image> &input_key_images,
+    const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const rct::xmr_amount transaction_fee,
@@ -107,18 +139,20 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 {
     static const std::string project_name{CRYPTONOTE_NAME};
 
-    // H_32(crypto project name, version string, input key images, output enotes, tx supplement, fee)
+    // H_32(crypto project name, version string, legacy input key images, legacy input key images, output enotes,
+    //         tx supplement, fee)
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_TX_PROPOSAL_MESSAGE_V1,
             project_name.size() +
                 version_string.size() +
-                input_key_images.size()*sizeof(crypto::key_image) +
+                (legacy_input_key_images.size() + sp_input_key_images.size())*sizeof(crypto::key_image) +
                 output_enotes.size()*SpEnoteV1::get_size_bytes() +
                 tx_supplement.get_size_bytes()
         };
     transcript.append("project_name", project_name);
     transcript.append("version_string", version_string);
-    transcript.append("input_key_images", input_key_images);
+    transcript.append("legacy_input_key_images", legacy_input_key_images);
+    transcript.append("sp_input_key_images", sp_input_key_images);
     transcript.append("output_enotes", output_enotes);
     transcript.append("tx_supplement", tx_supplement);
     transcript.append("transaction_fee", transaction_fee);
@@ -127,7 +161,8 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    const std::vector<crypto::key_image> &input_key_images,
+    const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     const std::vector<SpEnoteV1> &output_enotes,
     const SpTxSupplementV1 &tx_supplement,
     const DiscretizedFee &transaction_fee,
@@ -140,7 +175,8 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 
     // get proposal prefix
     make_tx_proposal_prefix_v1(version_string,
-        input_key_images,
+        legacy_input_key_images,
+        sp_input_key_images,
         output_enotes,
         tx_supplement,
         raw_transaction_fee,
@@ -156,18 +192,21 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
     rct::key &proposal_prefix_out)
 {
     // get key images from enote images
-    std::vector<crypto::key_image> input_key_images;
-    input_key_images.reserve(input_legacy_enote_images.size() + input_sp_enote_images.size());
+    std::vector<crypto::key_image> legacy_input_key_images;
+    std::vector<crypto::key_image> sp_input_key_images;
+    legacy_input_key_images.reserve(input_legacy_enote_images.size());
+    sp_input_key_images.reserve(input_sp_enote_images.size());
 
     for (const LegacyEnoteImageV2 &legacy_enote_image : input_legacy_enote_images)
-        input_key_images.emplace_back(legacy_enote_image.m_key_image);
+        legacy_input_key_images.emplace_back(legacy_enote_image.m_key_image);
 
     for (const SpEnoteImageV1 &sp_enote_image : input_sp_enote_images)
-        input_key_images.emplace_back(sp_enote_image.m_core.m_key_image);
+        sp_input_key_images.emplace_back(sp_enote_image.m_core.m_key_image);
 
     // get proposal prefix
     make_tx_proposal_prefix_v1(version_string,
-        input_key_images,
+        legacy_input_key_images,
+        sp_input_key_images,
         output_enotes,
         tx_supplement,
         transaction_fee,
@@ -175,7 +214,8 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    const std::vector<crypto::key_image> &input_key_images,
+    const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
@@ -198,7 +238,8 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 
     // get proposal prefix
     make_tx_proposal_prefix_v1(version_string,
-        input_key_images,
+        legacy_input_key_images,
+        sp_input_key_images,
         output_enotes,
         tx_supplement,
         transaction_fee,
@@ -206,23 +247,29 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    //todo: legacy partial inputs
-    const std::vector<SpPartialInputV1> &partial_inputs,
+    const std::vector<LegacyInputV1> &legacy_inputs,
+    const std::vector<SpPartialInputV1> &sp_partial_inputs,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
     rct::key &proposal_prefix_out)
 {
     // get key images from partial inputs
-    std::vector<crypto::key_image> input_key_images;
-    input_key_images.reserve(partial_inputs.size());
+    std::vector<crypto::key_image> legacy_input_key_images;
+    std::vector<crypto::key_image> sp_input_key_images;
+    legacy_input_key_images.reserve(legacy_inputs.size());
+    sp_input_key_images.reserve(sp_partial_inputs.size());
 
-    for (const SpPartialInputV1 &partial_input : partial_inputs)
-        input_key_images.emplace_back(partial_input.m_input_image.m_core.m_key_image);
+    for (const LegacyInputV1 &legacy_input : legacy_inputs)
+        legacy_input_key_images.emplace_back(legacy_input.m_input_image.m_key_image);
+
+    for (const SpPartialInputV1 &sp_partial_input : sp_partial_inputs)
+        sp_input_key_images.emplace_back(sp_partial_input.m_input_image.m_core.m_key_image);
 
     // get proposal prefix
     make_tx_proposal_prefix_v1(version_string,
-        input_key_images,
+        legacy_input_key_images,
+        sp_input_key_images,
         output_proposals,
         partial_memo,
         transaction_fee,
@@ -230,23 +277,29 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_tx_proposal_prefix_v1(const std::string &version_string,
-    //todo: legacy input proposals
-    const std::vector<SpInputProposalV1> &input_proposals,
+    const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &transaction_fee,
     rct::key &proposal_prefix_out)
 {
     // get key images from input proposals
-    std::vector<crypto::key_image> input_key_images;
-    input_key_images.reserve(input_proposals.size());
+    std::vector<crypto::key_image> legacy_input_key_images;
+    std::vector<crypto::key_image> sp_input_key_images;
+    legacy_input_key_images.reserve(legacy_input_proposals.size());
+    sp_input_key_images.reserve(sp_input_proposals.size());
 
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
-        input_key_images.emplace_back(input_proposal.m_core.m_key_image);
+    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
+        legacy_input_key_images.emplace_back(legacy_input_proposal.m_key_image);
+
+    for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
+        sp_input_key_images.emplace_back(sp_input_proposal.m_core.m_key_image);
 
     // get proposal prefix
     make_tx_proposal_prefix_v1(version_string,
-        input_key_images,
+        legacy_input_key_images,
+        sp_input_key_images,
         output_proposals,
         partial_memo,
         transaction_fee,
@@ -280,7 +333,8 @@ void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &legacy_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance)
 {
     /// validate self-send payment proposals
@@ -301,13 +355,13 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
 
     // 3. all self-send destinations must be owned by the wallet
     rct::key input_context;
-    make_standard_input_context_v1(tx_proposal.m_input_proposals, input_context);
+    make_standard_input_context_v1(tx_proposal.m_legacy_input_proposals, tx_proposal.m_sp_input_proposals, input_context);
 
     for (const jamtis::JamtisPaymentProposalSelfSendV1 &selfsend_payment_proposal : tx_proposal.m_selfsend_payment_proposals)
     {
         check_jamtis_payment_proposal_selfsend_semantics_v1(selfsend_payment_proposal,
             input_context,
-            wallet_spend_pubkey,
+            jamtis_spend_pubkey,
             k_view_balance);
     }
 
@@ -339,13 +393,8 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
         "Semantics check tx proposal v1: there are fewer than 2 outputs.");
 
     // 4. outputs should be sorted and unique
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(output_enotes.begin(), output_enotes.end()),
-        "Semantics check tx proposal v1: outputs aren't sorted.");
-
-    CHECK_AND_ASSERT_THROW_MES(std::adjacent_find(output_enotes.begin(),
-            output_enotes.end(),
-            equals_from_less{}) == output_enotes.end(),
-        "Semantics check tx proposal v1: output onetime addresses are not all unique.");
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(output_enotes),
+        "Semantics check tx proposal v1: output onetime addresses are not sorted and unique.");
 
     // 5. onetime addresses should be canonical (sanity check so our tx outputs don't have duplicate key images)
     for (const SpEnoteV1 &output_enote : output_enotes)
@@ -375,25 +424,25 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
     /// input checks
 
     // 1. there should be at least one input
-    CHECK_AND_ASSERT_THROW_MES(tx_proposal.m_input_proposals.size() >= 1,
+    CHECK_AND_ASSERT_THROW_MES(tx_proposal.m_legacy_input_proposals.size() + tx_proposal.m_sp_input_proposals.size() >= 1,
         "Semantics check tx proposal v1: there are no inputs.");
 
     // 2. input proposals should be sorted and unique
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(tx_proposal.m_input_proposals.begin(),
-            tx_proposal.m_input_proposals.end()),
-        "Semantics check tx proposal v1: input proposals are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(tx_proposal.m_legacy_input_proposals),
+        "Semantics check tx proposal v1: legacy input proposals are not sorted and unique.");
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(tx_proposal.m_sp_input_proposals),
+        "Semantics check tx proposal v1: seraphis input proposals are not sorted and unique.");
 
-    CHECK_AND_ASSERT_THROW_MES(std::adjacent_find(tx_proposal.m_input_proposals.begin(),
-            tx_proposal.m_input_proposals.end(),
-            equals_from_less{}) == tx_proposal.m_input_proposals.end(),
-        "Semantics check tx proposal v1: input proposal key images are not unique.");
+    // 3. legacy input proposal semantics should be valid
+    for (const LegacyInputProposalV1 &legacy_input_proposal : tx_proposal.m_legacy_input_proposals)
+        check_v1_legacy_input_proposal_semantics_v1(legacy_input_proposal, legacy_spend_pubkey);
 
-    // 3. input proposal semantics should be valid
-    rct::key wallet_spend_pubkey_base{wallet_spend_pubkey};
-    reduce_seraphis_spendkey_x(k_view_balance, wallet_spend_pubkey_base);
+    // 4. seraphis input proposal semantics should be valid
+    rct::key jamtis_spend_pubkey_base{jamtis_spend_pubkey};
+    reduce_seraphis_spendkey_x(k_view_balance, jamtis_spend_pubkey_base);
 
-    for (const SpInputProposalV1 &input_proposal : tx_proposal.m_input_proposals)
-        check_v1_input_proposal_semantics_v1(input_proposal, wallet_spend_pubkey_base);
+    for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
+        check_v1_input_proposal_semantics_v1(sp_input_proposal, jamtis_spend_pubkey_base);
 
 
     /// check that amounts balance in the proposal
@@ -405,10 +454,13 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
 
     // 2. get input amounts
     std::vector<rct::xmr_amount> in_amounts;
-    in_amounts.reserve(tx_proposal.m_input_proposals.size());
+    in_amounts.reserve(tx_proposal.m_legacy_input_proposals.size() + tx_proposal.m_sp_input_proposals.size());
 
-    for (const SpInputProposalV1 &input_proposal : tx_proposal.m_input_proposals)
-        in_amounts.emplace_back(input_proposal.get_amount());
+    for (const LegacyInputProposalV1 &legacy_input_proposal : tx_proposal.m_legacy_input_proposals)
+        in_amounts.emplace_back(legacy_input_proposal.get_amount());
+
+    for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
+        in_amounts.emplace_back(sp_input_proposal.get_amount());
 
     // 3. check: sum(input amnts) == sum(output amnts) + fee
     CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(in_amounts, output_amounts, raw_transaction_fee),
@@ -418,18 +470,21 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
 void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     const DiscretizedFee &tx_fee,
-    std::vector<SpInputProposalV1> input_proposals,
+    std::vector<LegacyInputProposalV1> legacy_input_proposals,
+    std::vector<SpInputProposalV1> sp_input_proposals,
     std::vector<ExtraFieldElement> additional_memo_elements,
     SpTxProposalV1 &tx_proposal_out)
 {
     // inputs should be sorted by key image
-    std::sort(input_proposals.begin(), input_proposals.end());
+    std::sort(legacy_input_proposals.begin(), legacy_input_proposals.end());
+    std::sort(sp_input_proposals.begin(), sp_input_proposals.end());
 
     // set fields
     tx_proposal_out.m_normal_payment_proposals = std::move(normal_payment_proposals);
     tx_proposal_out.m_selfsend_payment_proposals = std::move(selfsend_payment_proposals);
     tx_proposal_out.m_tx_fee = tx_fee;
-    tx_proposal_out.m_input_proposals = std::move(input_proposals);
+    tx_proposal_out.m_legacy_input_proposals = std::move(legacy_input_proposals);
+    tx_proposal_out.m_sp_input_proposals = std::move(sp_input_proposals);
     make_tx_extra(std::move(additional_memo_elements), tx_proposal_out.m_partial_memo);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -444,8 +499,12 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     TxExtra partial_memo_for_tx,
     const crypto::secret_key &k_view_balance,
     SpTxProposalV1 &tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out)
+    std::unordered_map<crypto::key_image, std::uint64_t> &legacy_input_ledger_mappings_out,
+    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out)
 {
+    legacy_input_ledger_mappings_out.clear();
+    sp_input_ledger_mappings_out.clear();
+
     // 1. try to select inputs for the tx
     const OutputSetContextForInputSelectionV1 output_set_context{
             normal_payment_proposals,
@@ -470,31 +529,48 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
     CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
-    // a. handle legacy inputs (TODO)
+    // a. handle legacy inputs
+    std::vector<LegacyInputProposalV1> legacy_input_proposals;
+    legacy_input_proposals.reserve(legacy_contextual_inputs.size());
+
+    for (const LegacyContextualEnoteRecordV1 &legacy_contextual_input : legacy_contextual_inputs)
+    {
+        // save input indices for making legacy ring signatures
+        legacy_input_ledger_mappings_out[legacy_contextual_input.m_record.m_key_image] = 
+            legacy_contextual_input.m_origin_context.m_enote_ledger_index;
+
+        // convert legacy inputs to input proposals
+        legacy_input_proposals.emplace_back();
+        make_v1_legacy_input_proposal_v1(legacy_contextual_input.m_record,
+            rct::rct2sk(rct::skGen()),
+            legacy_input_proposals.back());
+    }
 
     // b. handle seraphis inputs
-    input_ledger_mappings_out.clear();
+    std::vector<SpInputProposalV1> sp_input_proposals;
+    sp_input_proposals.reserve(sp_contextual_inputs.size());
 
-    std::vector<SpInputProposalV1> input_proposals;
-    input_proposals.reserve(sp_contextual_inputs.size());
-
-    for (const SpContextualEnoteRecordV1 &contextual_input : sp_contextual_inputs)
+    for (const SpContextualEnoteRecordV1 &sp_contextual_input : sp_contextual_inputs)
     {
-        // save input indices for making membership proofs
-        input_ledger_mappings_out[contextual_input.m_record.m_key_image] = 
-            contextual_input.m_origin_context.m_enote_ledger_index;
+        // save input indices for making seraphis membership proofs
+        sp_input_ledger_mappings_out[sp_contextual_input.m_record.m_key_image] = 
+            sp_contextual_input.m_origin_context.m_enote_ledger_index;
 
-        // convert inputs to input proposals
-        input_proposals.emplace_back();
-        make_v1_input_proposal_v1(contextual_input.m_record,
+        // convert seraphis inputs to input proposals
+        sp_input_proposals.emplace_back();
+        make_v1_input_proposal_v1(sp_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
             rct::rct2sk(rct::skGen()),
-            input_proposals.back());
+            sp_input_proposals.back());
     }
 
     // 3.  get total input amount
     boost::multiprecision::uint128_t total_input_amount{0};
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
+
+    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
+        total_input_amount += legacy_input_proposal.m_amount;
+
+    for (const SpInputProposalV1 &input_proposal : sp_input_proposals)
         total_input_amount += input_proposal.m_core.m_amount;
 
     // 4. finalize output set
@@ -525,7 +601,8 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     make_v1_tx_proposal_v1(std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         discretized_transaction_fee,
-        std::move(input_proposals),
+        std::move(legacy_input_proposals),
+        std::move(sp_input_proposals),
         std::move(extra_field_elements),
         tx_proposal_out);
 
@@ -584,25 +661,34 @@ void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &legacy_input_a
     balance_proof_out.m_remainder_blinding_factor = rct::sk2rct(remainder_blinding_factor);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool balance_check_in_out_amnts_v1(const std::vector<SpInputProposalV1> &input_proposals,
+bool balance_check_in_out_amnts_v1(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
     const std::vector<SpOutputProposalV1> &output_proposals,
     const DiscretizedFee &discretized_transaction_fee)
 {
+    // input amounts
     std::vector<rct::xmr_amount> in_amounts;
-    std::vector<rct::xmr_amount> out_amounts;
-    in_amounts.reserve(input_proposals.size());
-    out_amounts.reserve(output_proposals.size());
+    in_amounts.reserve(legacy_input_proposals.size() + sp_input_proposals.size());
 
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
-        in_amounts.emplace_back(input_proposal.get_amount());
+    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
+        in_amounts.emplace_back(legacy_input_proposal.get_amount());
+
+    for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
+        in_amounts.emplace_back(sp_input_proposal.get_amount());
+
+    // output amounts
+    std::vector<rct::xmr_amount> out_amounts;
+    out_amounts.reserve(output_proposals.size());
 
     for (const SpOutputProposalV1 &output_proposal : output_proposals)
         out_amounts.emplace_back(output_proposal.get_amount());
 
+    // fee
     rct::xmr_amount raw_transaction_fee;
     CHECK_AND_ASSERT_THROW_MES(try_get_fee_value(discretized_transaction_fee, raw_transaction_fee),
         "balance check in out amnts v1: unable to extract transaction fee from discretized fee representation.");
 
+    // balance check
     return balance_check_in_out_amnts(in_amounts, out_amounts, raw_transaction_fee);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -612,7 +698,7 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
     // 1. prepare a mock ledger
     MockLedgerContext mock_ledger{0, 0};
 
-    // 2. get parameters for making mock ref sets (use minimum parameters for efficiency when possible)
+    // 2. get parameters for making mock seraphis ref sets (use minimum parameters for efficiency when possible)
     const SemanticConfigSpRefSetV1 ref_set_config{semantic_config_sp_ref_sets_v1(semantic_rules_version)};
     const SpBinnedReferenceSetConfigV1 bin_config{
             .m_bin_radius = static_cast<ref_set_bin_dimension_v1_t>(ref_set_config.m_bin_radius_min),
@@ -620,44 +706,51 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
         };
 
     // 3. make mock membership proof ref sets
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps{
-            gen_mock_sp_membership_proof_preps_v1(partial_tx.m_input_enotes,
-                partial_tx.m_address_masks,
-                partial_tx.m_commitment_masks,
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps{
+            gen_mock_sp_membership_proof_preps_v1(partial_tx.m_sp_input_enotes,
+                partial_tx.m_sp_address_masks,
+                partial_tx.m_sp_commitment_masks,
                 ref_set_config.m_decomp_n_min,
                 ref_set_config.m_decomp_m_min,
                 bin_config,
                 mock_ledger)
         };
 
-    // 4. make the mock membership proofs
-    std::vector<SpMembershipProofV1> membership_proofs;
-    make_v1_membership_proofs_v1(std::move(membership_proof_preps), membership_proofs);
+    // 4. make the mock seraphis membership proofs
+    std::vector<SpMembershipProofV1> sp_membership_proofs;
+    make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps), sp_membership_proofs);
 
-    // 5. make tx (use raw constructor instead of partial tx constructor to avoid infinite loop)
+    // 5. collect legacy ring signature ring members for mock validation context
+    std::unordered_map<std::uint64_t, rct::ctkey> legacy_reference_set_proof_elements;
+
+    collect_legacy_ring_signature_ring_members(partial_tx.m_legacy_ring_signatures,
+        partial_tx.m_legacy_ring_signature_rings,
+        legacy_reference_set_proof_elements);
+
+    // 6. make tx (use raw constructor instead of partial tx constructor to avoid infinite loop)
     SpTxSquashedV1 test_tx;
     make_seraphis_tx_squashed_v1(
-        std::move(partial_tx.m_legacy_input_images),
-        std::move(partial_tx.m_sp_input_images),
-        std::move(partial_tx.m_outputs),
-        std::move(partial_tx.m_balance_proof),
-        std::move(partial_tx.m_legacy_ring_signatures),
-        std::move(partial_tx.m_sp_image_proofs),
-        std::move(membership_proofs),
-        std::move(partial_tx.m_tx_supplement),
+        partial_tx.m_legacy_input_images,
+        partial_tx.m_sp_input_images,
+        partial_tx.m_outputs,
+        partial_tx.m_balance_proof,
+        partial_tx.m_legacy_ring_signatures,
+        partial_tx.m_sp_image_proofs,
+        std::move(sp_membership_proofs),
+        partial_tx.m_tx_supplement,
         partial_tx.m_tx_fee,
         semantic_rules_version,
         test_tx);
 
-    // 6. validate tx
-    //todo: use mock validation context that knows the mapping for legacy ring signature ring members
-    const TxValidationContextMock tx_validation_context{mock_ledger};
+    // 7. validate tx
+    const TxValidationContextMockPartial tx_validation_context{mock_ledger, legacy_reference_set_proof_elements};
 
     CHECK_AND_ASSERT_THROW_MES(validate_tx(test_tx, tx_validation_context),
         "v1 partial tx semantics check (v1): test transaction was invalid using requested semantics rules version!");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
+void make_v1_partial_tx_v1(std::vector<LegacyInputV1> legacy_inputs,
+    std::vector<SpPartialInputV1> sp_partial_inputs,
     std::vector<SpOutputProposalV1> output_proposals,
     const TxExtra &partial_memo,
     const DiscretizedFee &tx_fee,
@@ -667,14 +760,18 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
     /// preparation and checks
     partial_tx_out = SpPartialTxV1{};
 
-    // 1. sort the inputs by key image and collect key images
-    std::sort(partial_inputs.begin(), partial_inputs.end());
+    // 1. sort the inputs by key image
+    std::sort(legacy_inputs.begin(), legacy_inputs.end());
+    std::sort(sp_partial_inputs.begin(), sp_partial_inputs.end());
 
     // 2. sort the outputs by onetime address
     std::sort(output_proposals.begin(), output_proposals.end());
 
     // 3. semantics checks for inputs and outputs
-    for (const SpPartialInputV1 &partial_input : partial_inputs)
+    for (const LegacyInputV1 &legacy_input : legacy_inputs)
+        check_v1_legacy_input_semantics_v1(legacy_input);
+
+    for (const SpPartialInputV1 &partial_input : sp_partial_inputs)
         check_v1_partial_input_semantics_v1(partial_input);
 
     check_v1_output_proposal_set_semantics_v1(output_proposals);  //do this after sorting the proposals
@@ -697,27 +794,40 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
     // 6. check: inputs and proposal must have consistent proposal prefixes
     rct::key proposal_prefix;
     make_tx_proposal_prefix_v1(version_string,
-        partial_inputs,
+        legacy_inputs,
+        sp_partial_inputs,
         output_proposals,
         partial_memo,
         tx_fee,
         proposal_prefix);
 
-    for (const SpPartialInputV1 &partial_input : partial_inputs)
+    for (const LegacyInputV1 &legacy_input : legacy_inputs)
+    {
+        CHECK_AND_ASSERT_THROW_MES(proposal_prefix == legacy_input.m_proposal_prefix,
+            "making partial tx: a legacy input's proposal prefix is invalid/inconsistent.");
+    }
+
+    for (const SpPartialInputV1 &partial_input : sp_partial_inputs)
     {
         CHECK_AND_ASSERT_THROW_MES(proposal_prefix == partial_input.m_proposal_prefix,
-            "making partial tx: a partial input's proposal prefix is invalid/inconsistent.");
+            "making partial tx: a seraphis partial input's proposal prefix is invalid/inconsistent.");
     }
 
 
     /// balance proof
 
     // 1. get input amounts and image amount commitment blinding factors
-    std::vector<rct::xmr_amount> input_amounts;
-    std::vector<crypto::secret_key> input_image_amount_commitment_blinding_factors;
-    prepare_input_commitment_factors_for_balance_proof_v1(partial_inputs,
-        input_amounts,
-        input_image_amount_commitment_blinding_factors);
+    std::vector<rct::xmr_amount> legacy_input_amounts;
+    std::vector<crypto::secret_key> legacy_input_image_amount_commitment_blinding_factors;
+    prepare_legacy_input_commitment_factors_for_balance_proof_v1(legacy_inputs,
+        legacy_input_amounts,
+        legacy_input_image_amount_commitment_blinding_factors);
+
+    std::vector<rct::xmr_amount> sp_input_amounts;
+    std::vector<crypto::secret_key> sp_input_image_amount_commitment_blinding_factors;
+    prepare_input_commitment_factors_for_balance_proof_v1(sp_partial_inputs,
+        sp_input_amounts,
+        sp_input_image_amount_commitment_blinding_factors);
 
     // 2. extract the fee
     rct::xmr_amount raw_transaction_fee;
@@ -725,72 +835,97 @@ void make_v1_partial_tx_v1(std::vector<SpPartialInputV1> partial_inputs,
         "making partial tx: could not extract a fee value from the discretized fee.");
 
     // 3. make balance proof
-    make_v1_balance_proof_v1({},  //legacy input amounts (todo)
-        input_amounts,
+    make_v1_balance_proof_v1(legacy_input_amounts,
+        sp_input_amounts,
         output_amounts,
         raw_transaction_fee,
-        {},  //legacy input masked commitment blinding factors (todo)
-        input_image_amount_commitment_blinding_factors,
+        legacy_input_image_amount_commitment_blinding_factors,
+        sp_input_image_amount_commitment_blinding_factors,
         output_amount_commitment_blinding_factors,
         partial_tx_out.m_balance_proof);
 
 
     /// copy misc tx pieces
 
-    // 1. gather tx input parts
-    //partial_tx_out.m_legacy_input_images.reserve(...);  //todo
-    partial_tx_out.m_sp_input_images.reserve(partial_inputs.size());
-    //partial_tx_out.m_legacy_ring_signatures.reserve(...);  //todo
-    partial_tx_out.m_sp_image_proofs.reserve(partial_inputs.size());
-    partial_tx_out.m_input_enotes.reserve(partial_inputs.size());
-    partial_tx_out.m_address_masks.reserve(partial_inputs.size());
-    partial_tx_out.m_commitment_masks.reserve(partial_inputs.size());
+    // 1. gather legacy tx input parts
+    partial_tx_out.m_legacy_input_images.reserve(legacy_inputs.size());
+    partial_tx_out.m_legacy_ring_signatures.reserve(legacy_inputs.size());
+    partial_tx_out.m_legacy_ring_signature_rings.reserve(legacy_inputs.size());
 
-    for (SpPartialInputV1 &partial_input : partial_inputs)
+    for (LegacyInputV1 &legacy_input : legacy_inputs)
+    {
+        partial_tx_out.m_legacy_input_images.emplace_back(legacy_input.m_input_image);
+        partial_tx_out.m_legacy_ring_signatures.emplace_back(std::move(legacy_input.m_ring_signature));
+        partial_tx_out.m_legacy_ring_signature_rings.emplace_back(std::move(legacy_input.m_ring_members));
+    }
+
+    // 2. gather seraphis tx input parts
+    partial_tx_out.m_sp_input_images.reserve(sp_partial_inputs.size());
+    partial_tx_out.m_sp_image_proofs.reserve(sp_partial_inputs.size());
+    partial_tx_out.m_sp_input_enotes.reserve(sp_partial_inputs.size());
+    partial_tx_out.m_sp_address_masks.reserve(sp_partial_inputs.size());
+    partial_tx_out.m_sp_commitment_masks.reserve(sp_partial_inputs.size());
+
+    for (SpPartialInputV1 &partial_input : sp_partial_inputs)
     {
         partial_tx_out.m_sp_input_images.emplace_back(partial_input.m_input_image);
         partial_tx_out.m_sp_image_proofs.emplace_back(std::move(partial_input.m_image_proof));
-        partial_tx_out.m_input_enotes.emplace_back(partial_input.m_input_enote_core);
-        partial_tx_out.m_address_masks.emplace_back(partial_input.m_address_mask);
-        partial_tx_out.m_commitment_masks.emplace_back(partial_input.m_commitment_mask);
+        partial_tx_out.m_sp_input_enotes.emplace_back(partial_input.m_input_enote_core);
+        partial_tx_out.m_sp_address_masks.emplace_back(partial_input.m_address_mask);
+        partial_tx_out.m_sp_commitment_masks.emplace_back(partial_input.m_commitment_mask);
     }
 
-    // 2. gather tx output parts
+    // 3. gather tx output parts
     partial_tx_out.m_outputs = std::move(output_enotes);
     partial_tx_out.m_tx_supplement = std::move(tx_supplement);
     partial_tx_out.m_tx_fee = tx_fee;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_partial_tx_v1(const SpTxProposalV1 &tx_proposal,
-    std::vector<SpPartialInputV1> partial_inputs,
+    std::vector<LegacyInputV1> legacy_inputs,
+    std::vector<SpPartialInputV1> sp_partial_inputs,
     const std::string &version_string,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &legacy_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpPartialTxV1 &partial_tx_out)
 {
     // 1. validate tx proposal
-    check_v1_tx_proposal_semantics_v1(tx_proposal, wallet_spend_pubkey, k_view_balance);
+    check_v1_tx_proposal_semantics_v1(tx_proposal, legacy_spend_pubkey, jamtis_spend_pubkey, k_view_balance);
 
     // 2. sort the inputs by key image
-    std::sort(partial_inputs.begin(), partial_inputs.end());
+    std::sort(legacy_inputs.begin(), legacy_inputs.end());
+    std::sort(sp_partial_inputs.begin(), sp_partial_inputs.end());
 
-    // 3. partial inputs must line up with input proposals in the tx proposal
-    CHECK_AND_ASSERT_THROW_MES(partial_inputs.size() == tx_proposal.m_input_proposals.size(),
-        "making partial tx: number of partial inputs doesn't match number of input proposals.");
+    // 3. legacy inputs must line up with legacy input proposals in the tx proposal
+    CHECK_AND_ASSERT_THROW_MES(legacy_inputs.size() == tx_proposal.m_legacy_input_proposals.size(),
+        "making partial tx: number of legacy inputs doesn't match number of legacy input proposals.");
 
-    for (std::size_t input_index{0}; input_index < partial_inputs.size(); ++input_index)
+    for (std::size_t input_index{0}; input_index < legacy_inputs.size(); ++input_index)
     {
-        CHECK_AND_ASSERT_THROW_MES(same_key_image(partial_inputs[input_index],
-                tx_proposal.m_input_proposals[input_index]),
-            "making partial tx: partial inputs and input proposals don't line up (inconsistent key images).");
+        CHECK_AND_ASSERT_THROW_MES(same_key_image(legacy_inputs[input_index],
+                tx_proposal.m_legacy_input_proposals[input_index]),
+            "making partial tx: legacy inputs and input proposals don't line up (inconsistent key images).");
     }
 
-    // 4. extract output proposals from tx proposal
+    // 4. seraphis partial inputs must line up with seraphis input proposals in the tx proposal
+    CHECK_AND_ASSERT_THROW_MES(sp_partial_inputs.size() == tx_proposal.m_sp_input_proposals.size(),
+        "making partial tx: number of seraphis partial inputs doesn't match number of seraphis input proposals.");
+
+    for (std::size_t input_index{0}; input_index < sp_partial_inputs.size(); ++input_index)
+    {
+        CHECK_AND_ASSERT_THROW_MES(same_key_image(sp_partial_inputs[input_index],
+                tx_proposal.m_sp_input_proposals[input_index]),
+            "making partial tx: seraphis partial inputs and input proposals don't line up (inconsistent key images).");
+    }
+
+    // 5. extract output proposals from tx proposal
     std::vector<SpOutputProposalV1> output_proposals;
     tx_proposal.get_output_proposals_v1(k_view_balance, output_proposals);
 
-    // 5. construct partial tx
-    make_v1_partial_tx_v1(std::move(partial_inputs),
+    // 6. construct partial tx
+    make_v1_partial_tx_v1(std::move(legacy_inputs),
+        std::move(sp_partial_inputs),
         std::move(output_proposals),
         tx_proposal.m_partial_memo,
         tx_proposal.m_tx_fee,

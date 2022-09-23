@@ -225,7 +225,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
 
         // complete and validate each signature attempt
         std::vector<sp::SpCompositionProofMultisigPartial> partial_sigs;
-        std::vector<sp::SpMultisigPubNonces> signer_nonces_pubs;
+        std::vector<sp::SpMultisigPubNonces> signer_nonces_pubs;  //stored with *(1/8)
         crypto::secret_key z_temp;
         sp::SpCompositionProof proof;
 
@@ -618,8 +618,10 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     SpPartialTxV1 partial_tx;
     ASSERT_NO_THROW(make_v1_partial_tx_v1(tx_proposal,
+        {},  //todo: legacy
         std::move(partial_inputs),
         version_string,
+        rct::key{},  //todo: legacy
         shared_keys.K_1_base,
         shared_keys.k_vb,
         partial_tx));
@@ -628,7 +630,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // note: use ring size 2^2 = 4 for speed
     std::vector<SpMembershipProofPrepV1> membership_proof_preps;
     ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(input_ledger_mappings,
-        tx_proposal.m_input_proposals,
+        tx_proposal.m_sp_input_proposals,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,

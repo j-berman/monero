@@ -56,6 +56,7 @@ extern "C"
 #include "tx_binned_reference_set_utils.h"
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
+#include "tx_legacy_builder_types.h"
 #include "tx_legacy_component_types.h"
 #include "tx_misc_utils.h"
 #include "tx_enote_record_types.h"
@@ -218,10 +219,10 @@ void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_e
 }
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal,
-    const rct::key &wallet_spend_pubkey_base)
+    const rct::key &jamtis_spend_pubkey_base)
 {
     // 1. the onetime address must be reproducible
-    rct::key extended_wallet_spendkey{wallet_spend_pubkey_base};
+    rct::key extended_wallet_spendkey{jamtis_spend_pubkey_base};
     extend_seraphis_spendkey_u(input_proposal.m_core.m_enote_view_privkey_u, extended_wallet_spendkey);
 
     rct::key onetime_address_reproduced{extended_wallet_spendkey};
@@ -295,7 +296,7 @@ void make_v1_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
 bool try_make_v1_input_proposal_v1(const SpEnoteV1 &enote,
     const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const crypto::secret_key &address_mask,
     const crypto::secret_key &commitment_mask,
@@ -306,7 +307,7 @@ bool try_make_v1_input_proposal_v1(const SpEnoteV1 &enote,
     if (!try_get_enote_record_v1(enote,
             enote_ephemeral_pubkey,
             input_context,
-            wallet_spend_pubkey,
+            jamtis_spend_pubkey,
             k_view_balance,
             enote_record))
         return false;
@@ -316,15 +317,21 @@ bool try_make_v1_input_proposal_v1(const SpEnoteV1 &enote,
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_standard_input_context_v1(const std::vector<SpInputProposalV1> &input_proposals, rct::key &input_context_out)
+void make_standard_input_context_v1(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
+    rct::key &input_context_out)
 {
     // collect key images
     std::vector<crypto::key_image> key_images;
+    key_images.reserve(legacy_input_proposals.size() + sp_input_proposals.size());
 
-    for (const SpInputProposalV1 &input_proposal : input_proposals)
+    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
+        key_images.emplace_back(legacy_input_proposal.m_key_image);
+
+    for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
     {
         key_images.emplace_back();
-        input_proposal.m_core.get_key_image(key_images.back());
+        sp_input_proposal.m_core.get_key_image(key_images.back());
     }
 
     // sort the key images
@@ -336,7 +343,7 @@ void make_standard_input_context_v1(const std::vector<SpInputProposalV1> &input_
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     const rct::key &message,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     SpImageProofV1 &image_proof_out)
 {
     // make image proof
@@ -364,7 +371,7 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     sc_mul(to_bytes(y), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_x));
     // H_n(Ko,C) (k_{b, recipient} + k_{b, sender})
     crypto::secret_key z;
-    sc_add(to_bytes(z), to_bytes(input_proposal.m_enote_view_privkey_u), to_bytes(spendbase_privkey));
+    sc_add(to_bytes(z), to_bytes(input_proposal.m_enote_view_privkey_u), to_bytes(sp_spend_privkey));
     sc_mul(to_bytes(z), to_bytes(squash_prefix), to_bytes(z));
 
     // make seraphis composition proof
@@ -373,7 +380,7 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_image_proofs_v1(const std::vector<SpInputProposalV1> &input_proposals,
     const rct::key &message,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     std::vector<SpImageProofV1> &image_proofs_out)
 {
     // make multiple image proofs
@@ -385,7 +392,7 @@ void make_v1_image_proofs_v1(const std::vector<SpInputProposalV1> &input_proposa
     for (const SpInputProposalV1 &input_proposal : input_proposals)
     {
         image_proofs_out.emplace_back();
-        make_v1_image_proof_v1(input_proposal.m_core, message, spendbase_privkey, image_proofs_out.back());
+        make_v1_image_proof_v1(input_proposal.m_core, message, sp_spend_privkey, image_proofs_out.back());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -575,14 +582,14 @@ void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input)
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
     const rct::key &proposal_prefix,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     SpPartialInputV1 &partial_input_out)
 {
     // check input proposal semantics
-    rct::key wallet_spend_pubkey_base;
-    make_seraphis_spendbase(spendbase_privkey, wallet_spend_pubkey_base);
+    rct::key jamtis_spend_pubkey_base;
+    make_seraphis_spendbase(sp_spend_privkey, jamtis_spend_pubkey_base);
 
-    check_v1_input_proposal_semantics_v1(input_proposal, wallet_spend_pubkey_base);
+    check_v1_input_proposal_semantics_v1(input_proposal, jamtis_spend_pubkey_base);
 
     // prepare input image
     input_proposal.get_enote_image_v1(partial_input_out.m_input_image);
@@ -598,13 +605,13 @@ void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
     // construct image proof
     make_v1_image_proof_v1(input_proposal.m_core,
         partial_input_out.m_proposal_prefix,
-        spendbase_privkey,
+        sp_spend_privkey,
         partial_input_out.m_image_proof);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_proposals,
     const rct::key &proposal_prefix,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     std::vector<SpPartialInputV1> &partial_inputs_out)
 {
     CHECK_AND_ASSERT_THROW_MES(input_proposals.size() > 0, "Can't make partial tx inputs without any input proposals.");
@@ -616,11 +623,11 @@ void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_propo
     for (const SpInputProposalV1 &input_proposal : input_proposals)
     {
         partial_inputs_out.emplace_back();
-        make_v1_partial_input_v1(input_proposal, proposal_prefix, spendbase_privkey, partial_inputs_out.back());
+        make_v1_partial_input_v1(input_proposal, proposal_prefix, sp_spend_privkey, partial_inputs_out.back());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secret_key &spendbase_privkey,
+std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secret_key &sp_spend_privkey,
     const std::vector<rct::xmr_amount> in_amounts)
 {
     // generate random inputs
@@ -630,7 +637,7 @@ std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secr
     for (const rct::xmr_amount in_amount : in_amounts)
     {
         input_proposals.emplace_back();
-        input_proposals.back().gen(spendbase_privkey, in_amount);
+        input_proposals.back().gen(sp_spend_privkey, in_amount);
     }
 
     return input_proposals;

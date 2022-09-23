@@ -433,7 +433,8 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
 
     // 2. tx proposal
     SpTxProposalV1 tx_proposal;
-    std::unordered_map<crypto::key_image, std::uint64_t> input_ledger_mappings;
+    std::unordered_map<crypto::key_image, std::uint64_t> legacy_input_ledger_mappings;
+    std::unordered_map<crypto::key_image, std::uint64_t> sp_input_ledger_mappings;
     ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_tx_proposal_for_transfer_v1(change_address,
         dummy_address,
         local_user_input_selector,
@@ -445,12 +446,13 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
         TxExtra{},
         local_user_keys.k_vb,
         tx_proposal,
-        input_ledger_mappings)));
+        legacy_input_ledger_mappings,  //todo: legacy
+        sp_input_ledger_mappings)));
 
     // 3. prepare for membership proofs
     std::vector<SpMembershipProofPrepV1> membership_proof_preps;
-    ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(input_ledger_mappings,
-        tx_proposal.m_input_proposals,
+    ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(sp_input_ledger_mappings,
+        tx_proposal.m_sp_input_proposals,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,
@@ -459,8 +461,10 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
 
     // 4. complete tx
     ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(tx_proposal,
+        {},  //todo: legacy
         std::move(membership_proof_preps),
         SpTxSquashedV1::SemanticRulesVersion::MOCK,
+        crypto::secret_key{},  //todo: legacy
         local_user_keys.k_m,
         local_user_keys.k_vb,
         tx_out));

@@ -42,6 +42,7 @@
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
+#include "tx_legacy_builder_types.h"
 #include "tx_legacy_component_types.h"
 
 //third party headers
@@ -82,9 +83,9 @@ struct SpInputProposalV1 final
     rct::xmr_amount get_amount() const { return m_core.m_amount; }
 
     /// generate a v1 input (does not support info recovery)
-    void gen(const crypto::secret_key &spendbase_privkey, const rct::xmr_amount amount)
+    void gen(const crypto::secret_key &sp_spend_privkey, const rct::xmr_amount amount)
     {
-        m_core.gen(spendbase_privkey, amount);
+        m_core.gen(sp_spend_privkey, amount);
     }
 };
 
@@ -173,8 +174,10 @@ struct SpTxProposalV1 final
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> m_selfsend_payment_proposals;
     /// tx fee
     DiscretizedFee m_tx_fee;
-    /// inputs
-    std::vector<SpInputProposalV1> m_input_proposals;
+    /// legacy input proposals
+    std::vector<LegacyInputProposalV1> m_legacy_input_proposals;
+    /// seraphis input proposals
+    std::vector<SpInputProposalV1> m_sp_input_proposals;
     /// partial memo
     TxExtra m_partial_memo;
 
@@ -244,13 +247,14 @@ struct SpPartialTxV1 final
     /// tx fee (discretized representation)
     DiscretizedFee m_tx_fee;
 
-    ///todo: cached legacy input info (legacy input enotes, legacy commitment masks, legacy reference set {KI, C})
+    /// ring members for each legacy input; for validating ring signatures stored here
+    std::vector<rct::ctkeyV> m_legacy_ring_signature_rings;
 
-    /// input enotes
-    std::vector<SpEnote> m_input_enotes;
-    /// image masks for creating seraphis input membership proofs
-    std::vector<crypto::secret_key> m_address_masks;
-    std::vector<crypto::secret_key> m_commitment_masks;
+    /// seraphis input enotes; for creating seraphis input membership proofs
+    std::vector<SpEnote> m_sp_input_enotes;
+    /// seraphis image masks; for creating seraphis input membership proofs
+    std::vector<crypto::secret_key> m_sp_address_masks;
+    std::vector<crypto::secret_key> m_sp_commitment_masks;
 };
 
 } //namespace sp

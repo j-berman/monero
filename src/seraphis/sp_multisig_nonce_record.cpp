@@ -55,7 +55,7 @@ bool SpMultisigPubNonces::operator<(const SpMultisigPubNonces &other) const
     const int nonce_1_comparison{
             memcmp(signature_nonce_1_pub.bytes, &other.signature_nonce_1_pub.bytes, sizeof(rct::key))
         };
-    
+
     if (nonce_1_comparison < 0)
     {
         return true;

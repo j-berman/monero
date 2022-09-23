@@ -132,7 +132,7 @@ void finalize_tx_extra_v1(const TxExtra &partial_memo,
 * param: transaction_fee -
 * param: change_destination -
 * param: dummy_destination -
-* param: wallet_spend_pubkey -
+* param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * inoutparam: normal_payment_proposals_inout -
 * inoutparam: selfsend_payment_proposals_inout -

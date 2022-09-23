@@ -42,6 +42,7 @@
 //third party headers
 
 //standard headers
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -64,6 +65,18 @@ struct equals_from_less final
     }
 };
 
+//todo: specialize when T::value_type has an operator==
+template <typename T>
+bool is_sorted_and_unique(const T& container)
+{
+    if (!std::is_sorted(container.begin(), container.end()))
+        return false;
+
+    if (std::adjacent_find(container.begin(), container.end(), equals_from_less{}) != container.end())
+        return false;
+
+    return true;
+}
 /**
 * brief: ref_set_size_from_decomp - compute n^m from decomposition of a reference set
 * param: ref_set_decomp_n -

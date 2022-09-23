@@ -93,10 +93,10 @@ void make_seraphis_key_image(const crypto::secret_key &k_a_sender,
     make_seraphis_key_image(k_a_combined, k_bU, key_image_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_spendbase(const crypto::secret_key &spendbase_privkey, rct::key &spendbase_pubkey_out)
+void make_seraphis_spendbase(const crypto::secret_key &sp_spend_privkey, rct::key &spendbase_pubkey_out)
 {
     // spendbase = k_{b, recipient} U
-    rct::scalarmultKey(spendbase_pubkey_out, rct::pk2rct(crypto::get_U()), rct::sk2rct(spendbase_privkey));
+    rct::scalarmultKey(spendbase_pubkey_out, rct::pk2rct(crypto::get_U()), rct::sk2rct(sp_spend_privkey));
 }
 //-------------------------------------------------------------------------------------------------------------------
 void extend_seraphis_spendkey_x(const crypto::secret_key &k_extender_x, rct::key &spendkey_inout)
@@ -227,14 +227,14 @@ void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_g,
 void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_g,
     const crypto::secret_key &enote_view_privkey_x,
     const crypto::secret_key &enote_view_privkey_u,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &amount_blinding_factor,
     const rct::xmr_amount amount,
     SpEnote &enote_core_out)
 {
     // spendbase = k_{b, recipient} U
     rct::key spendbase;
-    make_seraphis_spendbase(spendbase_privkey, spendbase);
+    make_seraphis_spendbase(sp_spend_privkey, spendbase);
 
     // finish making the enote
     make_seraphis_enote_core(enote_view_privkey_g,

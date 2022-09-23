@@ -60,14 +60,14 @@ void SpMultisigPublicInputProposalV1::get_squash_prefix(crypto::secret_key &squa
     make_seraphis_squash_prefix(m_enote.m_core.m_onetime_address, m_enote.m_core.m_amount_commitment, squash_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigPublicInputProposalV1::get_input_proposal_v1(const rct::key &wallet_spend_pubkey,
+void SpMultisigPublicInputProposalV1::get_input_proposal_v1(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpInputProposalV1 &input_proposal_out) const
 {
     CHECK_AND_ASSERT_THROW_MES(try_make_v1_input_proposal_v1(m_enote,
             m_enote_ephemeral_pubkey,
             m_input_context,
-            wallet_spend_pubkey,
+            jamtis_spend_pubkey,
             k_view_balance,
             m_address_mask,
             m_commitment_mask,
@@ -75,7 +75,7 @@ void SpMultisigPublicInputProposalV1::get_input_proposal_v1(const rct::key &wall
         "multisig public input proposal to plain input proposal: conversion failed (wallet may not own this input.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &wallet_spend_pubkey,
+void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpTxProposalV1 &tx_proposal_out) const
 {
@@ -85,7 +85,7 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &wallet_spend_
     for (const SpMultisigPublicInputProposalV1 &public_input_proposal : m_input_proposals)
     {
         plain_input_proposals.emplace_back();
-        public_input_proposal.get_input_proposal_v1(wallet_spend_pubkey, k_view_balance, plain_input_proposals.back());
+        public_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, plain_input_proposals.back());
     }
 
     // extract memo field elements
@@ -97,18 +97,19 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &wallet_spend_
     make_v1_tx_proposal_v1(m_normal_payment_proposals,
         m_selfsend_payment_proposals,
         m_tx_fee,
+        {},  //todo: legacy
         std::move(plain_input_proposals),
         std::move(additional_memo_elements),
         tx_proposal_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigTxProposalV1::get_proposal_prefix_v1(const rct::key &wallet_spend_pubkey,
+void SpMultisigTxProposalV1::get_proposal_prefix_v1(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     rct::key &proposal_prefix_out) const
 {
     // extract proposal
     SpTxProposalV1 tx_proposal;
-    this->get_v1_tx_proposal_v1(wallet_spend_pubkey, k_view_balance, tx_proposal);
+    this->get_v1_tx_proposal_v1(jamtis_spend_pubkey, k_view_balance, tx_proposal);
 
     // get prefix from proposal
     tx_proposal.get_proposal_prefix(m_version_string, k_view_balance, proposal_prefix_out);

@@ -79,10 +79,10 @@ void make_seraphis_key_image(const crypto::secret_key &k_a_sender,
 /**
 * brief: make_seraphis_spendbase - create the base part of a Seraphis spendkey
 *   spendbase = k_{b, recipient} U
-* param: spendbase_privkey - k_{b, recipient}
+* param: sp_spend_privkey - k_{b, recipient}
 * outparam: spendbase_pubkey_out - k_{b, recipient} U
 */
-void make_seraphis_spendbase(const crypto::secret_key &spendbase_privkey, rct::key &spendbase_pubkey_out);
+void make_seraphis_spendbase(const crypto::secret_key &sp_spend_privkey, rct::key &spendbase_pubkey_out);
 /**
 * brief: extend_seraphis_spendkey_x - extend a Seraphis spendkey (or onetime address) on generator X
 *   K = k_extender_x X + K_original
@@ -122,7 +122,7 @@ void reduce_seraphis_spendkey_u(const crypto::secret_key &k_reducer_u, rct::key 
 * brief: make_seraphis_spendkey - create a Seraphis spendkey (or onetime address)
 *   K = k_a X + k_b U
 * param: view_privkey - k_a
-* param: spendbase_privkey - k_b
+* param: sp_spend_privkey - k_b
 * outparam: spendkey_out - k_a X + k_b U
 */
 void make_seraphis_spendkey(const crypto::secret_key &k_a, const crypto::secret_key &k_b, rct::key &spendkey_out);
@@ -189,7 +189,7 @@ void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_g,
 * param: enote_view_privkey_g -
 * param: enote_view_privkey_x -
 * param: enote_view_privkey_u -
-* param: spendbase_privkey -
+* param: sp_spend_privkey -
 * param: amount_blinding_factor -
 * param: amount -
 * outparam: enote_core_out -
@@ -197,7 +197,7 @@ void make_seraphis_enote_core(const crypto::secret_key &extension_privkey_g,
 void make_seraphis_enote_core(const crypto::secret_key &enote_view_privkey_g,
     const crypto::secret_key &enote_view_privkey_x,
     const crypto::secret_key &enote_view_privkey_u,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &amount_blinding_factor,
     const rct::xmr_amount amount,
     SpEnote &enote_core_out);

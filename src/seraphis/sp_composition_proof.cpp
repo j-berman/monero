@@ -49,7 +49,6 @@ extern "C"
 #include "sp_multisig_nonce_record.h"
 #include "sp_hash_functions.h"
 #include "sp_transcript.h"
-#include "tx_misc_utils.h"  //for equals_from_less (todo: remove this dependency?)
 
 //third party headers
 #include <boost/utility/string_ref.hpp>
@@ -419,9 +418,8 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
     rct::scalarmultKey(local_nonce_pubs.signature_nonce_1_pub, U_gen, rct::sk2rct(local_nonce_1_priv));
     rct::scalarmultKey(local_nonce_pubs.signature_nonce_2_pub, U_gen, rct::sk2rct(local_nonce_2_priv));
 
-    CHECK_AND_ASSERT_THROW_MES(std::find(signer_nonces_pub_mul8.begin(),
+    CHECK_AND_ASSERT_THROW_MES(std::find(signer_nonces_pub_mul8.begin(), signer_nonces_pub_mul8.end(), local_nonce_pubs) !=
             signer_nonces_pub_mul8.end(),
-            local_nonce_pubs) != signer_nonces_pub_mul8.end(),
         "Local signer's opening nonces not in input set!");
 
 

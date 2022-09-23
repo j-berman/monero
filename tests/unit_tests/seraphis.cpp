@@ -295,7 +295,7 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
 
     // make wallet spendbase privkeys (master keys for legacy and seraphis)
     const crypto::secret_key legacy_spend_privkey{rct::rct2sk(rct::skGen())};
-    const crypto::secret_key sp_spendbase_privkey{rct::rct2sk(rct::skGen())};
+    const crypto::secret_key sp_spend_privkey{rct::rct2sk(rct::skGen())};
 
     // make mock legacy input proposals
     std::vector<LegacyInputProposalV1> legacy_input_proposals{
@@ -303,7 +303,7 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
         };
 
     // make mock seraphis input proposals
-    std::vector<SpInputProposalV1> sp_input_proposals{gen_mock_sp_input_proposals_v1(sp_spendbase_privkey, in_sp_amounts)};
+    std::vector<SpInputProposalV1> sp_input_proposals{gen_mock_sp_input_proposals_v1(sp_spend_privkey, in_sp_amounts)};
 
     // make mock output proposals
     std::vector<SpOutputProposalV1> output_proposals{
@@ -390,7 +390,7 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
         tx_legacy_ring_signatures);
     make_v1_image_proofs_v1(sp_input_proposals,
         tx_proposal_prefix,
-        sp_spendbase_privkey,
+        sp_spend_privkey,
         tx_sp_image_proofs);
     prepare_legacy_input_commitment_factors_for_balance_proof_v1(legacy_input_proposals,
         input_legacy_amounts,
@@ -478,13 +478,13 @@ TEST(seraphis, information_recovery_keyimage)
     sp::make_seraphis_key_image(y, rct::rct2pk(zU), key_image2);
     sp::make_seraphis_key_image(k_a_sender_x, k_a_recipient_x, rct::rct2pk(k_bU), key_image3);
 
-    rct::key wallet_spend_pubkey{k_bU};
+    rct::key jamtis_spend_pubkey{k_bU};
     crypto::secret_key k_view_balance, spendkey_extension;
     sc_add(to_bytes(k_view_balance), to_bytes(y), to_bytes(y));  // k_vb = 2*(2*y)
     const rct::key MINUS_ONE{sp::minus_one()};
     sc_mul(to_bytes(spendkey_extension), MINUS_ONE.bytes, to_bytes(k_a_sender_x));  // k^j_x = -y
-    sp::extend_seraphis_spendkey_x(k_view_balance, wallet_spend_pubkey);  // 4*y X + z U
-    sp::jamtis::make_seraphis_key_image_jamtis_style(wallet_spend_pubkey,
+    sp::extend_seraphis_spendkey_x(k_view_balance, jamtis_spend_pubkey);  // 4*y X + z U
+    sp::jamtis::make_seraphis_key_image_jamtis_style(jamtis_spend_pubkey,
         k_view_balance,
         spendkey_extension,
         rct::rct2sk(rct::zero()),

@@ -61,7 +61,7 @@ void JamtisDestinationV1::gen()
     crypto::rand(sizeof(address_tag_t), m_addr_tag.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
+void make_jamtis_destination_v1(const rct::key &spend_pubkey,
     const crypto::x25519_pubkey &unlockamounts_pubkey,
     const crypto::x25519_pubkey &findreceived_pubkey,
     const crypto::secret_key &s_generate_address,
@@ -69,7 +69,7 @@ void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
     JamtisDestinationV1 &destination_out)
 {
     // K_1 = k^j_g G + k^j_x X + k^j_u U + K_s
-    make_jamtis_address_spend_key(wallet_spend_pubkey, s_generate_address, j, destination_out.m_addr_K1);
+    make_jamtis_address_spend_key(spend_pubkey, s_generate_address, j, destination_out.m_addr_K1);
 
     // xK_2 = xk^j_a xK_fr
     crypto::x25519_secret_key address_privkey;
@@ -88,7 +88,7 @@ void make_jamtis_destination_v1(const rct::key &wallet_spend_pubkey,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_get_jamtis_index_from_destination_v1(const JamtisDestinationV1 &destination,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &spend_pubkey,
     const crypto::x25519_pubkey &unlockamounts_pubkey,
     const crypto::x25519_pubkey &findreceived_pubkey,
     const crypto::secret_key &s_generate_address,
@@ -107,7 +107,7 @@ bool try_get_jamtis_index_from_destination_v1(const JamtisDestinationV1 &destina
     // recreate the destination
     JamtisDestinationV1 test_destination;
 
-    make_jamtis_destination_v1(wallet_spend_pubkey,
+    make_jamtis_destination_v1(spend_pubkey,
         unlockamounts_pubkey,
         findreceived_pubkey,
         s_generate_address,

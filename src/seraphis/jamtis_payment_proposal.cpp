@@ -254,7 +254,7 @@ void JamtisPaymentProposalSelfSendV1::gen(const rct::xmr_amount amount,
 //-------------------------------------------------------------------------------------------------------------------
 void check_jamtis_payment_proposal_selfsend_semantics_v1(const JamtisPaymentProposalSelfSendV1 &selfsend_payment_proposal,
     const rct::key &input_context,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &spend_pubkey,
     const crypto::secret_key &k_view_balance)
 {
     // 1. convert to an output proposal
@@ -270,7 +270,7 @@ void check_jamtis_payment_proposal_selfsend_semantics_v1(const JamtisPaymentProp
     CHECK_AND_ASSERT_THROW_MES(try_get_enote_record_v1_selfsend(temp_enote,
             output_proposal.m_enote_ephemeral_pubkey,
             input_context,
-            wallet_spend_pubkey,
+            spend_pubkey,
             k_view_balance,
             temp_enote_record),
         "semantics check jamtis self-send payment proposal: failed to extract enote record from the proposal.");

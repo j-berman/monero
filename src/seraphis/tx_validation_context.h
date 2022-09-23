@@ -60,7 +60,7 @@ public:
 
 //member functions
     /**
-    * brief: key_image_exists_v1 - checks if a Seraphis key image (linking tag) exists in the validation context
+    * brief: key_image_exists_v1 - checks if a key image (linking tag) exists in the validation context
     * param: key_image -
     * return: true/false on check result
     */
@@ -73,7 +73,7 @@ public:
     virtual void get_reference_set_proof_elements_v1(const std::vector<std::uint64_t> &indices,
         rct::ctkeyV &proof_elements_out) const = 0;
     /**
-    * brief: get_reference_set_proof_elements_v2 - gets Seraphis squashed enotes stored in the validation context
+    * brief: get_reference_set_proof_elements_v2 - gets seraphis squashed enotes stored in the validation context
     * param: indices -
     * outparam: proof_elements_out - {squashed enote}
     */

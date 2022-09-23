@@ -48,6 +48,7 @@
 #include "tx_binned_reference_set.h"
 #include "tx_builder_types.h"
 #include "tx_builders_inputs.h"
+#include "tx_builders_legacy_inputs.h"
 #include "tx_builders_mixed.h"
 #include "tx_builders_outputs.h"
 #include "tx_component_types.h"
@@ -214,7 +215,8 @@ void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
     // tx_hash = H_32(tx_proposal_prefix, input images, proofs)
 
     // 1. tx proposal
-    // H_32(crypto project name, version string, input key images, output enotes, enote ephemeral pubkeys, memos, fee)
+    // H_32(crypto project name, version string, legacy input key images, sp input key images, output enotes,
+    //        tx supplement, fee)
     std::string version_string;
     version_string.reserve(3);
     make_versioning_string(m_tx_semantic_rules_version, version_string);
@@ -286,15 +288,16 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
     // check partial tx semantics
     check_v1_partial_tx_semantics_v1(partial_tx, semantic_rules_version);
 
-    // note: membership proofs cannot be validated without the ledger used to construct them, so there is no check here
+    // note: seraphis membership proofs cannot be validated without the ledger used to construct them, so there is no
+    //       check here
 
     // finish tx
     make_seraphis_tx_squashed_v1(
-        std::vector<LegacyEnoteImageV2>{},
+        std::move(partial_tx.m_legacy_input_images),
         std::move(partial_tx.m_sp_input_images),
         std::move(partial_tx.m_outputs),
         std::move(partial_tx.m_balance_proof),
-        std::vector<LegacyRingSignatureV3>{},
+        std::move(partial_tx.m_legacy_ring_signatures),
         std::move(partial_tx.m_sp_image_proofs),
         std::move(sp_membership_proofs),
         std::move(partial_tx.m_tx_supplement),
@@ -319,10 +322,12 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
-    std::vector<SpPartialInputV1> partial_inputs,
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps,
+    std::vector<LegacyInputV1> legacy_inputs,
+    std::vector<SpPartialInputV1> sp_partial_inputs,
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &legacy_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpTxSquashedV1 &tx_out)
 {
@@ -334,15 +339,17 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
     // partial tx
     SpPartialTxV1 partial_tx;
     make_v1_partial_tx_v1(tx_proposal,
-        std::move(partial_inputs),
+        std::move(legacy_inputs),
+        std::move(sp_partial_inputs),
         version_string,
-        wallet_spend_pubkey,
+        legacy_spend_pubkey,
+        jamtis_spend_pubkey,
         k_view_balance,
         partial_tx);
 
-    // membership proofs (assumes the caller prepared to make a membership proof for each input)
+    // seraphis membership proofs (assumes the caller prepared to make a membership proof for each input)
     std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs;
-    make_v1_membership_proofs_v1(std::move(membership_proof_preps), alignable_membership_proofs);
+    make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps), alignable_membership_proofs);
 
     // finish tx
     make_seraphis_tx_squashed_v1(std::move(partial_tx),
@@ -352,9 +359,11 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps,
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &legacy_spend_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &k_view_balance,
     SpTxSquashedV1 &tx_out)
 {
@@ -367,20 +376,34 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
     rct::key proposal_prefix;
     tx_proposal.get_proposal_prefix(version_string, k_view_balance, proposal_prefix);
 
-    // partial inputs
-    std::vector<SpPartialInputV1> partial_inputs;
-    make_v1_partial_inputs_v1(tx_proposal.m_input_proposals, proposal_prefix, spendbase_privkey, partial_inputs);
+    // legacy inputs
+    std::vector<LegacyInputV1> legacy_inputs;
 
-    // wallet spend pubkey
-    rct::key wallet_spend_pubkey;
-    make_seraphis_spendkey(k_view_balance, spendbase_privkey, wallet_spend_pubkey);
+    make_v1_legacy_inputs_v1(proposal_prefix,
+        tx_proposal.m_legacy_input_proposals,
+        std::move(legacy_ring_signature_preps),
+        legacy_spend_privkey,
+        legacy_inputs);
+
+    // seraphis partial inputs
+    std::vector<SpPartialInputV1> sp_partial_inputs;
+    make_v1_partial_inputs_v1(tx_proposal.m_sp_input_proposals, proposal_prefix, sp_spend_privkey, sp_partial_inputs);
+
+    // legacy spend pubkey
+    const rct::key legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(sp_spend_privkey))};
+
+    // jamtis spend pubkey
+    rct::key jamtis_spend_pubkey;
+    make_seraphis_spendkey(k_view_balance, sp_spend_privkey, jamtis_spend_pubkey);
 
     // finish tx
     make_seraphis_tx_squashed_v1(tx_proposal,
-        std::move(partial_inputs),
-        std::move(membership_proof_preps),
+        std::move(legacy_inputs),
+        std::move(sp_partial_inputs),
+        std::move(sp_membership_proof_preps),
         semantic_rules_version,
-        wallet_spend_pubkey,
+        legacy_spend_pubkey,
+        jamtis_spend_pubkey,
         k_view_balance,
         tx_out);
 }
@@ -388,11 +411,14 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
 void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     const DiscretizedFee &tx_fee,
-    std::vector<SpInputProposalV1> input_proposals,
+    std::vector<LegacyInputProposalV1> legacy_input_proposals,
+    std::vector<SpInputProposalV1> sp_input_proposals,
     std::vector<ExtraFieldElement> additional_memo_elements,
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps,
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
-    const crypto::secret_key &spendbase_privkey,
+    const crypto::secret_key &legacy_spend_privkey,
+    const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &k_view_balance,
     SpTxSquashedV1 &tx_out)
 {
@@ -401,15 +427,18 @@ void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> n
     make_v1_tx_proposal_v1(std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         tx_fee,
-        std::move(input_proposals),
+        std::move(legacy_input_proposals),
+        std::move(sp_input_proposals),
         std::move(additional_memo_elements),
         tx_proposal);
 
     // finish tx
     make_seraphis_tx_squashed_v1(tx_proposal,
-        std::move(membership_proof_preps),
+        std::move(legacy_ring_signature_preps),
+        std::move(sp_membership_proof_preps),
         semantic_rules_version,
-        spendbase_privkey,
+        legacy_spend_privkey,
+        sp_spend_privkey,
         k_view_balance,
         tx_out);
 }
@@ -679,15 +708,20 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
     // mock semantics version
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version{SpTxSquashedV1::SemanticRulesVersion::MOCK};
 
-    // make wallet spendbase privkey (master key)
-    const crypto::secret_key spendbase_privkey{rct::rct2sk(rct::skGen())};
+    // make legacy spend privkey
+    const crypto::secret_key legacy_spend_privkey{rct::rct2sk(rct::skGen())};
 
-    //todo: make mock legacy inputs
-    CHECK_AND_ASSERT_THROW_MES(legacy_in_amounts.size() == 0, "legacy inputs disabled for now... (todo)");
+    // make seraphis spendbase privkey (master key)
+    const crypto::secret_key sp_spend_privkey{rct::rct2sk(rct::skGen())};
+
+    // make mock legacy inputs
+    std::vector<LegacyInputProposalV1> legacy_input_proposals{
+            gen_mock_legacy_input_proposals_v1(legacy_spend_privkey, legacy_in_amounts)
+        };
+    std::sort(legacy_input_proposals.begin(), legacy_input_proposals.end());
 
     // make mock seraphis inputs
-    // enote, view key stuff, amount, amount blinding factor
-    std::vector<SpInputProposalV1> sp_input_proposals{gen_mock_sp_input_proposals_v1(spendbase_privkey, sp_in_amounts)};
+    std::vector<SpInputProposalV1> sp_input_proposals{gen_mock_sp_input_proposals_v1(sp_spend_privkey, sp_in_amounts)};
     std::sort(sp_input_proposals.begin(), sp_input_proposals.end());
 
     // make mock outputs
@@ -700,7 +734,10 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
         output_proposals[1].m_enote_ephemeral_pubkey = output_proposals[0].m_enote_ephemeral_pubkey;
 
     // expect amounts to balance
-    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts_v1(sp_input_proposals, output_proposals, tx_fee),
+    CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts_v1(legacy_input_proposals,
+            sp_input_proposals,
+            output_proposals,
+            tx_fee),
         "SpTxSquashedV1: tried to make mock tx with unbalanced amounts.");
 
     // make partial memo
@@ -721,24 +758,43 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
     // proposal prefix
     rct::key proposal_prefix;
     make_tx_proposal_prefix_v1(version_string,
+        legacy_input_proposals,
         sp_input_proposals,
         output_proposals,
         partial_memo,
         tx_fee,
         proposal_prefix);
 
-    //todo: make legacy ring signature preps
+    // make legacy ring signature preps
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps{
+            gen_mock_legacy_ring_signature_preps_v1(proposal_prefix,
+                legacy_input_proposals,
+                params.legacy_ring_size,
+                ledger_context_inout)
+        };
+    std::sort(legacy_ring_signature_preps.begin(), legacy_ring_signature_preps.end());
 
-    //todo: make legacy partial inputs
+    // make legacy inputs
+    std::vector<LegacyInputV1> legacy_inputs;
+
+    make_v1_legacy_inputs_v1(proposal_prefix,
+        legacy_input_proposals,
+        std::move(legacy_ring_signature_preps),
+        legacy_spend_privkey,
+        legacy_inputs);
+    std::sort(legacy_inputs.begin(), legacy_inputs.end());
 
     // make seraphis partial inputs
-    std::vector<SpPartialInputV1> partial_inputs;
-    make_v1_partial_inputs_v1(sp_input_proposals, proposal_prefix, spendbase_privkey, partial_inputs);
+    std::vector<SpPartialInputV1> sp_partial_inputs;
+
+    make_v1_partial_inputs_v1(sp_input_proposals, proposal_prefix, sp_spend_privkey, sp_partial_inputs);
+    std::sort(sp_partial_inputs.begin(), sp_partial_inputs.end());
 
     // prepare partial tx
     SpPartialTxV1 partial_tx;
 
-    make_v1_partial_tx_v1(std::move(partial_inputs),
+    make_v1_partial_tx_v1(std::move(legacy_inputs),
+        std::move(sp_partial_inputs),
         std::move(output_proposals),
         partial_memo,
         tx_fee,
@@ -746,7 +802,7 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
         partial_tx);
 
     // make mock seraphis membership proof ref sets
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps{
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps{
             gen_mock_sp_membership_proof_preps_v1(sp_input_proposals,
                 params.ref_set_decomp_n,
                 params.ref_set_decomp_m,
@@ -755,12 +811,12 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
         };
 
     // seraphis membership proofs (assumes the caller prepared to make a membership proof for each input)
-    std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs;
-    make_v1_membership_proofs_v1(std::move(membership_proof_preps), alignable_membership_proofs);
+    std::vector<SpAlignableMembershipProofV1> sp_alignable_membership_proofs;
+    make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps), sp_alignable_membership_proofs);
 
     // make tx
     make_seraphis_tx_squashed_v1(std::move(partial_tx),
-        std::move(alignable_membership_proofs),
+        std::move(sp_alignable_membership_proofs),
         semantic_rules_version,
         tx_out);
 }

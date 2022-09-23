@@ -236,7 +236,8 @@ SpCompositionProofMultisigProposal sp_composition_multisig_proposal(const rct::k
 * param: x - secret key
 * param: y - secret key
 * param: z_e - secret key of multisig signer e
-* param: signer_pub_nonces - signature nonce pubkeys {alpha_{ki,1,e}*U,  alpha_{ki,2,e}*U} from all signers (including local signer)
+* param: signer_pub_nonces - signature nonce pubkeys (1/8) * {alpha_{ki,1,e}*U,  alpha_{ki,2,e}*U} from all signers
+*                            (including local signer)
 * param: local_nonce_1_priv - alpha_{ki,1,e} for local signer
 * param: local_nonce_2_priv - alpha_{ki,2,e} for local signer
 * return: partially signed Seraphis composition proof

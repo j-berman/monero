@@ -97,7 +97,7 @@ void process_chunk_intermediate_legacy(const rct::key &legacy_base_spend_pubkey,
     // note: mapped to H32(Ko, a) so enotes with the same key image but different amounts will be recovered
     std::unordered_map<rct::key, LegacyContextualIntermediateEnoteRecordV1> &found_enote_records_inout,
     std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images_inout);
-void process_chunk_intermediate_sp(const rct::key &wallet_spend_pubkey,
+void process_chunk_intermediate_sp(const rct::key &jamtis_spend_pubkey,
     const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
@@ -113,7 +113,7 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
     // note: mapped to H32(Ko, a) so enotes with the same key image but different amounts will be recovered
     std::unordered_map<rct::key, LegacyContextualEnoteRecordV1> &found_enote_records_inout,
     std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images_inout);
-void process_chunk_full_sp(const rct::key &wallet_spend_pubkey,
+void process_chunk_full_sp(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::x25519_secret_key &xk_find_received,

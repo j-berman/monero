@@ -153,18 +153,18 @@ void make_tx_legacy_ring_signature_message_v1(const rct::key &tx_proposal_messag
 }
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_legacy_input_proposal_semantics_v1(const LegacyInputProposalV1 &input_proposal,
-    const rct::key &wallet_legacy_spend_pubkey)
+    const rct::key &legacy_spend_pubkey)
 {
     // 1. the onetime address must be reproducible
     // Ko ?= k_v_stuff + k^s G
-    rct::key onetime_address_reproduced{wallet_legacy_spend_pubkey};
+    rct::key onetime_address_reproduced{legacy_spend_pubkey};
     mask_key(input_proposal.m_enote_view_privkey, onetime_address_reproduced, onetime_address_reproduced);
 
     CHECK_AND_ASSERT_THROW_MES(onetime_address_reproduced == input_proposal.m_onetime_address,
         "legacy input proposal v1 semantics check: could not reproduce the one-time address.");
 
-    // 2. the key image must canonical (note: legacy key image can't be reproduced in a semantics checker because it needs
-    //    the legacy private spend key [assumed not available in semantics checkers])
+    // 2. the key image must be canonical (note: legacy key image can't be reproduced in a semantics checker because it
+    //    needs the legacy private spend key [assumed not available in semantics checkers])
     CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(rct::ki2rct(input_proposal.m_key_image)),
         "legacy input proposal v1 semantics check: the key image is not canonical.");
 
@@ -226,10 +226,8 @@ void make_v3_legacy_ring_signature_v1(const rct::key &tx_proposal_prefix,
     /// checks
 
     // reference sets
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(reference_set.begin(), reference_set.end()),
-        "make v3 legacy ring signature: reference set indices are not sorted.");
-    CHECK_AND_ASSERT_THROW_MES(std::adjacent_find(reference_set.begin(), reference_set.end()) == reference_set.end(),
-        "make v3 legacy ring signature: reference set indices are not unique.");
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(reference_set),
+        "make v3 legacy ring signature: reference set indices are not sorted and unique.");
     CHECK_AND_ASSERT_THROW_MES(reference_set.size() == referenced_enotes.size(),
         "make v3 legacy ring signature: reference set indices don't match referenced enotes.");
     CHECK_AND_ASSERT_THROW_MES(real_reference_index < referenced_enotes.size(),
@@ -349,12 +347,8 @@ void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input)
         "legacy input semantics (v1): key image is not consistent between input image and ring signature.");
 
     // ring signature reference indices are sorted and unique and match with the cached reference enotes
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(input.m_ring_signature.m_reference_set.begin(),
-            input.m_ring_signature.m_reference_set.end()),
-        "legacy input semantics (v1): reference set indices are not sorted.");
-    CHECK_AND_ASSERT_THROW_MES(std::adjacent_find(input.m_ring_signature.m_reference_set.begin(),
-            input.m_ring_signature.m_reference_set.end()) == input.m_ring_signature.m_reference_set.end(),
-        "legacy input semantics (v1): reference set indices are not unique.");
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(input.m_ring_signature.m_reference_set),
+        "legacy input semantics (v1): reference set indices are not sorted and unique.");
     CHECK_AND_ASSERT_THROW_MES(input.m_ring_signature.m_reference_set.size() == input.m_ring_members.size(),
         "legacy input semantics (v1): reference set indices don't match referenced enotes.");
 
@@ -379,8 +373,8 @@ void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
     LegacyInputV1 &input_out)
 {
     // check input proposal semantics
-    const rct::key wallet_legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
-    check_v1_legacy_input_proposal_semantics_v1(input_proposal, wallet_legacy_spend_pubkey);
+    const rct::key legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    check_v1_legacy_input_proposal_semantics_v1(input_proposal, legacy_spend_pubkey);
 
     // ring signature prep must line up with specified proposal prefix
     CHECK_AND_ASSERT_THROW_MES(proposal_prefix == ring_signature_prep.m_proposal_prefix,

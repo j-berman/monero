@@ -154,10 +154,10 @@ struct SpInputProposal final
 
     /**
     * brief: gen - generate random enote keys
-    * param: spendbase_privkey -
+    * param: sp_spend_privkey -
     * param: amount -
     */
-    void gen(const crypto::secret_key &spendbase_privkey, const rct::xmr_amount amount);
+    void gen(const crypto::secret_key &sp_spend_privkey, const rct::xmr_amount amount);
 };
 
 ////

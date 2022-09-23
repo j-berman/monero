@@ -282,14 +282,9 @@ void check_v1_output_proposal_set_semantics_v1(const std::vector<SpOutputProposa
             "unique.");
     }
 
-    // proposals should be sorted
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(output_proposals.begin(), output_proposals.end()),
-        "Semantics check output proposals v1: outputs aren't sorted.");
-
-    // proposals should be unique (can use adjacent_find when sorted)
-    CHECK_AND_ASSERT_THROW_MES(std::adjacent_find(output_proposals.begin(), output_proposals.end(), equals_from_less{})
-            == output_proposals.end(),
-        "Semantics check output proposals v1: output onetime addresses are not all unique.");
+    // proposals should be sorted and unique
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(output_proposals),
+        "Semantics check output proposals v1: output onetime addresses are not sorted and unique.");
 
     // proposal onetime addresses should be canonical (sanity check so our tx outputs don't have duplicate key images)
     for (const SpOutputProposalV1 &output_proposal : output_proposals)

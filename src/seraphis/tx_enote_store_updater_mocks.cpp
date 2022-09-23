@@ -117,10 +117,10 @@ std::uint64_t EnoteStoreUpdaterLedgerMockLegacy::get_top_block_height() const
     return m_enote_store.get_top_legacy_fullscanned_block_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-EnoteStoreUpdaterLedgerMock::EnoteStoreUpdaterLedgerMock(const rct::key &wallet_spend_pubkey,
+EnoteStoreUpdaterLedgerMock::EnoteStoreUpdaterLedgerMock(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpEnoteStoreMockV1 &enote_store) :
-        m_wallet_spend_pubkey{wallet_spend_pubkey},
+        m_jamtis_spend_pubkey{jamtis_spend_pubkey},
         m_k_view_balance{k_view_balance},
         m_enote_store{enote_store}
 {
@@ -143,7 +143,7 @@ void EnoteStoreUpdaterLedgerMock::process_chunk(
     const std::unordered_map<rct::key, std::list<ContextualBasicRecordVariant>> &chunk_basic_records_per_tx,
     const std::list<SpContextualKeyImageSetV1> &chunk_contextual_key_images)
 {
-    process_chunk_full_sp(m_wallet_spend_pubkey,
+    process_chunk_full_sp(m_jamtis_spend_pubkey,
         m_k_view_balance,
         m_xk_unlock_amounts,
         m_xk_find_received,
@@ -191,10 +191,10 @@ std::uint64_t EnoteStoreUpdaterLedgerMock::get_top_block_height() const
     return m_enote_store.get_top_sp_scanned_block_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-EnoteStoreUpdaterNonLedgerMock::EnoteStoreUpdaterNonLedgerMock(const rct::key &wallet_spend_pubkey,
+EnoteStoreUpdaterNonLedgerMock::EnoteStoreUpdaterNonLedgerMock(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpEnoteStoreMockV1 &enote_store) :
-        m_wallet_spend_pubkey{wallet_spend_pubkey},
+        m_jamtis_spend_pubkey{jamtis_spend_pubkey},
         m_k_view_balance{k_view_balance},
         m_enote_store{enote_store}
 {
@@ -214,7 +214,7 @@ void EnoteStoreUpdaterNonLedgerMock::process_and_handle_chunk(
     std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> found_spent_key_images;
     std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> legacy_key_images_in_sp_selfsends;
 
-    process_chunk_full_sp(m_wallet_spend_pubkey,
+    process_chunk_full_sp(m_jamtis_spend_pubkey,
         m_k_view_balance,
         m_xk_unlock_amounts,
         m_xk_find_received,
@@ -303,12 +303,12 @@ std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::get_top_block_heigh
         return m_enote_store.get_top_legacy_partialscanned_block_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-EnoteStoreUpdaterLedgerMockIntermediate::EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &wallet_spend_pubkey,
+EnoteStoreUpdaterLedgerMockIntermediate::EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &jamtis_spend_pubkey,
     const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     SpEnoteStoreMockPaymentValidatorV1 &enote_store) :
-        m_wallet_spend_pubkey{wallet_spend_pubkey},
+        m_jamtis_spend_pubkey{jamtis_spend_pubkey},
         m_xk_unlock_amounts{xk_unlock_amounts},
         m_xk_find_received{xk_find_received},
         m_s_generate_address{s_generate_address},
@@ -328,7 +328,7 @@ void EnoteStoreUpdaterLedgerMockIntermediate::process_chunk(
     const std::unordered_map<rct::key, std::list<ContextualBasicRecordVariant>> &chunk_basic_records_per_tx,
     const std::list<SpContextualKeyImageSetV1>&)
 {
-    process_chunk_intermediate_sp(m_wallet_spend_pubkey,
+    process_chunk_intermediate_sp(m_jamtis_spend_pubkey,
         m_xk_unlock_amounts,
         m_xk_find_received,
         m_s_generate_address,
@@ -366,12 +366,12 @@ std::uint64_t EnoteStoreUpdaterLedgerMockIntermediate::get_top_block_height() co
 }
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterNonLedgerMockIntermediate::EnoteStoreUpdaterNonLedgerMockIntermediate(
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::x25519_secret_key &xk_unlock_amounts,
     const crypto::x25519_secret_key &xk_find_received,
     const crypto::secret_key &s_generate_address,
     SpEnoteStoreMockPaymentValidatorV1 &enote_store) :
-        m_wallet_spend_pubkey{wallet_spend_pubkey},
+        m_jamtis_spend_pubkey{jamtis_spend_pubkey},
         m_xk_unlock_amounts{xk_unlock_amounts},
         m_xk_find_received{xk_find_received},
         m_s_generate_address{s_generate_address},
@@ -388,7 +388,7 @@ void EnoteStoreUpdaterNonLedgerMockIntermediate::process_and_handle_chunk(
 {
     std::unordered_map<rct::key, SpContextualIntermediateEnoteRecordV1> found_enote_records;
 
-    process_chunk_intermediate_sp(m_wallet_spend_pubkey,
+    process_chunk_intermediate_sp(m_jamtis_spend_pubkey,
         m_xk_unlock_amounts,
         m_xk_find_received,
         m_s_generate_address,

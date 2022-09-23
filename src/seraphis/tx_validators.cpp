@@ -287,10 +287,7 @@ bool validate_sp_semantics_layout_v1(const std::vector<LegacyRingSignatureV3> &l
     // legacy reference sets should be sorted (ascending) without duplicates
     for (const LegacyRingSignatureV3 &legacy_ring_signature : legacy_ring_signatures)
     {
-        if (!std::is_sorted(legacy_ring_signature.m_reference_set.begin(), legacy_ring_signature.m_reference_set.end()))
-            return false;
-        if (std::adjacent_find(legacy_ring_signature.m_reference_set.begin(), legacy_ring_signature.m_reference_set.end()) !=
-                legacy_ring_signature.m_reference_set.end())
+        if (!is_sorted_and_unique(legacy_ring_signature.m_reference_set))
             return false;
     }
 
@@ -304,16 +301,11 @@ bool validate_sp_semantics_layout_v1(const std::vector<LegacyRingSignatureV3> &l
     }
 
     // legacy input images should be sorted by key image with byte-wise comparisons (ascending), and unique
-    if (!std::is_sorted(legacy_input_images.begin(), legacy_input_images.end()))
-        return false;
-    if (std::adjacent_find(legacy_input_images.begin(), legacy_input_images.end(), equals_from_less{}) !=
-            legacy_input_images.end())
+    if (!is_sorted_and_unique(legacy_input_images))
         return false;
 
     // seraphis input images should be sorted by key image with byte-wise comparisons (ascending), and unique
-    if (!std::is_sorted(sp_input_images.begin(), sp_input_images.end()))
-        return false;
-    if (std::adjacent_find(sp_input_images.begin(), sp_input_images.end(), equals_from_less{}) != sp_input_images.end())
+    if (!is_sorted_and_unique(sp_input_images))
         return false;
 
     // legacy and seraphis input images should not have any matching key images
@@ -328,9 +320,7 @@ bool validate_sp_semantics_layout_v1(const std::vector<LegacyRingSignatureV3> &l
     }
 
     // output enotes should be sorted by onetime address with byte-wise comparisons (ascending), and unique
-    if (!std::is_sorted(outputs.begin(), outputs.end()))
-        return false;
-    if (std::adjacent_find(outputs.begin(), outputs.end(), equals_from_less{}) != outputs.end())
+    if (!is_sorted_and_unique(outputs))
         return false;
 
     // enote ephemeral pubkeys should be unique (they don't need to be sorted)

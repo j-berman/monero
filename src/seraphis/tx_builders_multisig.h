@@ -109,14 +109,14 @@ void make_v1_multisig_public_input_proposal_v1(const SpEnoteRecordV1 &enote_reco
 * param: expected_version_string -
 * param: threshold -
 * param: num_signers -
-* param: wallet_spend_pubkey -
+* param: jamtis_spend_pubkey -
 * param: k_view_balance -
 */
 void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::string &expected_version_string,
     const std::uint32_t threshold,
     const std::uint32_t num_signers,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance);
 /**
 * brief: make_v1_multisig_tx_proposal_v1 - make a multisig tx proposal
@@ -127,7 +127,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 * param: version_string -
 * param: full_input_proposals -
 * param: aggregate_signer_set_filter -
-* param: wallet_spend_pubkey
+* param: jamtis_spend_pubkey
 * param: k_view_balance -
 * outparam: proposal_out -
 */
@@ -138,7 +138,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::string version_string,
     std::vector<SpMultisigPublicInputProposalV1> public_input_proposals,
     const multisig::signer_set_filter aggregate_signer_set_filter,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out);
 /**
@@ -155,7 +155,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
 * param: normal_payment_proposals -
 * param: selfsend_payment_proposals -
 * param: partial_memo_for_tx -
-* param: wallet_spend_pubkey -
+* param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * outparam: multisig_tx_proposal_out -
 * outparam: input_ledger_mappings_out -
@@ -171,7 +171,7 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &multisig_tx_proposal_out,
     std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out);
@@ -211,7 +211,7 @@ void make_v1_multisig_input_init_set_v1(const crypto::public_key &signer_id,
     const std::vector<crypto::public_key> &multisig_signers,
     const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::string &expected_version_string,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigNonceRecord &nonce_record_inout,
     SpMultisigInputInitSetV1 &input_init_set_out);
@@ -250,7 +250,7 @@ bool try_make_v1_multisig_input_partial_sig_sets_v1(const multisig::multisig_acc
 *   - will only succeed if a partial input can be made for each of the inputs found in the multisig tx proposal
 * param: multisig_tx_proposal -
 * param: multisig_signers -
-* param: wallet_spend_pubkey -
+* param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * param: input_partial_sigs_per_signer -
 * outparam: partial_inputs_out -
@@ -262,7 +262,7 @@ bool try_make_v1_partial_input_v1(const SpInputProposal &input_proposal,
     SpPartialInputV1 &partial_input_out);
 bool try_make_v1_partial_inputs_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::vector<crypto::public_key> &multisig_signers,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     std::unordered_map<crypto::public_key, std::vector<SpMultisigInputPartialSigSetV1>> input_partial_sigs_per_signer,
     std::vector<SpPartialInputV1> &partial_inputs_out);

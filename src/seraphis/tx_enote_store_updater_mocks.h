@@ -108,7 +108,7 @@ class EnoteStoreUpdaterLedgerMock final : public EnoteStoreUpdaterLedger
 public:
 //constructors
     /// normal constructor
-    EnoteStoreUpdaterLedgerMock(const rct::key &wallet_spend_pubkey,
+    EnoteStoreUpdaterLedgerMock(const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         SpEnoteStoreMockV1 &enote_store);
 
@@ -138,7 +138,7 @@ public:
 //member variables
 private:
     /// static data
-    const rct::key &m_wallet_spend_pubkey;
+    const rct::key &m_jamtis_spend_pubkey;
     const crypto::secret_key &m_k_view_balance;
     SpEnoteStoreMockV1 &m_enote_store;
 
@@ -159,7 +159,7 @@ class EnoteStoreUpdaterNonLedgerMock final : public EnoteStoreUpdaterNonLedger
 public:
 //constructors
     /// normal constructor
-    EnoteStoreUpdaterNonLedgerMock(const rct::key &wallet_spend_pubkey,
+    EnoteStoreUpdaterNonLedgerMock(const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         SpEnoteStoreMockV1 &enote_store);
 
@@ -176,7 +176,7 @@ public:
 //member variables
 private:
     /// static data
-    const rct::key &m_wallet_spend_pubkey;
+    const rct::key &m_jamtis_spend_pubkey;
     const crypto::secret_key &m_k_view_balance;
     SpEnoteStoreMockV1 &m_enote_store;
 
@@ -243,7 +243,7 @@ class EnoteStoreUpdaterLedgerMockIntermediate final : public EnoteStoreUpdaterLe
 public:
 //constructors
     /// normal constructor
-    EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &wallet_spend_pubkey,
+    EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &jamtis_spend_pubkey,
         const crypto::x25519_secret_key &xk_unlock_amounts,
         const crypto::x25519_secret_key &xk_find_received,
         const crypto::secret_key &s_generate_address,
@@ -275,7 +275,7 @@ public:
 //member variables
 private:
     /// static data
-    const rct::key &m_wallet_spend_pubkey;
+    const rct::key &m_jamtis_spend_pubkey;
     const crypto::x25519_secret_key &m_xk_unlock_amounts;
     const crypto::x25519_secret_key &m_xk_find_received;
     const crypto::secret_key &m_s_generate_address;
@@ -293,7 +293,7 @@ class EnoteStoreUpdaterNonLedgerMockIntermediate final : public EnoteStoreUpdate
 public:
 //constructors
     /// normal constructor
-    EnoteStoreUpdaterNonLedgerMockIntermediate(const rct::key &wallet_spend_pubkey,
+    EnoteStoreUpdaterNonLedgerMockIntermediate(const rct::key &jamtis_spend_pubkey,
         const crypto::x25519_secret_key &xk_unlock_amounts,
         const crypto::x25519_secret_key &xk_find_received,
         const crypto::secret_key &s_generate_address,
@@ -312,7 +312,7 @@ public:
 //member variables
 private:
     /// static data
-    const rct::key &m_wallet_spend_pubkey;
+    const rct::key &m_jamtis_spend_pubkey;
     const crypto::x25519_secret_key &m_xk_unlock_amounts;
     const crypto::x25519_secret_key &m_xk_find_received;
     const crypto::secret_key &m_s_generate_address;

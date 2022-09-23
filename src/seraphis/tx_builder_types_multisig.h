@@ -82,11 +82,11 @@ struct SpMultisigPublicInputProposalV1 final
 
     /**
     * brief: get_input_proposal_v1 - convert this input to a plain input proposal (throws on failure to convert)
-    * param: wallet_spend_pubkey -
+    * param: jamtis_spend_pubkey -
     * param: k_view_balance -
     * outparam: input_proposal_out -
     */
-    void get_input_proposal_v1(const rct::key &wallet_spend_pubkey,
+    void get_input_proposal_v1(const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         SpInputProposalV1 &input_proposal_out) const;
 };
@@ -118,12 +118,12 @@ struct SpMultisigTxProposalV1 final
     std::string m_version_string;
 
     /// convert to plain tx proposal
-    void get_v1_tx_proposal_v1(const rct::key &wallet_spend_pubkey,
+    void get_v1_tx_proposal_v1(const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         SpTxProposalV1 &tx_proposal_out) const;
 
     /// get the tx proposal prefix that will be signed by input composition proofs
-    void get_proposal_prefix_v1(const rct::key &wallet_spend_pubkey,
+    void get_proposal_prefix_v1(const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         rct::key &proposal_prefix_out) const;
 };

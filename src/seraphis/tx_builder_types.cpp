@@ -90,7 +90,7 @@ void SpTxProposalV1::get_output_proposals_v1(const crypto::secret_key &k_view_ba
 
     // input context
     rct::key input_context;
-    make_standard_input_context_v1(m_input_proposals, input_context);
+    make_standard_input_context_v1(m_legacy_input_proposals, m_sp_input_proposals, input_context);
 
     // output proposals
     output_proposals_out.clear();
@@ -125,7 +125,8 @@ void SpTxProposalV1::get_proposal_prefix(const std::string &version_string,
 
     // make the proposal prefix
     make_tx_proposal_prefix_v1(version_string,
-        m_input_proposals,
+        m_legacy_input_proposals,
+        m_sp_input_proposals,
         output_proposals,
         m_partial_memo,
         m_tx_fee,

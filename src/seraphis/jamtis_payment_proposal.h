@@ -140,14 +140,14 @@ struct JamtisPaymentProposalSelfSendV1 final
 * brief: check_jamtis_payment_proposal_selfsend_semantics_v1 - validate semantics of a self-send payment proposal
 * param: output_proposal -
 * param: input_context -
-* param: wallet_spend_pubkey -
+* param: spend_pubkey -
 * param: k_view_balance -
 * outparam: type_out -
 * return: true if it's a self-send proposal
 */
 void check_jamtis_payment_proposal_selfsend_semantics_v1(const JamtisPaymentProposalSelfSendV1 &selfsend_payment_proposal,
     const rct::key &input_context,
-    const rct::key &wallet_spend_pubkey,
+    const rct::key &spend_pubkey,
     const crypto::secret_key &k_view_balance);
 
 } //namespace jamtis
