@@ -217,38 +217,64 @@ int main(int argc, char** argv)
   SpTxPerfIncrementer incrementer;
   ParamsShuttleSpTx p_seraphis_tx;
   p_seraphis_tx.core_params = p.core_params;
-/*
-  /// Looking for membership proof membership error
-  for (std::size_t i{0}; i < 100; ++i)
-  {
-    incrementer = {
-        {1}, //batch sizes
-        {2}, //in counts
-        {2}, //out counts
-        {2}, //decomp n
-        {11} //decomp m limits
-      };
-    while (incrementer.next(p_seraphis_tx))
-    {
-      // only decomp 2^7
-      if (p_seraphis_tx.n == 2 && p_seraphis_tx.m == 11)
-      {
-std::cerr << "TEST #" << i;
-        TEST_PERFORMANCE1(filter, p_seraphis_tx, test_seraphis_tx, sp::SpTxSquashedV1);
-      }
-    }
-  }
-*/
 
-  //// TEST SET 3
 
-  /// TEST 5: SpTxSquashedV1
+  /// TEST: SpTxSquashedV1
+  // notes:
+  // - legacy inputs are not batched in any way
+  // - seraphis input membership proofs and range proofs can be batched with output range proofs
 
-  // TEST 5.1: SpTxSquashedV1 {inputs}
+  // TEST 1: SpTxSquashedV1 {legacy inputs}
   incrementer = {
       {1}, //batch sizes
-      {1, 2, 4, 7, 12, 16}, //in counts
+      {1, 2, 4, 7, 12, 16}, //legacy in counts
+      {0}, //sp in counts
       {2}, //out counts
+      {16}, //legacy ring size
+      {2}, //decomp n
+      {2} //decomp m limits
+    };
+  while (incrementer.next(p_seraphis_tx))
+  {
+    // ignore n^m
+    if (p_seraphis_tx.n != 2 || p_seraphis_tx.m != 2)
+      continue;
+
+    TEST_PERFORMANCE1(filter, p_seraphis_tx, test_seraphis_tx, sp::SpTxSquashedV1);
+  }
+  // test done, save results
+  if (p.core_params.td.get())
+    p.core_params.td->save(false);
+
+  // TEST 2: SpTxSquashedV1 {legacy ring size}
+  incrementer = {
+      {1}, //batch sizes
+      {1}, //legacy in counts
+      {0}, //sp in counts
+      {2}, //out counts
+      {1, 2, 4, 7, 12, 16, 25}, //legacy ring size
+      {2}, //decomp n
+      {2} //decomp m limits
+    };
+  while (incrementer.next(p_seraphis_tx))
+  {
+    // ignore n^m
+    if (p_seraphis_tx.n != 2 || p_seraphis_tx.m != 2)
+      continue;
+
+    TEST_PERFORMANCE1(filter, p_seraphis_tx, test_seraphis_tx, sp::SpTxSquashedV1);
+  }
+  // test done, save results
+  if (p.core_params.td.get())
+    p.core_params.td->save(false);
+
+  // TEST 3: SpTxSquashedV1 {sp inputs}
+  incrementer = {
+      {1}, //batch sizes
+      {0}, //legacy in counts
+      {1, 2, 4, 7, 12, 16}, //seraphis in counts
+      {2}, //out counts
+      {2}, //legacy ring size
       {2}, //decomp n
       {7} //decomp m limits
     };
@@ -262,11 +288,13 @@ std::cerr << "TEST #" << i;
   if (p.core_params.td.get())
     p.core_params.td->save(false);
 
-  // TEST 5.2: SpTxSquashedV1 {decomp}
+  // TEST 4: SpTxSquashedV1 {decomp}
   incrementer = {
       {1}, //batch sizes
-      {2}, //in counts
+      {0}, //legacy in counts
+      {2}, //seraphis in counts
       {2}, //out counts
+      {2}, //legacy ring size
       {2, 3}, //decomp n
       {12, 7} //decomp m limits
     };
@@ -279,11 +307,13 @@ std::cerr << "TEST #" << i;
   if (p.core_params.td.get())
     p.core_params.td->save(false);
 
-  // TEST 5.3: SpTxSquashedV1 {decomp 2-series, batch size 25}
+  // TEST 5: SpTxSquashedV1 {decomp 2-series, batch size 25}
   incrementer = {
       {25}, //batch sizes
-      {2}, //in counts
+      {0}, //legacy in counts
+      {2}, //seraphis in counts
       {2}, //out counts
+      {2}, //legacy ring size
       {2}, //decomp n
       {12} //decomp m limits
     };
@@ -296,11 +326,13 @@ std::cerr << "TEST #" << i;
   if (p.core_params.td.get())
     p.core_params.td->save(false);
 
-  // TEST 5.4: SpTxSquashedV1 {outputs, batch size 1}
+  // TEST 6: SpTxSquashedV1 {outputs, batch size 1}
   incrementer = {
       {1}, //batch sizes
-      {1, 2, 4, 7, 12, 16}, //in counts
+      {0}, //legacy in counts
+      {1, 2, 4, 7, 12, 16}, //seraphis in counts
       {1, 2, 4, 7, 12, 16}, //out counts
+      {2}, //legacy ring size
       {2}, //decomp n
       {7} //decomp m limits
     };
@@ -314,11 +346,13 @@ std::cerr << "TEST #" << i;
   if (p.core_params.td.get())
     p.core_params.td->save(false);
 
-  // TEST 5.5: SpTxSquashedV1 {16in/out, batch sizes 7, 15}
+  // TEST 7: SpTxSquashedV1 {16in/out, batch sizes 7, 15}
   incrementer = {
       {7, 15}, //batch sizes
-      {16}, //in counts
+      {0}, //legacy in counts
+      {16}, //seraphis in counts
       {16}, //out counts
+      {2}, //legacy ring size
       {2}, //decomp n
       {7} //decomp m limits
     };
@@ -332,11 +366,13 @@ std::cerr << "TEST #" << i;
   if (p.core_params.td.get())
     p.core_params.td->save(false);
 
-  // TEST 5.6: SpTxSquashedV1 {outputs, batch size 25}
+  // TEST 8: SpTxSquashedV1 {outputs, batch size 25}
   incrementer = {
       {25}, //batch sizes
-      {1, 2, 4, 7, 12, 16}, //in counts
+      {0}, //legacy in counts
+      {1, 2, 4, 7, 12, 16}, //seraphis in counts
       {1, 2, 4, 7, 12, 16}, //out counts
+      {2}, //legacy ring size
       {2}, //decomp n
       {7} //decomp m limits
     };
@@ -349,7 +385,7 @@ std::cerr << "TEST #" << i;
   // test done, save results
   if (p.core_params.td.get())
     p.core_params.td->save(false);
-  //// TEST SET 3 (end)
+  /// TEST: SpTxSquashedV1 (end)
 
 
 /*
