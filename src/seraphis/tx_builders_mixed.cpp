@@ -438,11 +438,11 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
         check_v1_legacy_input_proposal_semantics_v1(legacy_input_proposal, legacy_spend_pubkey);
 
     // 4. seraphis input proposal semantics should be valid
-    rct::key jamtis_spend_pubkey_base{jamtis_spend_pubkey};
-    reduce_seraphis_spendkey_x(k_view_balance, jamtis_spend_pubkey_base);
+    rct::key sp_spend_pubkey{jamtis_spend_pubkey};
+    reduce_seraphis_spendkey_x(k_view_balance, sp_spend_pubkey);
 
     for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
-        check_v1_input_proposal_semantics_v1(sp_input_proposal, jamtis_spend_pubkey_base);
+        check_v1_input_proposal_semantics_v1(sp_input_proposal, sp_spend_pubkey);
 
 
     /// check that amounts balance in the proposal

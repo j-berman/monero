@@ -218,14 +218,13 @@ void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_e
     sp_hash_to_32(transcript, input_images_prefix_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal,
-    const rct::key &jamtis_spend_pubkey_base)
+void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal, const rct::key &sp_spend_pubkey)
 {
     // 1. the onetime address must be reproducible
-    rct::key extended_wallet_spendkey{jamtis_spend_pubkey_base};
-    extend_seraphis_spendkey_u(input_proposal.m_core.m_enote_view_privkey_u, extended_wallet_spendkey);
+    rct::key extended_spendkey{sp_spend_pubkey};
+    extend_seraphis_spendkey_u(input_proposal.m_core.m_enote_view_privkey_u, extended_spendkey);
 
-    rct::key onetime_address_reproduced{extended_wallet_spendkey};
+    rct::key onetime_address_reproduced{extended_spendkey};
     extend_seraphis_spendkey_x(input_proposal.m_core.m_enote_view_privkey_x, onetime_address_reproduced);
     mask_key(input_proposal.m_core.m_enote_view_privkey_g, onetime_address_reproduced, onetime_address_reproduced);
 
@@ -235,7 +234,7 @@ void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposa
     // 2. the key image must be reproducible and canonical
     crypto::key_image key_image_reproduced;
     make_seraphis_key_image(input_proposal.m_core.m_enote_view_privkey_x,
-        rct::rct2pk(extended_wallet_spendkey),
+        rct::rct2pk(extended_spendkey),
         key_image_reproduced);
 
     CHECK_AND_ASSERT_THROW_MES(key_image_reproduced == input_proposal.m_core.m_key_image,
@@ -586,10 +585,10 @@ void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
     SpPartialInputV1 &partial_input_out)
 {
     // check input proposal semantics
-    rct::key jamtis_spend_pubkey_base;
-    make_seraphis_spendbase(sp_spend_privkey, jamtis_spend_pubkey_base);
+    rct::key sp_spend_pubkey;
+    make_seraphis_spendbase(sp_spend_privkey, sp_spend_pubkey);
 
-    check_v1_input_proposal_semantics_v1(input_proposal, jamtis_spend_pubkey_base);
+    check_v1_input_proposal_semantics_v1(input_proposal, sp_spend_pubkey);
 
     // prepare input image
     input_proposal.get_enote_image_v1(partial_input_out.m_input_image);
@@ -614,8 +613,6 @@ void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_propo
     const crypto::secret_key &sp_spend_privkey,
     std::vector<SpPartialInputV1> &partial_inputs_out)
 {
-    CHECK_AND_ASSERT_THROW_MES(input_proposals.size() > 0, "Can't make partial tx inputs without any input proposals.");
-
     partial_inputs_out.clear();
     partial_inputs_out.reserve(input_proposals.size());
 

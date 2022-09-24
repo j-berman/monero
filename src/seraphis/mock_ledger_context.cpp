@@ -814,6 +814,7 @@ std::uint64_t MockLedgerContext::commit_unconfirmed_txs_v1_impl(const rct::key &
     const std::uint64_t new_height{get_chain_height() + 1};
 
     // 1. add key images
+    m_legacy_key_images.insert(m_unconfirmed_legacy_key_images.begin(), m_unconfirmed_legacy_key_images.end());
     m_sp_key_images.insert(m_unconfirmed_sp_key_images.begin(), m_unconfirmed_sp_key_images.end());
     m_blocks_of_tx_key_images[new_height] = std::move(m_unconfirmed_tx_key_images);
 

@@ -112,8 +112,7 @@ void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_e
     const std::vector<SpEnoteImageV1> &sp_enote_images,
     rct::key &input_images_prefix_out);
 //todo
-void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal,
-    const rct::key &jamtis_spend_pubkey_base);
+void check_v1_input_proposal_semantics_v1(const SpInputProposalV1 &input_proposal, const rct::key &sp_spend_pubkey);
 /**
 * brief: make_input_proposal - make the core of an input proposal
 * param: enote_core -
