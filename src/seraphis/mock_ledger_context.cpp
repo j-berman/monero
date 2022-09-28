@@ -267,7 +267,7 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
         if (chunk_out.m_start_height > 0)
         {
             CHECK_AND_ASSERT_THROW_MES(m_block_infos.find(chunk_out.m_start_height - 1) != m_block_infos.end(),
-                "onchain chunk find-received scanning (mock ledger context): block ids map incorrect indexing (bug).");
+                "onchain chunk legacy-view scanning (mock ledger context): block ids map incorrect indexing (bug).");
 
             chunk_out.m_prefix_block_id = std::get<rct::key>(m_block_infos.at(chunk_out.m_start_height - 1));
         }
@@ -285,10 +285,10 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
         std::min({get_chain_height() + 1, m_first_seraphis_only_block, chunk_start_height + chunk_max_size});
 
     CHECK_AND_ASSERT_THROW_MES(chunk_out.m_end_height > chunk_out.m_start_height,
-        "onchain chunk find-received scanning (mock ledger context): chunk has no blocks below failure tests (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): chunk has no blocks below failure tests (bug).");
     CHECK_AND_ASSERT_THROW_MES(m_block_infos.find(chunk_out.m_start_height) != m_block_infos.end() &&
             m_block_infos.find(chunk_out.m_end_height - 1) != m_block_infos.end(),
-        "onchain chunk find-received scanning (mock ledger context): block range outside of block ids map (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): block range outside of block ids map (bug).");
 
     // b. prefix block id
     chunk_out.m_prefix_block_id =
@@ -309,7 +309,7 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
         );
 
     CHECK_AND_ASSERT_THROW_MES(chunk_out.m_block_ids.size() == chunk_out.m_end_height - chunk_out.m_start_height,
-        "onchain chunk find-received scanning (mock ledger context): invalid number of block ids acquired (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): invalid number of block ids acquired (bug).");
 
 
     /// 3. scan blocks in the chunk range that may contain legacy enotes or key images
@@ -321,16 +321,16 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
 
     CHECK_AND_ASSERT_THROW_MES(m_blocks_of_legacy_tx_output_contents.find(chunk_out.m_start_height) !=
             m_blocks_of_legacy_tx_output_contents.end(),
-        "onchain chunk find-received scanning (mock ledger context): start of chunk not known in tx outputs map (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): start of chunk not known in tx outputs map (bug).");
     CHECK_AND_ASSERT_THROW_MES(m_blocks_of_legacy_tx_output_contents.find(chunk_out.m_end_height - 1) !=
             m_blocks_of_legacy_tx_output_contents.end(),
-        "onchain chunk find-received scanning (mock ledger context): end of chunk not known in tx outputs map (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): end of chunk not known in tx outputs map (bug).");
     CHECK_AND_ASSERT_THROW_MES(m_blocks_of_tx_key_images.find(chunk_out.m_start_height) !=
             m_blocks_of_tx_key_images.end(),
-        "onchain chunk find-received scanning (mock ledger context): start of chunk not known in key images map (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): start of chunk not known in key images map (bug).");
     CHECK_AND_ASSERT_THROW_MES(m_blocks_of_tx_key_images.find(chunk_out.m_end_height - 1) !=
             m_blocks_of_tx_key_images.end(),
-        "onchain chunk find-received scanning (mock ledger context): end of chunk not known in key images map (bug).");
+        "onchain chunk legacy-view scanning (mock ledger context): end of chunk not known in key images map (bug).");
 
     // a. initialize output count to the total number of legacy enotes in the ledger before the first block to scan
     std::uint64_t total_output_count_before_tx{0};
@@ -339,19 +339,19 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
     {
         CHECK_AND_ASSERT_THROW_MES(m_accumulated_legacy_output_counts.find(chunk_out.m_start_height - 1) !=
                 m_accumulated_legacy_output_counts.end(),
-            "onchain chunk find-received scanning (mock ledger context): output counts missing a block (bug).");
+            "onchain chunk legacy-view scanning (mock ledger context): output counts missing a block (bug).");
 
         total_output_count_before_tx = m_accumulated_legacy_output_counts.at(chunk_out.m_start_height - 1);
     }
 
-    // b. find-received scan each block in the range
+    // b. legacy-view scan each block in the range
     std::for_each(
             m_blocks_of_legacy_tx_output_contents.find(chunk_out.m_start_height),
             m_blocks_of_legacy_tx_output_contents.find(chunk_out.m_end_height),
             [&](const auto &block_of_tx_output_contents)
             {
                 CHECK_AND_ASSERT_THROW_MES(m_block_infos.find(block_of_tx_output_contents.first) != m_block_infos.end(),
-                    "onchain chunk find-received scanning (mock ledger context): block infos map missing height (bug).");
+                    "onchain chunk legacy-view scanning (mock ledger context): block infos map missing height (bug).");
 
                 for (const auto &tx_with_output_contents : block_of_tx_output_contents.second)
                 {
@@ -382,7 +382,7 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
                             .at(block_of_tx_output_contents.first).find(tx_with_output_contents.first) !=
                         m_blocks_of_tx_key_images
                             .at(block_of_tx_output_contents.first).end(),
-                        "onchain chunk find-received scanning (mock ledger context): key image map missing tx (bug).");
+                        "onchain chunk legacy-view scanning (mock ledger context): key image map missing tx (bug).");
 
                     collect_key_images_from_tx(block_of_tx_output_contents.first,
                         std::get<std::uint64_t>(m_block_infos.at(block_of_tx_output_contents.first)),
@@ -406,7 +406,7 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
     for (const SpContextualKeyImageSetV1 &key_image_set : chunk_out.m_contextual_key_images)
     {
         CHECK_AND_ASSERT_THROW_MES(key_image_set.m_sp_key_images.size() == 0,
-            "onchain chunk find-received scanning (mock ledger context): a legacy tx has sp key images (bug).");
+            "onchain chunk legacy-view scanning (mock ledger context): a legacy tx has sp key images (bug).");
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -501,7 +501,7 @@ void MockLedgerContext::get_onchain_chunk_sp_impl(const std::uint64_t chunk_star
     // c. initialize output count to the total number of seraphis enotes in the ledger before the first block to scan
     std::uint64_t total_output_count_before_tx{0};
 
-    if (chunk_start_adjusted > 0)
+    if (chunk_start_adjusted > m_first_seraphis_allowed_block)
     {
         CHECK_AND_ASSERT_THROW_MES(m_accumulated_sp_output_counts.find(chunk_start_adjusted - 1) !=
                 m_accumulated_sp_output_counts.end(),
@@ -636,26 +636,32 @@ std::uint64_t MockLedgerContext::add_legacy_coinbase_impl(const rct::key &tx_id,
     // 2. add tx outputs
 
     // a. initialize with current total legacy output count
-    std::uint64_t total_output_count{m_legacy_enote_references.size()};
+    std::uint64_t total_legacy_output_count{m_legacy_enote_references.size()};
 
     // b. insert all legacy enotes to the reference set
     for (const LegacyEnoteVariant &enote : output_enotes)
     {
-        m_legacy_enote_references[total_output_count] = {enote.onetime_address(), enote.amount_commitment()};
+        m_legacy_enote_references[total_legacy_output_count] = {enote.onetime_address(), enote.amount_commitment()};
 
-        ++total_output_count;
+        ++total_legacy_output_count;
     }
 
-    // 3. add this block's accumulated output count
-    m_accumulated_legacy_output_counts[new_height] = total_output_count;
+    // c. add this block's accumulated output count
+    m_accumulated_legacy_output_counts[new_height] = total_legacy_output_count;
+
+    if (new_height >= m_first_seraphis_allowed_block)
+        m_accumulated_sp_output_counts[new_height] = m_sp_squashed_enotes.size();
 
     // d. add this block's tx output contents
     m_blocks_of_legacy_tx_output_contents[new_height][tx_id] = {unlock_time, std::move(memo), std::move(output_enotes)};
 
-    // 4. add block info (random block ID and zero timestamp in mockup)
+    if (new_height >= m_first_seraphis_allowed_block)
+        m_blocks_of_sp_tx_output_contents[new_height];
+
+    // 3. add block info (random block ID and zero timestamp in mockup)
     m_block_infos[new_height] = {rct::pkGen(), 0};
 
-    // 5. clear unconfirmed cache
+    // 4. clear unconfirmed cache
     clear_unconfirmed_cache_impl();
 
     return new_height;
@@ -713,7 +719,7 @@ bool MockLedgerContext::try_add_unconfirmed_tx_v1_impl(const SpTxSquashedV1 &tx)
     }
 
     rct::key input_context;
-    jamtis::make_jamtis_input_context_standard(sp_key_images_collected, input_context);
+    jamtis::make_jamtis_input_context_standard(legacy_key_images_collected, sp_key_images_collected, input_context);
 
     // 2. fail if tx id is duplicated (bug since key image check should prevent this)
     rct::key tx_id;
@@ -821,7 +827,7 @@ std::uint64_t MockLedgerContext::commit_unconfirmed_txs_v1_impl(const rct::key &
     // 2. add tx outputs
 
     // a. initialize with current total output count
-    std::uint64_t total_output_count{m_sp_squashed_enotes.size()};
+    std::uint64_t total_sp_output_count{m_sp_squashed_enotes.size()};
 
     // b. insert all squashed enotes to the reference set
     for (const auto &tx_info : m_unconfirmed_tx_output_contents)
@@ -831,17 +837,23 @@ std::uint64_t MockLedgerContext::commit_unconfirmed_txs_v1_impl(const rct::key &
         {
             make_seraphis_squashed_enote_Q(enote.m_core.m_onetime_address,
                 enote.m_core.m_amount_commitment,
-                m_sp_squashed_enotes[total_output_count]);
+                m_sp_squashed_enotes[total_sp_output_count]);
 
-            ++total_output_count;
+            ++total_sp_output_count;
         }
     }
 
     // c. add this block's accumulated output count
-    m_accumulated_sp_output_counts[new_height] = total_output_count;
+    m_accumulated_sp_output_counts[new_height] = total_sp_output_count;
+
+    if (new_height < m_first_seraphis_only_block)
+        m_accumulated_legacy_output_counts[new_height] = m_legacy_enote_references.size();
 
     // d. steal the unconfirmed cache's tx output contents
     m_blocks_of_sp_tx_output_contents[new_height] = std::move(m_unconfirmed_tx_output_contents);
+
+    if (new_height < m_first_seraphis_only_block)
+        m_blocks_of_legacy_tx_output_contents[new_height];
 
     // 3. add block info (random block ID and zero timestamp in mockup)
     m_block_infos[new_height] = {rct::pkGen(), 0};

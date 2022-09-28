@@ -28,6 +28,7 @@
 
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
+#include "cryptonote_basic/subaddress_index.h"
 #include "misc_language.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
@@ -38,6 +39,8 @@
 #include "seraphis/jamtis_enote_utils.h"
 #include "seraphis/jamtis_payment_proposal.h"
 #include "seraphis/jamtis_support_types.h"
+#include "seraphis/legacy_core_utils.h"
+#include "seraphis/legacy_enote_utils.h"
 #include "seraphis/mock_ledger_context.h"
 #include "seraphis/sp_composition_proof.h"
 #include "seraphis/sp_core_enote_utils.h"
@@ -47,6 +50,7 @@
 #include "seraphis/tx_binned_reference_set.h"
 #include "seraphis/tx_builder_types.h"
 #include "seraphis/tx_builders_inputs.h"
+#include "seraphis/tx_builders_legacy_inputs.h"
 #include "seraphis/tx_builders_mixed.h"
 #include "seraphis/tx_builders_outputs.h"
 #include "seraphis/tx_component_types.h"
@@ -113,6 +117,55 @@ static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amou
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void send_legacy_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
+    const rct::key &destination_subaddr_spend_pubkey,
+    const rct::key &destination_subaddr_view_pubkey,
+    sp::MockLedgerContext &ledger_context_inout)
+{
+    using namespace sp;
+
+    // prepare mock coinbase enotes
+    std::vector<LegacyEnoteVariant> coinbase_enotes;
+    std::vector<rct::key> collected_enote_ephemeral_pubkeys;
+    TxExtra tx_extra;
+    coinbase_enotes.reserve(coinbase_amounts.size());
+    coinbase_enotes.reserve(coinbase_amounts.size());
+
+    LegacyEnoteV4 enote_temp;
+
+    for (std::size_t amount_index{0}; amount_index < coinbase_amounts.size(); ++amount_index)
+    {
+        // legacy enote ephemeral pubkey
+        const crypto::secret_key enote_ephemeral_privkey{rct::rct2sk(rct::skGen())};
+        collected_enote_ephemeral_pubkeys.emplace_back(
+                rct::scalarmultKey(destination_subaddr_spend_pubkey, rct::sk2rct(enote_ephemeral_privkey))
+            );
+
+        // make legacy coinbase enote
+        ASSERT_NO_THROW(make_legacy_enote_v4(destination_subaddr_spend_pubkey,
+            destination_subaddr_view_pubkey,
+            coinbase_amounts[amount_index],
+            amount_index,
+            enote_ephemeral_privkey,
+            enote_temp));
+
+        coinbase_enotes.emplace_back(enote_temp);
+    }
+
+    // set tx extra
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(collected_enote_ephemeral_pubkeys, tx_extra));
+
+    // commit coinbase enotes as new block
+    ASSERT_NO_THROW(ledger_context_inout.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            std::move(tx_extra),
+            {},
+            std::move(coinbase_enotes)
+        ));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void send_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
     const sp::jamtis::JamtisDestinationV1 &user_address,
     sp::MockLedgerContext &ledger_context_inout)
@@ -166,12 +219,42 @@ static void refresh_user_enote_store(const sp::jamtis::jamtis_mock_keys &user_ke
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &local_user_keys,
+static void refresh_user_enote_store_legacy_full(const rct::key &legacy_base_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_spend_privkey,
+    const crypto::secret_key &legacy_view_privkey,
+    const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
+    const sp::MockLedgerContext &ledger_context,
+    sp::SpEnoteStoreMockV1 &user_enote_store_inout)
+{
+    using namespace sp;
+
+    const EnoteFindingContextLedgerMockLegacy enote_finding_context{
+            ledger_context,
+            legacy_base_spend_pubkey,
+            legacy_subaddress_map,
+            legacy_view_privkey
+        };
+    EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
+    EnoteStoreUpdaterLedgerMockLegacy enote_store_updater{
+            legacy_base_spend_pubkey,
+            legacy_spend_privkey,
+            legacy_view_privkey,
+            user_enote_store_inout
+        };
+
+    ASSERT_NO_THROW(refresh_enote_store_ledger(refresh_config, enote_scanning_context, enote_store_updater));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_user_legacy_keys,
+    const sp::jamtis::jamtis_mock_keys &local_user_sp_keys,
     const sp::InputSelectorV1 &local_user_input_selector,
     const sp::FeeCalculator &tx_fee_calculator,
     const rct::xmr_amount fee_per_tx_weight,
     const std::size_t max_inputs,
     const std::vector<std::tuple<rct::xmr_amount, sp::jamtis::JamtisDestinationV1, sp::TxExtra>> &outlays,
+    const std::size_t legacy_ring_size,
     const std::size_t ref_set_decomp_n,
     const std::size_t ref_set_decomp_m,
     const sp::SpBinnedReferenceSetConfigV1 &bin_config,
@@ -186,8 +269,8 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
     // 1. prepare dummy and change addresses
     JamtisDestinationV1 change_address;
     JamtisDestinationV1 dummy_address;
-    make_random_address_for_user(local_user_keys, change_address);
-    make_random_address_for_user(local_user_keys, dummy_address);
+    make_random_address_for_user(local_user_sp_keys, change_address);
+    make_random_address_for_user(local_user_sp_keys, dummy_address);
 
     // 2. convert outlays to normal payment proposals
     std::vector<JamtisPaymentProposalV1> normal_payment_proposals;
@@ -216,39 +299,58 @@ static void construct_tx_for_mock_ledger_v1(const sp::jamtis::jamtis_mock_keys &
         std::move(normal_payment_proposals),
         std::vector<JamtisPaymentProposalSelfSendV1>{},
         TxExtra{},
-        local_user_keys.k_vb,
+        local_user_sp_keys.k_vb,
         tx_proposal,
-        legacy_input_ledger_mappings,  //todo: legacy
+        legacy_input_ledger_mappings,
         sp_input_ledger_mappings)));
 
-    // 3. prepare for membership proofs
-    std::vector<SpMembershipProofPrepV1> membership_proof_preps;
+    // 3. tx proposal prefix
+    std::string version_string;
+    version_string.reserve(3);
+    make_versioning_string(SpTxSquashedV1::SemanticRulesVersion::MOCK, version_string);
+
+    rct::key tx_proposal_prefix;
+    tx_proposal.get_proposal_prefix(version_string, local_user_sp_keys.k_vb, tx_proposal_prefix);
+
+    // 4. prepare for legacy ring signatures
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps;
+    ASSERT_NO_THROW(make_mock_legacy_ring_signature_preps_for_inputs_v1(tx_proposal_prefix,
+        legacy_input_ledger_mappings,
+        tx_proposal.m_legacy_input_proposals,
+        legacy_ring_size,
+        ledger_context_inout,
+        legacy_ring_signature_preps));
+
+    // 5. prepare for seraphis membership proofs
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps;
     ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(sp_input_ledger_mappings,
         tx_proposal.m_sp_input_proposals,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,
         ledger_context_inout,
-        membership_proof_preps));
+        sp_membership_proof_preps));
 
-    // 4. complete tx
+    // 6. complete tx
     ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(tx_proposal,
-        {},  //todo: legacy
-        std::move(membership_proof_preps),
+        std::move(legacy_ring_signature_preps),
+        std::move(sp_membership_proof_preps),
         SpTxSquashedV1::SemanticRulesVersion::MOCK,
-        crypto::secret_key{}, //todo: legacy
-        local_user_keys.k_m,
-        local_user_keys.k_vb,
+        local_user_legacy_keys.k_s,
+        local_user_sp_keys.k_m,
+        local_user_sp_keys.k_vb,
         tx_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void transfer_funds_single_mock_v1(const sp::jamtis::jamtis_mock_keys &local_user_keys,
+static void transfer_funds_single_mock_v1(const sp::legacy_mock_keys &local_user_legacy_keys,
+    const sp::jamtis::jamtis_mock_keys &local_user_sp_keys,
     const sp::InputSelectorV1 &local_user_input_selector,
     const sp::FeeCalculator &tx_fee_calculator,
     const rct::xmr_amount fee_per_tx_weight,
     const std::size_t max_inputs,
     const std::vector<std::tuple<rct::xmr_amount, sp::jamtis::JamtisDestinationV1, sp::TxExtra>> &outlays,
+    const std::size_t legacy_ring_size,
     const std::size_t ref_set_decomp_n,
     const std::size_t ref_set_decomp_m,
     const sp::SpBinnedReferenceSetConfigV1 &bin_config,
@@ -259,12 +361,14 @@ static void transfer_funds_single_mock_v1(const sp::jamtis::jamtis_mock_keys &lo
 
     // make one tx
     SpTxSquashedV1 single_tx;
-    construct_tx_for_mock_ledger_v1(local_user_keys,
+    construct_tx_for_mock_ledger_v1(local_user_legacy_keys,
+        local_user_sp_keys,
         local_user_input_selector,
         tx_fee_calculator,
         fee_per_tx_weight,
         max_inputs,
         outlays,
+        legacy_ring_size,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,
@@ -288,6 +392,7 @@ TEST(seraphis_integration, txtype_squashed_v1)
     /// config
     const std::size_t max_inputs{1000};
     const std::size_t fee_per_tx_weight{1};
+    const std::size_t legacy_ring_size{2};
     const std::size_t ref_set_decomp_n{2};
     const std::size_t ref_set_decomp_m{2};
 
@@ -305,86 +410,133 @@ TEST(seraphis_integration, txtype_squashed_v1)
         };
 
     /// mock ledger context for this test
-    MockLedgerContext ledger_context{0, 0};
+    MockLedgerContext ledger_context{0, 10000};
 
 
-    /// add enough fake enotes to the ledger so we can reliably make membership proofs
-    std::vector<rct::xmr_amount> fake_enote_amounts(static_cast<std::size_t>(2*bin_config.m_bin_radius + 1), 0);
+    /// prepare for membership proofs
+
+    // a. add enough fake enotes to the ledger so we can reliably make legacy ring signatures
+    std::vector<rct::xmr_amount> fake_legacy_enote_amounts(static_cast<std::size_t>(legacy_ring_size), 0);
+    const rct::key fake_legacy_spendkey{rct::pkGen()};
+    const rct::key fake_legacy_viewkey{rct::pkGen()};
+
+    send_legacy_coinbase_amounts_to_user(fake_legacy_enote_amounts,
+        fake_legacy_spendkey,
+        fake_legacy_viewkey,
+        ledger_context);
+
+    // b. add enough fake enotes to the ledger so we can reliably make seraphis membership proofs
+    std::vector<rct::xmr_amount> fake_sp_enote_amounts(static_cast<std::size_t>(2*bin_config.m_bin_radius + 1), 0);
     JamtisDestinationV1 fake_destination;
     fake_destination.gen();
 
-    send_coinbase_amounts_to_user(fake_enote_amounts, fake_destination, ledger_context);
+    send_coinbase_amounts_to_user(fake_sp_enote_amounts, fake_destination, ledger_context);
 
 
     /// make two users
 
     // a. user keys
+    legacy_mock_keys legacy_user_keys_A;
     jamtis_mock_keys user_keys_A;
     jamtis_mock_keys user_keys_B;
+    make_legacy_mock_keys(legacy_user_keys_A);
     make_jamtis_mock_keys(user_keys_A);
     make_jamtis_mock_keys(user_keys_B);
 
-    // b. user addresses
+    // b. legacy user address
+    rct::key legacy_subaddr_spendkey_A;
+    rct::key legacy_subaddr_viewkey_A;
+    cryptonote::subaddress_index legacy_subaddr_index_A;
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map_A;
+
+    gen_legacy_subaddress(legacy_user_keys_A.Ks,
+        legacy_user_keys_A.k_v,
+        legacy_subaddr_spendkey_A,
+        legacy_subaddr_viewkey_A,
+        legacy_subaddr_index_A);
+
+    legacy_subaddress_map_A[legacy_subaddr_spendkey_A] = legacy_subaddr_index_A;
+
+    // c. seraphis user addresses
     JamtisDestinationV1 destination_A;
     JamtisDestinationV1 destination_B;
     make_random_address_for_user(user_keys_A, destination_A);
     make_random_address_for_user(user_keys_B, destination_B);
 
-    // c. user enote stores (refresh height = 0; seraphis initial block = 0)
+    // d. user enote stores (refresh height = 0; seraphis initial block = 0; default spendable age = 0)
     SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
 
-    // d. user input selectors
+    // e. user input selectors
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
 
 
-    /// initial funding for user A
+    /// initial funding for user A: legacy 4000000 + seraphis 4000000
+    send_legacy_coinbase_amounts_to_user(
+            {1000000, 1000000, 1000000, 1000000},
+            legacy_subaddr_spendkey_A,
+            legacy_subaddr_viewkey_A,
+            ledger_context
+        );
     send_coinbase_amounts_to_user({1000000, 1000000, 1000000, 1000000}, destination_A, ledger_context);
 
 
     /// send funds back and forth between users
 
-    // A -> B: 2000000
+    // A -> B: 6000000
+    refresh_user_enote_store_legacy_full(legacy_user_keys_A.Ks,
+        legacy_subaddress_map_A,
+        legacy_user_keys_A.k_s,
+        legacy_user_keys_A.k_v,
+        refresh_config,
+        ledger_context,
+        enote_store_A);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
-        {SpEnoteSpentStatus::SPENT_ONCHAIN}) >= 2000000);
-    transfer_funds_single_mock_v1(user_keys_A,
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) >= 8000000);
+    transfer_funds_single_mock_v1(legacy_user_keys_A,
+        user_keys_A,
         input_selector_A,
         fee_calculator,
         fee_per_tx_weight,
         max_inputs,
-        {{2000000, destination_B, TxExtra{}}},
+        {{6000000, destination_B, TxExtra{}}},
+        legacy_ring_size,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,
         ledger_context);
 
-    // B -> A: 1000000
+    // B -> A: 3000000
     refresh_user_enote_store(user_keys_B, refresh_config, ledger_context, enote_store_B);
     ASSERT_TRUE(enote_store_B.get_balance({SpEnoteOriginStatus::ONCHAIN},
-        {SpEnoteSpentStatus::SPENT_ONCHAIN}) >= 1000000);
-    transfer_funds_single_mock_v1(user_keys_B,
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) >= 6000000);
+    transfer_funds_single_mock_v1(legacy_mock_keys{},
+        user_keys_B,
         input_selector_B,
         fee_calculator,
         fee_per_tx_weight,
         max_inputs,
-        {{1000000, destination_A, TxExtra{}}},
+        {{3000000, destination_A, TxExtra{}}},
+        legacy_ring_size,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,
         ledger_context);
 
-    // A -> B: 1500000
+    // A -> B: 4000000
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
-        {SpEnoteSpentStatus::SPENT_ONCHAIN}) >= 1500000);
-    transfer_funds_single_mock_v1(user_keys_A,
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) >= 4000000);
+    transfer_funds_single_mock_v1(legacy_user_keys_A,
+        user_keys_A,
         input_selector_A,
         fee_calculator,
         fee_per_tx_weight,
         max_inputs,
-        {{1500000, destination_B, TxExtra{}}},
+        {{4000000, destination_B, TxExtra{}}},
+        legacy_ring_size,
         ref_set_decomp_n,
         ref_set_decomp_m,
         bin_config,

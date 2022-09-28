@@ -28,7 +28,6 @@
 
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
-#include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "misc_language.h"
 #include "ringct/rctOps.h"
@@ -185,39 +184,6 @@ static void make_random_address_for_user(const sp::jamtis::jamtis_mock_keys &use
         user_keys.s_ga,
         address_index,
         user_address_out));
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void make_legacy_subaddress(const rct::key &legacy_base_spend_pubkey,
-    const crypto::secret_key &legacy_view_privkey,
-    rct::key &subaddr_spendkey_out,
-    rct::key &subaddr_viewkey_out,
-    cryptonote::subaddress_index &subaddr_index_out)
-{
-    // random subaddress index: i
-    crypto::rand(sizeof(subaddr_index_out.minor), reinterpret_cast<unsigned char*>(&subaddr_index_out.minor));
-    crypto::rand(sizeof(subaddr_index_out.major), reinterpret_cast<unsigned char*>(&subaddr_index_out.major));
-
-    // subaddress spendkey: (Hn(k^v, i) + k^s) G
-    sp::make_legacy_subaddress_spendkey(legacy_base_spend_pubkey,
-        legacy_view_privkey,
-        subaddr_index_out,
-        subaddr_spendkey_out);
-
-    // subaddress viewkey: k^v * K^{s,i}
-    rct::scalarmultKey(subaddr_viewkey_out, subaddr_spendkey_out, rct::sk2rct(legacy_view_privkey));
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void append_legacy_enote_ephemeral_pubkeys_to_tx_extra(const std::vector<rct::key> &enote_ephemeral_pubkeys,
-    sp::TxExtra &tx_extra_inout)
-{
-    std::vector<crypto::public_key> enote_ephemeral_pubkeys_typed;
-    enote_ephemeral_pubkeys_typed.reserve(enote_ephemeral_pubkeys.size());
-    for (const rct::key &enote_ephemeral_pubkey : enote_ephemeral_pubkeys)
-        enote_ephemeral_pubkeys_typed.emplace_back(rct::rct2pk(enote_ephemeral_pubkey));
-
-    ASSERT_TRUE(cryptonote::add_additional_tx_pub_keys_to_extra(tx_extra_inout, enote_ephemeral_pubkeys_typed));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -506,7 +472,7 @@ static void transfer_funds_single_mock_v1_unconfirmed(const sp::jamtis::jamtis_m
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void prepare_legacy_enote_for_transfer(const rct::key &destination_subaddr_spendkey,
+static void prepare_mock_v4_legacy_enote_for_transfer(const rct::key &destination_subaddr_spendkey,
     const rct::key &destination_subaddr_viewkey,
     const rct::key &legacy_base_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
@@ -2560,7 +2526,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_1)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -2692,7 +2658,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_1)
         enote_v4_2));
 
     TxExtra tx_extra_1;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_1,
                 enote_ephemeral_pubkey_2,
@@ -2704,7 +2670,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_1)
                 enote_ephemeral_pubkey_8
             },
             tx_extra_1
-        );
+        ));
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
             rct::pkGen(),
             0,
@@ -2765,7 +2731,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -2782,7 +2748,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     rct::key enote_ephemeral_pubkey_1;
     crypto::key_image key_image;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -2796,12 +2762,12 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
         key_image);
 
     TxExtra tx_extra_1;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_1
             },
             tx_extra_1
-        );
+        ));
 
     //add legacy enote in block 0
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -2996,7 +2962,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -3017,7 +2983,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     rct::key enote_ephemeral_pubkey_1;
     crypto::key_image key_image_1;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3039,13 +3005,13 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         enote_rand));
 
     TxExtra tx_extra_1;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_1,
                 rct::pkGen()  //random enote gets a random enote ephemeral pubkey
             },
             tx_extra_1
-        );
+        ));
 
     //block 0: 1 -> user, 1 -> rand
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -3082,7 +3048,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     rct::key enote_ephemeral_pubkey_2;
     crypto::key_image key_image_2;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3096,12 +3062,12 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         key_image_2);
 
     TxExtra tx_extra_2;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_2
             },
             tx_extra_2
-        );
+        ));
 
     //block 1: 2 -> user
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -3296,7 +3262,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     rct::key enote_ephemeral_pubkey_3;
     crypto::key_image key_image_3;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3310,12 +3276,12 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         key_image_3);
 
     TxExtra tx_extra_3;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_3
             },
             tx_extra_3
-        );
+        ));
 
     //block 2: 4 -> user, spend enote 1
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -3490,7 +3456,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -3508,7 +3474,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     rct::key enote_ephemeral_pubkey_1;
     crypto::key_image key_image_1;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3522,12 +3488,12 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         key_image_1);
 
     TxExtra tx_extra_1;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_1
             },
             tx_extra_1
-        );
+        ));
 
     //block 0: enote 1-a
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -3926,7 +3892,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -3950,7 +3916,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     crypto::key_image key_image;
     crypto::key_image key_image_temp;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3963,7 +3929,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         enote_ephemeral_pubkey,
         key_image);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3978,7 +3944,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_ephemeral_pubkey_temp == enote_ephemeral_pubkey);
     ASSERT_TRUE(key_image_temp == key_image);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -3993,7 +3959,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_ephemeral_pubkey_temp == enote_ephemeral_pubkey);
     ASSERT_TRUE(key_image_temp == key_image);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4009,12 +3975,12 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(key_image_temp == key_image);
 
     TxExtra tx_extra;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey
             },
             tx_extra
-        );
+        ));
 
     //block 0: enote 1-a (amount 3)
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -4380,7 +4346,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -4404,7 +4370,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     crypto::key_image key_image_2;
     crypto::key_image key_image_3;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4417,7 +4383,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         enote_ephemeral_pubkey_1,
         key_image_1);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4430,7 +4396,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         enote_ephemeral_pubkey_2,
         key_image_2);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4444,26 +4410,26 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         key_image_3);
 
     TxExtra tx_extra_1;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_1
             },
             tx_extra_1
-        );
+        ));
     TxExtra tx_extra_2;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_2
             },
             tx_extra_2
-        );
+        ));
     TxExtra tx_extra_3;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey_3
             },
             tx_extra_3
-        );
+        ));
 
     //block 0: enote 1 (unlock 0)
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
@@ -4775,7 +4741,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -4798,7 +4764,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     crypto::key_image key_image;
     crypto::key_image key_image_temp;
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4811,7 +4777,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         enote_ephemeral_pubkey,
         key_image);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4826,7 +4792,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     ASSERT_TRUE(enote_ephemeral_pubkey_temp == enote_ephemeral_pubkey);
     ASSERT_TRUE(key_image_temp == key_image);
 
-    prepare_legacy_enote_for_transfer(subaddr_spendkey,
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
@@ -4842,12 +4808,12 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     ASSERT_TRUE(key_image_temp == key_image);
 
     TxExtra tx_extra;
-    append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
             {
                 enote_ephemeral_pubkey
             },
             tx_extra
-        );
+        ));
 
     //block 0: enote 1-a (amount 1; unlock 0)
     ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(

@@ -174,20 +174,24 @@ void make_jamtis_input_context_coinbase(const std::uint64_t block_height, rct::k
     sp_hash_to_32(transcript, input_context_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_jamtis_input_context_standard(const std::vector<crypto::key_image> &input_key_images,
+void make_jamtis_input_context_standard(const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     rct::key &input_context_out)
 {
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(input_key_images.begin(), input_key_images.end()),
-        "jamtis input context (standard): key images are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(legacy_input_key_images.begin(), legacy_input_key_images.end()),
+        "jamtis input context (standard): legacy key images are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(sp_input_key_images.begin(), sp_input_key_images.end()),
+        "jamtis input context (standard): seraphis key images are not sorted.");
 
-    // {KI}
+    // {legacy KI} || {seraphis KI}
     SpKDFTranscript transcript{
             config::HASH_KEY_JAMTIS_INPUT_CONTEXT_STANDARD,
-            input_key_images.size()*sizeof(crypto::key_image)
+            (legacy_input_key_images.size() + sp_input_key_images.size())*sizeof(crypto::key_image)
         };
-    transcript.append("input_KI", input_key_images);
+    transcript.append("legacy_input_KI", legacy_input_key_images);
+    transcript.append("sp_input_KI", sp_input_key_images);
 
-    // input_context (standard) = H_32({KI})
+    // input_context (standard) = H_32({legacy KI}, {seraphis KI})
     sp_hash_to_32(transcript, input_context_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------

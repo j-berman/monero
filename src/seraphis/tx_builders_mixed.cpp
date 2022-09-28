@@ -139,7 +139,14 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
 {
     static const std::string project_name{CRYPTONOTE_NAME};
 
-    // H_32(crypto project name, version string, legacy input key images, legacy input key images, output enotes,
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(legacy_input_key_images.begin(), legacy_input_key_images.end()),
+        "tx proposal prefix (v1): legacy input key images are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(sp_input_key_images.begin(), sp_input_key_images.end()),
+        "tx proposal prefix (v1): seraphis input key images are not sorted.");
+    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(output_enotes.begin(), output_enotes.end(), equals_from_less{}),
+        "tx proposal prefix (v1): output enotes are not sorted.");
+
+    // H_32(crypto project name, version string, legacy input key images, seraphis input key images, output enotes,
     //         tx supplement, fee)
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_TX_PROPOSAL_MESSAGE_V1,
@@ -527,7 +534,6 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
     std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
 
     split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
-    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
     // a. handle legacy inputs
     std::vector<LegacyInputProposalV1> legacy_input_proposals;

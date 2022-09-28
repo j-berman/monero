@@ -257,6 +257,18 @@ void make_legacy_view_tag(const rct::key &destination_viewkey,
     crypto::derive_view_tag(derivation, tx_output_index, view_tag_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(const std::vector<rct::key> &enote_ephemeral_pubkeys,
+    TxExtra &tx_extra_inout)
+{
+    std::vector<crypto::public_key> enote_ephemeral_pubkeys_typed;
+    enote_ephemeral_pubkeys_typed.reserve(enote_ephemeral_pubkeys.size());
+
+    for (const rct::key &enote_ephemeral_pubkey : enote_ephemeral_pubkeys)
+        enote_ephemeral_pubkeys_typed.emplace_back(rct::rct2pk(enote_ephemeral_pubkey));
+
+    return cryptonote::add_additional_tx_pub_keys_to_extra(tx_extra_inout, enote_ephemeral_pubkeys_typed);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void extract_legacy_enote_ephemeral_pubkeys_from_tx_extra(const TxExtra &tx_extra,
     std::vector<crypto::public_key> &legacy_enote_ephemeral_pubkeys_out)
 {
@@ -280,6 +292,34 @@ void extract_legacy_enote_ephemeral_pubkeys_from_tx_extra(const TxExtra &tx_extr
     {
         legacy_enote_ephemeral_pubkeys_out = additional_pub_keys_field.data;
     }
+}
+//-------------------------------------------------------------------------------------------------------------------
+void gen_legacy_subaddress(const rct::key &legacy_base_spend_pubkey,
+    const crypto::secret_key &legacy_view_privkey,
+    rct::key &subaddr_spendkey_out,
+    rct::key &subaddr_viewkey_out,
+    cryptonote::subaddress_index &subaddr_index_out)
+{
+    // random subaddress index: i
+    crypto::rand(sizeof(subaddr_index_out.minor), reinterpret_cast<unsigned char*>(&subaddr_index_out.minor));
+    crypto::rand(sizeof(subaddr_index_out.major), reinterpret_cast<unsigned char*>(&subaddr_index_out.major));
+
+    // subaddress spendkey: (Hn(k^v, i) + k^s) G
+    make_legacy_subaddress_spendkey(legacy_base_spend_pubkey,
+        legacy_view_privkey,
+        subaddr_index_out,
+        subaddr_spendkey_out);
+
+    // subaddress viewkey: k^v * K^{s,i}
+    rct::scalarmultKey(subaddr_viewkey_out, subaddr_spendkey_out, rct::sk2rct(legacy_view_privkey));
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_legacy_mock_keys(legacy_mock_keys &keys_out)
+{
+    keys_out.k_s = rct::rct2sk(rct::skGen());
+    keys_out.k_v = rct::rct2sk(rct::skGen());
+    keys_out.Ks = rct::scalarmultBase(rct::sk2rct(keys_out.k_s));
+    keys_out.Kv = rct::scalarmultBase(rct::sk2rct(keys_out.k_v));
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

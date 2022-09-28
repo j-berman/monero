@@ -59,7 +59,7 @@ namespace sp
 
 /**
 * brief: make_tx_proposal_prefix_v1 - hash representing a tx proposal
-*   - H_32(crypto project name, version string, legacy input key images, sp input key images, output enotes,
+*   - H_32(crypto project name, version string, legacy input key images, seraphis input key images, output enotes,
 *               tx supplement, fee)
 * param: version_string -
 * param: legacy_input_key_images -

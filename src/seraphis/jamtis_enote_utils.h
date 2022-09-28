@@ -92,11 +92,13 @@ void make_jamtis_view_tag(const crypto::x25519_secret_key &privkey,
 void make_jamtis_input_context_coinbase(const std::uint64_t block_height, rct::key &input_context_out);
 /**
 * brief: make_jamtis_input_context_standard - input context for a sender-receiver secret (standard txs)
-*    input_context = H_32({KI})
-* param: input_key_images - {KI} from the inputs of the tx (sorted)
-* outparam: input_context_out - H_32({KI})
+*    input_context = H_32({legacy KI}, {seraphis KI})
+* param: legacy_input_key_images - {KI} from the legacy inputs of a tx (sorted)
+* param: sp_input_key_images - {KI} from the seraphis inputs of a tx (sorted)
+* outparam: input_context_out - H_32({legacy KI}, {seraphis KI}})
 */
-void make_jamtis_input_context_standard(const std::vector<crypto::key_image> &input_key_images,
+void make_jamtis_input_context_standard(const std::vector<crypto::key_image> &legacy_input_key_images,
+    const std::vector<crypto::key_image> &sp_input_key_images,
     rct::key &input_context_out);
 /**
 * brief: make_jamtis_sender_receiver_secret_plain - sender-receiver secret q for a normal enote

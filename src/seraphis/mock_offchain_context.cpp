@@ -183,7 +183,7 @@ bool MockOffchainContext::try_add_v1_impl(const std::vector<LegacyEnoteImageV2> 
     }
 
     rct::key input_context;
-    jamtis::make_jamtis_input_context_standard(sp_key_images_collected, input_context);
+    jamtis::make_jamtis_input_context_standard(legacy_key_images_collected, sp_key_images_collected, input_context);
 
     // 2. fail if input context is duplicated (bug since key image check should prevent this)
     CHECK_AND_ASSERT_THROW_MES(m_tx_key_images.find(input_context) == m_tx_key_images.end(),

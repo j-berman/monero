@@ -390,7 +390,7 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
     make_v1_partial_inputs_v1(tx_proposal.m_sp_input_proposals, proposal_prefix, sp_spend_privkey, sp_partial_inputs);
 
     // legacy spend pubkey
-    const rct::key legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(sp_spend_privkey))};
+    const rct::key legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
 
     // jamtis spend pubkey
     rct::key jamtis_spend_pubkey;

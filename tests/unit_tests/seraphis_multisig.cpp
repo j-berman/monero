@@ -506,7 +506,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         accounts[0].get_signers(),
         aggregate_filter_of_requested_multisig_signers);
 
-    // b) make multisig tx proposal
+    // c) make multisig tx proposal
     const sp::InputSelectorMockV1 input_selector{enote_store};
     const sp::FeeCalculatorMockTrivial tx_fee_calculator;  //trivial fee calculator so we can use specified input fee
 
