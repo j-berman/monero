@@ -559,7 +559,7 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
     std::vector<jamtis::JamtisPaymentProposalV1> &normal_payment_proposals_inout,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &selfsend_payment_proposals_inout)
 {
-    // get change amount
+    // 1. get change amount
     boost::multiprecision::uint128_t output_sum{transaction_fee};
 
     for (const jamtis::JamtisPaymentProposalV1 &normal_proposal : normal_payment_proposals_inout)
@@ -575,14 +575,14 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
 
     const rct::xmr_amount change_amount{total_input_amount - output_sum};
 
-    // collect self-send output types
+    // 2. collect self-send output types
     std::vector<jamtis::JamtisSelfSendType> self_send_output_types;
     self_send_output_types.reserve(selfsend_payment_proposals_inout.size());
 
     for (const jamtis::JamtisPaymentProposalSelfSendV1 &selfsend_proposal : selfsend_payment_proposals_inout)
         self_send_output_types.emplace_back(selfsend_proposal.m_type);
 
-    // set the shared enote ephemeral pubkey here: it will always be the first one when it is needed
+    // 3. set the shared enote ephemeral pubkey here: it will always be the first one when it is needed
     crypto::x25519_pubkey first_enote_ephemeral_pubkey{};
 
     if (normal_payment_proposals_inout.size() > 0)
@@ -590,7 +590,7 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
     else if (selfsend_payment_proposals_inout.size() > 0)
         selfsend_payment_proposals_inout[0].get_enote_ephemeral_pubkey(first_enote_ephemeral_pubkey);
 
-    // get output types to add
+    // 4. get output types to add
     std::vector<OutputProposalSetExtraTypesV1> additional_outputs;
 
     get_additional_output_types_for_output_set_v1(
@@ -600,7 +600,7 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
         change_amount,
         additional_outputs);
 
-    // add the new outputs
+    // 5. add the new outputs
     for (const OutputProposalSetExtraTypesV1 additional_output_type : additional_outputs)
     {
         if (additional_output_type == OutputProposalSetExtraTypesV1::NORMAL_DUMMY ||

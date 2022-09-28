@@ -167,7 +167,7 @@ void make_jamtis_view_tag(const crypto::x25519_secret_key &privkey,
 void make_jamtis_input_context_coinbase(const std::uint64_t block_height, rct::key &input_context_out)
 {
     // block height as varint
-    SpKDFTranscript transcript{config::HASH_KEY_JAMTIS_INPUT_CONTEXT_COINBASE, 4};
+    SpFSTranscript transcript{config::HASH_KEY_JAMTIS_INPUT_CONTEXT_COINBASE, 4};
     transcript.append("height", block_height);
 
     // input_context (coinbase) = H_32(block height)
@@ -184,7 +184,7 @@ void make_jamtis_input_context_standard(const std::vector<crypto::key_image> &le
         "jamtis input context (standard): seraphis key images are not sorted.");
 
     // {legacy KI} || {seraphis KI}
-    SpKDFTranscript transcript{
+    SpFSTranscript transcript{
             config::HASH_KEY_JAMTIS_INPUT_CONTEXT_STANDARD,
             (legacy_input_key_images.size() + sp_input_key_images.size())*sizeof(crypto::key_image)
         };

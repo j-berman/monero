@@ -105,6 +105,54 @@ static bool same_key_image(const SpPartialInputV1 &partial_input, const SpInputP
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void legacy_enote_records_to_input_proposals(
+    const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_records,
+    std::vector<LegacyInputProposalV1> &legacy_input_proposals_out,
+    std::unordered_map<crypto::key_image, std::uint64_t> &legacy_input_ledger_mappings_out)
+{
+    legacy_input_proposals_out.clear();
+    legacy_input_ledger_mappings_out.clear();
+    legacy_input_proposals_out.reserve(legacy_contextual_records.size());
+
+    for (const LegacyContextualEnoteRecordV1 &legacy_contextual_input : legacy_contextual_records)
+    {
+        // save input indices for making legacy ring signatures
+        legacy_input_ledger_mappings_out[legacy_contextual_input.m_record.m_key_image] = 
+            legacy_contextual_input.m_origin_context.m_enote_ledger_index;
+
+        // convert legacy inputs to input proposals
+        legacy_input_proposals_out.emplace_back();
+        make_v1_legacy_input_proposal_v1(legacy_contextual_input.m_record,
+            rct::rct2sk(rct::skGen()),
+            legacy_input_proposals_out.back());
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void sp_enote_records_to_input_proposals(const std::list<SpContextualEnoteRecordV1> &sp_contextual_records,
+    std::vector<SpInputProposalV1> &sp_input_proposals_out,
+    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out)
+{
+    sp_input_proposals_out.clear();
+    sp_input_ledger_mappings_out.clear();
+    sp_input_proposals_out.reserve(sp_contextual_records.size());
+
+    for (const SpContextualEnoteRecordV1 &sp_contextual_input : sp_contextual_records)
+    {
+        // save input indices for making seraphis membership proofs
+        sp_input_ledger_mappings_out[sp_contextual_input.m_record.m_key_image] = 
+            sp_contextual_input.m_origin_context.m_enote_ledger_index;
+
+        // convert seraphis inputs to input proposals
+        sp_input_proposals_out.emplace_back();
+        make_v1_input_proposal_v1(sp_contextual_input.m_record,
+            rct::rct2sk(rct::skGen()),
+            rct::rct2sk(rct::skGen()),
+            sp_input_proposals_out.back());
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void collect_legacy_ring_signature_ring_members(const std::vector<LegacyRingSignatureV3> &legacy_ring_signatures,
     const std::vector<rct::ctkeyV> &legacy_ring_signature_rings,
     std::unordered_map<std::uint64_t, rct::ctkey> &legacy_reference_set_proof_elements_out)
@@ -520,6 +568,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
 
     rct::xmr_amount reported_final_fee;
     input_set_tracker_t selected_input_set;
+
     if (!try_get_input_set_v1(output_set_context,
             max_inputs,
             local_user_input_selector,
@@ -537,38 +586,15 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
 
     // a. handle legacy inputs
     std::vector<LegacyInputProposalV1> legacy_input_proposals;
-    legacy_input_proposals.reserve(legacy_contextual_inputs.size());
-
-    for (const LegacyContextualEnoteRecordV1 &legacy_contextual_input : legacy_contextual_inputs)
-    {
-        // save input indices for making legacy ring signatures
-        legacy_input_ledger_mappings_out[legacy_contextual_input.m_record.m_key_image] = 
-            legacy_contextual_input.m_origin_context.m_enote_ledger_index;
-
-        // convert legacy inputs to input proposals
-        legacy_input_proposals.emplace_back();
-        make_v1_legacy_input_proposal_v1(legacy_contextual_input.m_record,
-            rct::rct2sk(rct::skGen()),
-            legacy_input_proposals.back());
-    }
+    legacy_enote_records_to_input_proposals(legacy_contextual_inputs,
+        legacy_input_proposals,
+        legacy_input_ledger_mappings_out);
 
     // b. handle seraphis inputs
     std::vector<SpInputProposalV1> sp_input_proposals;
-    sp_input_proposals.reserve(sp_contextual_inputs.size());
-
-    for (const SpContextualEnoteRecordV1 &sp_contextual_input : sp_contextual_inputs)
-    {
-        // save input indices for making seraphis membership proofs
-        sp_input_ledger_mappings_out[sp_contextual_input.m_record.m_key_image] = 
-            sp_contextual_input.m_origin_context.m_enote_ledger_index;
-
-        // convert seraphis inputs to input proposals
-        sp_input_proposals.emplace_back();
-        make_v1_input_proposal_v1(sp_contextual_input.m_record,
-            rct::rct2sk(rct::skGen()),
-            rct::rct2sk(rct::skGen()),
-            sp_input_proposals.back());
-    }
+    sp_enote_records_to_input_proposals(sp_contextual_inputs,
+        sp_input_proposals,
+        sp_input_ledger_mappings_out);
 
     // 3.  get total input amount
     boost::multiprecision::uint128_t total_input_amount{0};
@@ -631,7 +657,7 @@ void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &legacy_input_a
     all_in_amounts.insert(all_in_amounts.end(), sp_input_amounts.begin(), sp_input_amounts.end());
 
     CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(all_in_amounts, output_amounts, transaction_fee),
-        "Amounts don't balance when making balance proof.");
+        "make v1 balance proof (v1): amounts don't balance.");
 
     // 2. combine seraphis inputs and outputs for range proof (legacy input masked commitments are not range proofed)
     std::vector<rct::xmr_amount> range_proof_amounts{sp_input_amounts};
