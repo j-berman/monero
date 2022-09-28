@@ -98,7 +98,7 @@ class SpTranscriptBuilder final
     }
     void append_flag(const SpTranscriptBuilderFlag flag)
     {
-        if (m_simple_mode)
+        if (m_mode == Mode::SIMPLE)
             return;
 
         static_assert(sizeof(SpTranscriptBuilderFlag) <= sizeof(std::uint64_t),
@@ -107,7 +107,7 @@ class SpTranscriptBuilder final
     }
     void append_length(const std::size_t length)
     {
-        if (m_simple_mode)
+        if (m_mode == Mode::SIMPLE)
             return;
 
         static_assert(sizeof(std::size_t) <= sizeof(std::uint64_t), "SpTranscriptBuilder: size_t greater than uint64_t.");
@@ -121,7 +121,7 @@ class SpTranscriptBuilder final
     }
     void append_label(const boost::string_ref label)
     {
-        if (m_simple_mode ||
+        if (m_mode == Mode::SIMPLE ||
             label.size() == 0)
             return;
 
@@ -143,10 +143,18 @@ class SpTranscriptBuilder final
     }
 
 public:
+//public member types
+    /// transcript builder mode
+    enum class Mode
+    {
+        FULL,
+        SIMPLE
+    };
+
 //constructors
-    /// normal constructor: start building a transcript with the domain separator
-    SpTranscriptBuilder(const std::size_t estimated_data_size, const bool mode) :
-        m_simple_mode{mode}
+    /// normal constructor
+    SpTranscriptBuilder(const std::size_t estimated_data_size, const Mode mode) :
+        m_mode{mode}
     {
         m_transcript.reserve(2 * estimated_data_size + 20);
     }
@@ -246,7 +254,7 @@ public:
         static_assert(sizeof(T) <= sizeof(std::uint64_t), "SpTranscriptBuilderFlag: unsupported signed integer type.");
         append_label(label);
         append_flag(SpTranscriptBuilderFlag::SIGNED_INTEGER);
-        if (signed_integer > 0)
+        if (signed_integer >= 0)
         {
             // positive integer: byte{0} || varint(uint(int_variable))
             append_uint(0);
@@ -295,7 +303,7 @@ public:
 //member variables
 private:
     /// if set, exclude: labels, flags, lengths
-    bool m_simple_mode;
+    Mode m_mode;
     /// the transcript itself (wipeable in case it contains sensitive data)
     epee::wipeable_string m_transcript;
 };
@@ -311,7 +319,7 @@ public:
 //constructors
     /// normal constructor: start building a transcript with the domain separator
     SpFSTranscript(const boost::string_ref domain_separator, const std::size_t estimated_data_size) :
-        m_transcript_builder{15 + domain_separator.size() + estimated_data_size, true}
+        m_transcript_builder{15 + domain_separator.size() + estimated_data_size, SpTranscriptBuilder::Mode::FULL}
     {
         // transcript = sp_FS_transcript || domain_separator
         m_transcript_builder.append("FS_transcript", config::SERAPHIS_FS_TRANSCRIPT_PREFIX);
@@ -352,7 +360,7 @@ public:
 //constructors
     /// normal constructor: start building a transcript with the domain separator
     SpKDFTranscript(const boost::string_ref domain_separator, const std::size_t estimated_data_size) :
-        m_transcript_builder{domain_separator.size() + estimated_data_size, false}
+        m_transcript_builder{domain_separator.size() + estimated_data_size, SpTranscriptBuilder::Mode::SIMPLE}
     {
         // transcript = domain_separator
         m_transcript_builder.append("", domain_separator);
