@@ -2513,20 +2513,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_1)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-    const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+    const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -2538,10 +2537,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_1)
     MockLedgerContext ledger_context{10000, 10000};
     SpEnoteStoreMockV1 enote_store{0, 10000, 0};
 
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store);
@@ -2688,10 +2687,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_1)
             }
         ));
 
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store);
@@ -2718,20 +2717,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-    //const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+    //const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -2750,10 +2748,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -2781,9 +2779,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
         ));
 
     //intermediate refresh
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -2814,9 +2812,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
         ));
 
     //intermediate refresh
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -2864,9 +2862,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
         ));
 
     //collect legacy key images since last fullscan (block -1)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,  //only collect key images with spent contexts
         refresh_config,
         ledger_context,
@@ -2892,9 +2890,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     ASSERT_TRUE(enote_store.get_top_block_height() == 1);
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -2910,9 +2908,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     ledger_context.pop_blocks(1);
 
     //collect legacy key images since last fullscan (block 1)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,  //key image recovery mode to demonstrate it doesn't affect seraphis block height tracker or block ids
         refresh_config,
         ledger_context,
@@ -2949,20 +2947,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-    //const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+    //const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -2985,10 +2982,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -3026,9 +3023,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         ));
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3050,10 +3047,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         2,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -3098,9 +3095,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 1);  //intermediate record promoted to full
 
     //legacy key image scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,
         refresh_config,
         ledger_context,
@@ -3122,9 +3119,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == 0);
 
     //intermediate scan (to read block 1)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3157,9 +3154,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 3);  //intermediate record promoted to full
 
     //legacy key image scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,
         refresh_config,
         ledger_context,
@@ -3192,9 +3189,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         ));
 
     //intermediate scan (to read block 2)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3226,9 +3223,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     ledger_context.pop_blocks(1);
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3264,10 +3261,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         4,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -3297,10 +3294,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         ));
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3315,9 +3312,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 6);
 
     //intermediate scan (this should have no effect right after a full scan)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3358,10 +3355,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
         ));
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3379,10 +3376,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     ledger_context.pop_blocks(1);
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3398,9 +3395,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
 
     //intermediate scan to fix height trackers (these can get messed up if doing both intermediate and full scans,
     //which will never be done in practice)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3443,20 +3440,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-   // const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+   // const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -3476,10 +3472,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -3507,9 +3503,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3523,10 +3519,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3547,9 +3543,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         ));
 
     //intermediate scan (don't import key image yet); should still be only 1 intermediate record, with origin height 0
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3566,10 +3562,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 0);
 
     //full scan (separate enote store); balance should still be 1
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3582,9 +3578,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ledger_context.pop_blocks(1);
 
     //intermediate scan: still one intermediate record for enote 1-a
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3618,9 +3614,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 1);  //intermediate record promoted to full
 
     //legacy key image scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,
         refresh_config,
         ledger_context,
@@ -3642,10 +3638,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 0);
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3666,9 +3662,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         ));
 
     //intermediate scan: no intermediate records
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3698,10 +3694,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 1);
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3714,9 +3710,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ledger_context.pop_blocks(1);
 
     //intermediate scan: still no intermediate records, balance still has enote 1-a
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3744,10 +3740,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 0);
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3768,9 +3764,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         ));
 
     //intermediate scan: still no intermediate records, balance still has enote 1-a
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3798,10 +3794,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 1);
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3822,9 +3818,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
         ));
 
     //intermediate scan: still no intermediate records, 0 balance now
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -3852,10 +3848,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 2);
 
     //full scan
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -3879,20 +3875,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-    //const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+    //const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -3918,10 +3913,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         3,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -3931,10 +3926,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         5,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -3946,10 +3941,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -3961,10 +3956,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         4,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -3994,9 +3989,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4010,10 +4005,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4034,9 +4029,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         ));
 
     //intermediate scan (with key image import)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4067,9 +4062,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 5);  //intermediate records promoted to full
 
     //legacy key image scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,
         refresh_config,
         ledger_context,
@@ -4091,10 +4086,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 1);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4107,9 +4102,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ledger_context.pop_blocks(1);
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4137,10 +4132,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4172,9 +4167,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         ));
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4202,10 +4197,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 2);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4226,9 +4221,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
         ));
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4257,10 +4252,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 3);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4274,9 +4269,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ledger_context.pop_blocks(1);
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4305,10 +4300,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 2);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4333,20 +4328,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-    //const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+    //const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -4372,10 +4366,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -4385,10 +4379,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -4398,10 +4392,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         make_secret_key(),
@@ -4443,9 +4437,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4463,10 +4457,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4490,9 +4484,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4510,10 +4504,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4537,9 +4531,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4557,10 +4551,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4582,9 +4576,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4602,10 +4596,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4627,9 +4621,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         ));
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4670,9 +4664,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 3);  //intermediate records promoted to full
 
     //legacy key image scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,
         refresh_config,
         ledger_context,
@@ -4698,10 +4692,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 4);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4728,20 +4722,19 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         };
 
     // 2. user keys
-    const crypto::secret_key legacy_spend_privkey{make_secret_key()};
-    const crypto::secret_key legacy_view_privkey{make_secret_key()};
-    const rct::key legacy_base_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
 
     // 3. user normal address
-    //const rct::key normal_addr_spendkey{legacy_base_spend_pubkey};
-    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_view_privkey))};
+    //const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
 
     // 4. user subaddress
     rct::key subaddr_spendkey;
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
     legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
@@ -4766,10 +4759,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         1,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -4779,10 +4772,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         2,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -4794,10 +4787,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
 
     prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
         subaddr_viewkey,
-        legacy_base_spend_pubkey,
+        legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         3,  //amount
         0,  //index in planned mock coinbase tx
         enote_ephemeral_privkey,
@@ -4827,9 +4820,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4847,10 +4840,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4872,9 +4865,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4892,10 +4885,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4919,9 +4912,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         ));
 
     //intermediate scan (don't import key image yet)
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -4939,10 +4932,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -4964,9 +4957,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         ));
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -5005,9 +4998,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 2);  //intermediate records promoted to full
 
     //legacy key image scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         true,
         refresh_config,
         ledger_context,
@@ -5033,10 +5026,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 3);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -5062,9 +5055,9 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         ));
 
     //intermediate scan
-    refresh_user_enote_store_legacy_intermediate(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_view_privkey,
+        legacy_keys.k_v,
         false,
         refresh_config,
         ledger_context,
@@ -5100,10 +5093,10 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     ASSERT_TRUE(enote_store_int.get_top_legacy_fullscanned_block_height() == 4);
 
     //full scan (separate enote store)
-    refresh_user_enote_store_legacy_full(legacy_base_spend_pubkey,
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
         legacy_subaddress_map,
-        legacy_spend_privkey,
-        legacy_view_privkey,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
         refresh_config,
         ledger_context,
         enote_store_full);
@@ -5120,3 +5113,236 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
         {EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 }
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+/*TEST(seraphis_enote_scanning, legacy_sp_transition_1)
+{
+    using namespace sp;
+
+    /// setup
+
+    // 1. config
+    const RefreshLedgerEnoteStoreConfig refresh_config{
+            .m_reorg_avoidance_depth = 1,
+            .m_max_chunk_size = 1,
+            .m_max_partialscan_attempts = 0
+        };
+
+    // 2. user keys
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
+
+    // 3. user normal address
+    //const rct::key normal_addr_spendkey{legacy_keys.Ks};
+    //const rct::key normal_addr_viewkey{rct::scalarmultBase(rct::sk2rct(legacy_keys.k_v))};
+
+    // 4. user subaddress
+    rct::key subaddr_spendkey;
+    rct::key subaddr_viewkey;
+    cryptonote::subaddress_index subaddr_index;
+
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
+    legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
+
+
+    /// test
+
+    // 2. manual scanning with key image imports: test 1
+    MockLedgerContext ledger_context{10000, 10000};
+    SpEnoteStoreMockV1 enote_store{0, 10000, 0};
+
+    //make enote for test
+    LegacyEnoteV4 enote_1;
+    rct::key enote_ephemeral_pubkey_1;
+    crypto::key_image key_image;
+
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        0,  //index in planned mock coinbase tx
+        make_secret_key(),
+        enote_1,
+        enote_ephemeral_pubkey_1,
+        key_image);
+
+    TxExtra tx_extra_1;
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+            {
+                enote_ephemeral_pubkey_1
+            },
+            tx_extra_1
+        ));
+
+    //add legacy enote in block 0
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_1,
+            {},
+            {
+                enote_1
+            }
+        ));
+
+    //intermediate refresh
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_v,
+        false,
+        refresh_config,
+        ledger_context,
+        enote_store);
+
+    ASSERT_TRUE(enote_store.get_top_legacy_partialscanned_block_height() == 0);
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == -1);
+    ASSERT_TRUE(enote_store.get_legacy_intermediate_records().size() == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 0);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN, SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN},
+        {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 0);
+
+    //spend enote in block 1
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            TxExtra{},
+            {
+                key_image
+            },
+            {}
+        ));
+
+    //intermediate refresh
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_v,
+        false,
+        refresh_config,
+        ledger_context,
+        enote_store);
+
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == -1);
+    ASSERT_TRUE(enote_store.get_legacy_intermediate_records().size() == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 0);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN, SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 1);
+
+    //export intermediate onetime addresses that need key images
+    //(not done for this mock-up)
+
+    //save current height that was legacy partial-scanned
+    const std::uint64_t intermediate_height_pre_import_cycle{
+            enote_store.get_top_legacy_partialscanned_block_height()
+        };
+
+    //import key images for onetime addresses of intermediate records in the enote store
+    ASSERT_NO_THROW(enote_store.import_legacy_key_image(key_image, enote_1.m_onetime_address));
+
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == -1);
+    ASSERT_TRUE(enote_store.get_legacy_intermediate_records().size() == 0);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 0);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN, SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 1);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN},
+        {EnoteStoreBalanceUpdateExclusions::LEGACY_INTERMEDIATE}) == 1);  //intermediate record promoted to full
+
+    //add empty block 2 (inject to test ledger height trackers)
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            TxExtra{},
+            {},
+            {}
+        ));
+
+    //collect legacy key images since last fullscan (block -1)
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_v,
+        true,  //only collect key images with spent contexts
+        refresh_config,
+        ledger_context,
+        enote_store);
+
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 0);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 0);
+    ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN, SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 0);
+
+    ASSERT_TRUE(enote_store.get_top_legacy_partialscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == -1);
+    ASSERT_TRUE(enote_store.get_top_sp_scanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_block_height() == 1);  //key image recovery scan should not update block height
+
+    //update legacy fullscan height in enote store to partialscan height the store had when exporting onetime addresses
+    ASSERT_NO_THROW(enote_store.set_last_legacy_fullscan_height(intermediate_height_pre_import_cycle));
+
+    ASSERT_TRUE(enote_store.get_top_legacy_partialscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_block_height() == 1);
+
+    //intermediate scan
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_v,
+        false,
+        refresh_config,
+        ledger_context,
+        enote_store);
+
+    ASSERT_TRUE(enote_store.get_top_legacy_partialscanned_block_height() == 2);
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_sp_scanned_block_height() == 2);
+    ASSERT_TRUE(enote_store.get_top_block_height() == 2);
+    ASSERT_TRUE(enote_store.get_legacy_intermediate_records().size() == 0);
+
+    //remove block 2
+    ledger_context.pop_blocks(1);
+
+    //collect legacy key images since last fullscan (block 1)
+    refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_v,
+        true,  //key image recovery mode to demonstrate it doesn't affect seraphis block height tracker or block ids
+        refresh_config,
+        ledger_context,
+        enote_store);
+
+    ASSERT_TRUE(enote_store.get_top_legacy_partialscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_sp_scanned_block_height() == 2);
+    ASSERT_TRUE(enote_store.get_top_block_height() == 2);
+
+    //mock seraphis refresh to fix enote store block height trackers after reorg
+    refresh_user_enote_store(jamtis::jamtis_mock_keys{},
+        refresh_config,
+        ledger_context,
+        enote_store);
+
+    ASSERT_TRUE(enote_store.get_top_legacy_partialscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_sp_scanned_block_height() == 1);
+    ASSERT_TRUE(enote_store.get_top_block_height() == 1);
+}
+*/
