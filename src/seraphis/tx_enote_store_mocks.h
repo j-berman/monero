@@ -175,18 +175,6 @@ public:
     /// get height of heighest block that was seraphis view-balance scanned
     std::uint64_t get_top_sp_scanned_block_height() const { return m_sp_scanned_height; }
     /// get current balance using specified origin/spent statuses and exclusions
-    boost::multiprecision::uint128_t get_balance_intermediate_legacy(
-        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
-        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
-        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
-    boost::multiprecision::uint128_t get_balance_full_legacy(
-        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
-        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
-        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
-    boost::multiprecision::uint128_t get_balance_seraphis(
-        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
-        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
-        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
     boost::multiprecision::uint128_t get_balance(
         const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
         const std::unordered_set<SpEnoteSpentStatus> &spent_statuses = {},
@@ -213,6 +201,19 @@ private:
     /// update seraphis state with fresh seraphis key images that were found to be spent
     void update_sp_with_fresh_found_spent_key_images(
         const std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images);
+    /// get balance helpers
+    boost::multiprecision::uint128_t get_balance_intermediate_legacy(
+        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
+        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
+        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
+    boost::multiprecision::uint128_t get_balance_full_legacy(
+        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
+        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
+        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
+    boost::multiprecision::uint128_t get_balance_seraphis(
+        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
+        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
+        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
 
 //member variables
 protected:

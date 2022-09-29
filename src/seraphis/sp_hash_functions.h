@@ -57,6 +57,12 @@ class DataSource final
         DataSourceConcept& operator=(DataSourceConcept&&) = delete;
         virtual const void* data() const = 0;
         virtual std::size_t size() const = 0;
+
+        /// specialize these for source types that don't have .data() and .size() member functions
+        template <typename SourceT>
+        static const void* get_source_data(const SourceT &source) { return source.data(); }
+        template <typename SourceT>
+        static std::size_t get_source_size(const SourceT &source) { return source.size(); }
     };
 
     /// model: data source
@@ -69,9 +75,9 @@ class DataSource final
         /// disable copy/move (this is a scoped manager [reference wrapper])
         DataSourceModel& operator=(DataSourceModel&&) = delete;
         /// data source's data
-        const void* data() const override { return m_source.data(); }
+        const void* data() const override { return DataSourceConcept::get_source_data(m_source); }
         /// data source's data size
-        std::size_t size() const override { return m_source.size(); }
+        std::size_t size() const override { return DataSourceConcept::get_source_size(m_source); }
 
     private:
         /// underlying data source
