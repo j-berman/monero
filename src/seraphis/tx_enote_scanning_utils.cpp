@@ -190,8 +190,12 @@ static void process_chunk_new_record_update_sp(const SpEnoteRecordV1 &new_enote_
         // c. get the record's current spent context
         spent_context_update = found_spent_key_images_inout[new_record_key_image];
 
-        // d. save the tx id of the tx where this enote was spent
-        txs_have_spent_enotes_inout.insert(spent_context_update.m_transaction_id);
+        // d. save the tx id of the tx in this chunk where this enote was spent
+        // note: use spent context of contextual key images instead of the spent context update in case the update did not
+        //       resolve to a tx in this chunk (probably a bug, but better safe than sorry here)
+        txs_have_spent_enotes_inout.insert(
+                contextual_key_images_of_record_spent_in_this_chunk->m_spent_context.m_transaction_id
+            );
     }
 
     // 3. update the contextual enote record's contexts

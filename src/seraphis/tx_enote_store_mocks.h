@@ -175,6 +175,18 @@ public:
     /// get height of heighest block that was seraphis view-balance scanned
     std::uint64_t get_top_sp_scanned_block_height() const { return m_sp_scanned_height; }
     /// get current balance using specified origin/spent statuses and exclusions
+    boost::multiprecision::uint128_t get_balance_intermediate_legacy(
+        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
+        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
+        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
+    boost::multiprecision::uint128_t get_balance_full_legacy(
+        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
+        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
+        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
+    boost::multiprecision::uint128_t get_balance_seraphis(
+        const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
+        const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
+        const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions) const;
     boost::multiprecision::uint128_t get_balance(
         const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
         const std::unordered_set<SpEnoteSpentStatus> &spent_statuses = {},
@@ -187,10 +199,19 @@ private:
         const rct::key &alignment_block_id,
         const std::vector<rct::key> &new_block_ids);
     /// clean up legacy state to prepare for adding fresh legacy enotes and key images
-    void clean_legacy_maps_for_ledger_update(const std::uint64_t first_new_block,
+    void clean_maps_for_legacy_ledger_update(const std::uint64_t first_new_block,
         const std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images);
+    /// clean maps based on tx ids of removed seraphis enotes
+    void clean_maps_for_removed_sp_enotes(const std::unordered_set<rct::key> &tx_ids_of_removed_enotes);
+    /// clean up seraphis state to prepare for adding fresh seraphis enotes and key images and legacy key images
+    void clean_maps_for_sp_ledger_update(const std::uint64_t first_new_block);
+    /// clean up seraphis state to prepare for adding fresh off-chain seraphis enotes and key images and legacy key images
+    void clean_maps_for_sp_offchain_update();
     /// update legacy state with fresh legacy key images that were found to be spent
     void update_legacy_with_fresh_found_spent_key_images(
+        const std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images);
+    /// update seraphis state with fresh seraphis key images that were found to be spent
+    void update_sp_with_fresh_found_spent_key_images(
         const std::unordered_map<crypto::key_image, SpEnoteSpentContextV1> &found_spent_key_images);
 
 //member variables

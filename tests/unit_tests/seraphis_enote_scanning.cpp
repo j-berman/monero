@@ -5344,5 +5344,4 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     ASSERT_TRUE(enote_store.get_top_legacy_fullscanned_block_height() == 1);
     ASSERT_TRUE(enote_store.get_top_sp_scanned_block_height() == 1);
     ASSERT_TRUE(enote_store.get_top_block_height() == 1);
-}
-*/
+}*/
