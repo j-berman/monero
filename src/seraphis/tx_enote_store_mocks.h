@@ -89,6 +89,7 @@ class SpEnoteStoreMockV1 final
     //       messiness of a friend class
     friend class InputSelectorMockV1;
 
+public:
     enum class ScanUpdateMode
     {
         LEGACY_FULL,
@@ -96,7 +97,6 @@ class SpEnoteStoreMockV1 final
         SERAPHIS
     };
 
-public:
 //constructors
     /// default constructor
     SpEnoteStoreMockV1() = default;
@@ -109,6 +109,9 @@ public:
 //member functions
     /// setters for scan heights
     /// WARNING: misuse of these will mess up the enote store's state (to recover: set height(s) below problem then rescan)
+    /// note: to repair the enote store in case of an exception or other error during an update, save all of the last
+    ///       scanned heights from before the update, then reset the enote store with them on failure, and then re-scan to
+    ///       repair
     void set_last_legacy_fullscan_height(const std::uint64_t new_height);
     void set_last_legacy_partialscan_height(const std::uint64_t new_height);
     void set_last_sp_scanned_height(const std::uint64_t new_height);
@@ -157,6 +160,13 @@ public:
     bool has_enote_with_key_image(const crypto::key_image &key_image) const;
     /// try to get the recorded block id for a given height
     bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const;
+    /// try to get the recorded block id for a given height and specified scan mode
+    /// note: during scanning, different scan modes are assumed to 'not see' block ids obtained by a different scan mode;
+    ///       this hacky behavior is necessary to recover from reorgs involving multiple scan modes
+    bool try_get_block_id_for_scan_mode(const std::uint64_t block_height,
+        const ScanUpdateMode scan_update_mode,
+        rct::key &block_id_out) const;
+    /// get the legacy intermediate records (e.g. to collect their onetime addresses for key image recovery)
     const std::unordered_map<rct::key, LegacyContextualIntermediateEnoteRecordV1>& get_legacy_intermediate_records() const
     { return m_mapped_legacy_intermediate_contextual_enote_records; }
 

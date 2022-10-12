@@ -45,6 +45,7 @@
 #include <algorithm>
 #include <ctime>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -527,6 +528,51 @@ bool SpEnoteStoreMockV1::try_get_block_id(const std::uint64_t block_height, rct:
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool SpEnoteStoreMockV1::try_get_block_id_for_scan_mode(const std::uint64_t block_height,
+    const ScanUpdateMode scan_update_mode,
+    rct::key &block_id_out) const
+{
+    if (block_height < m_refresh_height ||
+        block_height > m_refresh_height + m_block_ids.size() - 1 ||
+        m_block_ids.size() == 0)
+        return false;
+
+    // assume a block id is 'unknown' to a given scan mode if its height is above the last scanned block height
+    switch (scan_update_mode)
+    {
+        case (ScanUpdateMode::LEGACY_FULL) :
+        {
+            if (block_height + 1 > m_legacy_fullscan_height + 1)
+                return false;
+            else
+                break;
+        }
+
+        case (ScanUpdateMode::LEGACY_INTERMEDIATE) :
+        {
+            if (block_height + 1 > m_legacy_partialscan_height + 1)
+                return false;
+            else
+                break;
+        }
+
+        case (ScanUpdateMode::SERAPHIS) :
+        {
+            if (block_height + 1 > m_sp_scanned_height + 1)
+                return false;
+            else
+                break;
+        }
+
+        default :
+            CHECK_AND_ASSERT_THROW_MES(false, "enote store get block id for scan mode (mock): unknown scan mode.");
+    }
+
+    block_id_out = m_block_ids[block_height - m_refresh_height];
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
 boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance(
     const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
     const std::unordered_set<SpEnoteSpentStatus> &spent_statuses,
@@ -574,8 +620,30 @@ void SpEnoteStoreMockV1::update_with_new_blocks_from_ledger(const ScanUpdateMode
     if (new_block_ids.size() > 0 ||
         scan_update_mode == ScanUpdateMode::SERAPHIS)
     {
-        m_block_ids.resize(first_new_block - m_refresh_height);  //crop old blocks
-        m_block_ids.insert(m_block_ids.end(), new_block_ids.begin(), new_block_ids.end());
+        // a. find the first new block id (there can be some overlap in 'new_block_ids' with 'm_block_ids' if a prior
+        //   scan with a different mode collected some of the same blocks)
+        std::uint64_t alignment_block_height{first_new_block - 1};  //we align on the input alignment block (first new - 1)
+        for (const rct::key &new_block_id : new_block_ids)
+        {
+            if (alignment_block_height + 1 - m_refresh_height >= m_block_ids.size())
+                break;
+
+            if (!(new_block_id == m_block_ids[alignment_block_height + 1 - m_refresh_height]))
+                break;
+
+            ++alignment_block_height;  //we must also align on the next new block, so increment height
+        }
+
+        // b. if we are reorging, shove the scan-mode heights back to the last block that they scanned in the reorged chain
+        m_legacy_fullscan_height = std::min(m_legacy_fullscan_height + 1, alignment_block_height + 1) - 1;
+        m_legacy_partialscan_height = std::min(m_legacy_partialscan_height + 1, alignment_block_height + 1) - 1;
+        m_sp_scanned_height = std::min(m_sp_scanned_height + 1, alignment_block_height + 1) - 1;
+
+        // c. add the new block ids
+        m_block_ids.resize(alignment_block_height + 1 - m_refresh_height);  //crop old blocks
+        m_block_ids.insert(m_block_ids.end(),
+            std::next(new_block_ids.begin(), alignment_block_height + 1 - first_new_block),
+            new_block_ids.end());
     }
 
     // 2. update scanning height for this scan mode

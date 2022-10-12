@@ -39,6 +39,7 @@
 
 //standard headers
 #include <memory>
+#include <string>
 
 //forward declarations
 

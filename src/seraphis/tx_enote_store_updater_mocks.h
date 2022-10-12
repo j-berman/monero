@@ -87,8 +87,8 @@ public:
     bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const override;
     /// get height of first block the enote store cares about
     std::uint64_t get_refresh_height() const override;
-    /// get height of heighest recorded block (refresh height - 1 if no recorded blocks)
-    std::uint64_t get_top_block_height() const override;
+    /// get height of first block the updater wants to have scanned
+    std::uint64_t get_desired_first_block() const override;
 
 //member variables
 private:
@@ -132,8 +132,8 @@ public:
     bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const override;
     /// get height of first block the enote store cares about
     std::uint64_t get_refresh_height() const override;
-    /// get height of heighest recorded block (refresh height - 1 if no recorded blocks)
-    std::uint64_t get_top_block_height() const override;
+    /// get height of first block the updater wants to have scanned
+    std::uint64_t get_desired_first_block() const override;
 
 //member variables
 private:
@@ -217,13 +217,14 @@ public:
     bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const override;
     /// get height of first block the enote store cares about
     std::uint64_t get_refresh_height() const override;
-    /// get height of heighest recorded block (refresh height - 1 if no recorded blocks)
-    std::uint64_t get_top_block_height() const override;
+    /// get height of first block the updater wants to have scanned
+    std::uint64_t get_desired_first_block() const override;
 
 //member variables
 private:
-    /// If this is set, then get_top_block_height() will return the last block that was legacy view-scanned and where
-    /// legacy key images were fully handled. Otherwise, it will return the last block that was only legacy view-scanned.
+    /// If this is set, then get_desired_first_block() will be defined from the last block that was legacy view-scanned
+    /// and where legacy key images were fully handled. Otherwise, it will be defined from the last block that was only
+    /// legacy view-scanned.
     /// - Goal: when set, expect the enote scanner to return key images for all blocks that were only legacy view-scanned
     ///   but that didn't have key images handled (i.e. because key images weren't available during a previous scan).
     bool m_legacy_key_image_recovery_mode;
@@ -269,8 +270,8 @@ public:
     bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const override;
     /// get height of first block the enote store cares about
     std::uint64_t get_refresh_height() const override;
-    /// get height of heighest recorded block (refresh height - 1 if no recorded blocks)
-    std::uint64_t get_top_block_height() const override;
+    /// get height of first block the updater wants to have scanned
+    std::uint64_t get_desired_first_block() const override;
 
 //member variables
 private:

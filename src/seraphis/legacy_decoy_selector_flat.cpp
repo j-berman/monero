@@ -64,7 +64,7 @@ void LegacyDecoySelectorFlat::get_ring_members(const std::uint64_t real_ring_mem
         "legacy decoy selector (flat): real ring member index below available index range.");
     CHECK_AND_ASSERT_THROW_MES(real_ring_member_index <= m_max_index,
         "legacy decoy selector (flat): real ring member index above available index range.");
-    CHECK_AND_ASSERT_THROW_MES(num_ring_members <= m_max_index - m_min_index,
+    CHECK_AND_ASSERT_THROW_MES(num_ring_members <= m_max_index - m_min_index + 1,
         "legacy decoy selector (flat): insufficient available legacy enotes to have unique ring members.");
 
     // fill in ring members

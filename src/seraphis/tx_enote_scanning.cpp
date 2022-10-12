@@ -419,7 +419,7 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
     EnoteStoreUpdaterLedger &enote_store_updater_inout)
 {
     // we want to scan the first block after the last block that we scanned
-    std::uint64_t desired_first_block{enote_store_updater_inout.get_top_block_height() + 1};
+    std::uint64_t desired_first_block{enote_store_updater_inout.get_desired_first_block()};
 
     // scan attempts
     ScanStatus scan_status{ScanStatus::NEED_FULLSCAN};

@@ -46,6 +46,8 @@ extern "C"
 //third party headers
 
 //standard headers
+#include <sstream>
+#include <iomanip>
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -92,6 +94,18 @@ static std::vector<SpFactoryGenerator> prepare_generators()
         ge_p3_to_cached(&generators[generator_index].generator_cached,
             &generators[generator_index].generator_p3);
     }
+
+/*
+// demo: print first generator public key to console
+for (const unsigned char byte : generators[0].generator.data)
+{
+    printf("0x");
+    if (byte < 16)
+        printf("0");
+    printf("%x ", byte);
+}
+printf("\n");
+*/
 
     return generators;
 }
