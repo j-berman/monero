@@ -46,8 +46,6 @@ extern "C"
 //third party headers
 
 //standard headers
-#include <sstream>
-#include <iomanip>
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
