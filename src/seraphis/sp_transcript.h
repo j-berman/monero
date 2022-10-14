@@ -65,7 +65,7 @@ namespace sp
 //       - all labels are treated as byte buffers
 //     - named container: container_flag || container_name || data_member1 || ... || container_terminator_flag
 //     - list-type container (same-type elements only): list_flag || list_length || element1 || element2 || ...
-// - the transcript can be used by passing a predicate to use_transcript()
+// - the transcript can be used like a string via the .data() and .size() member functions
 // - simple mode: exclude all labels, flags, and lengths
 ///
 class SpTranscriptBuilder final

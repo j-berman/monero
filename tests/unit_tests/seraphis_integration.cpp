@@ -48,6 +48,7 @@
 #include "seraphis/sp_crypto_utils.h"
 #include "seraphis/tx_base.h"
 #include "seraphis/tx_binned_reference_set.h"
+#include "seraphis/tx_binned_reference_set_utils.h"
 #include "seraphis/tx_builder_types.h"
 #include "seraphis/tx_builders_inputs.h"
 #include "seraphis/tx_builders_legacy_inputs.h"
@@ -426,7 +427,10 @@ TEST(seraphis_integration, txtype_squashed_v1)
         ledger_context);
 
     // b. add enough fake enotes to the ledger so we can reliably make seraphis membership proofs
-    std::vector<rct::xmr_amount> fake_sp_enote_amounts(static_cast<std::size_t>(2*bin_config.m_bin_radius + 1), 0);
+    std::vector<rct::xmr_amount> fake_sp_enote_amounts(
+            static_cast<std::size_t>(compute_bin_width(bin_config.m_bin_radius)),
+            0
+        );
     JamtisDestinationV1 fake_destination;
     fake_destination.gen();
 

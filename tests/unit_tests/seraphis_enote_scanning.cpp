@@ -5384,7 +5384,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         - 0: sp
         - 1: sp
         - pop 1 between legacy and seraphis scan
-        - 1: legacy
+        - 1: legacy x2
         - 2: sp
         - 3: sp
         - 4: send all to B
@@ -6439,6 +6439,1038 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
 
         0, //final_balance
         1, //final_legacy_fullscan_height
+
+        32, //view_scan_expected_balance_after_intermediate_scan
+        32, //view_scan_expected_balance_after_importing_key_images
+        32, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+}
+//-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_enote_scanning, legacy_sp_transition_2)
+{
+/*
+    - test 2:
+        - [first sp allowed: 1, first sp only: 3, chunk size: 2]
+        - 0: legacy
+        - 1: legacy
+        - 2: sp
+            - fresh enote store: seraphis scan should throw if this line in mock ledger context is changed to > 0
+                if (chunk_start_adjusted > m_first_seraphis_allowed_block)
+        - 3: sp
+        - 4: sp
+        - 5: send all to B
+        - pop 4
+        //don't scan
+        - 1: sp
+        //scan
+        - 2: legacy
+        - 3: sp
+        - 4: sp
+        - 5: send all to B
+        - pop 5
+        - 1: sp
+        - 2: sp
+        - 3: sp
+        - 4: sp
+        - 5: send all to B
+        - pop 3
+        - 3: sp
+        - 4: sp
+*/
+    using namespace sp;
+    using namespace jamtis;
+
+    /// setup
+
+    // 1. config
+    const RefreshLedgerEnoteStoreConfig refresh_config{
+            .m_reorg_avoidance_depth = 1,
+            .m_max_chunk_size = 2,
+            .m_max_partialscan_attempts = 0
+        };
+
+    const std::size_t max_inputs{1000};
+    const std::size_t fee_per_tx_weight{0};  // 0 fee here
+    const std::size_t legacy_ring_size{2};
+    const std::size_t ref_set_decomp_n{2};
+    const std::size_t ref_set_decomp_m{2};
+
+    const FeeCalculatorMockTrivial fee_calculator;  //just do a trivial calculator here (fee = fee/weight * 1 weight)
+
+    const SpBinnedReferenceSetConfigV1 bin_config{
+            .m_bin_radius = 1,
+            .m_num_bin_members = 2
+        };
+
+    const std::uint64_t first_sp_allowed_block{1};
+    const std::uint64_t first_sp_only_block{3};
+
+    // 2. legacy user keys
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
+
+    // 3. user legacy subaddress
+    rct::key subaddr_spendkey;
+    rct::key subaddr_viewkey;
+    cryptonote::subaddress_index subaddr_index;
+
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
+    legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
+
+    // 4. seraphis user keys
+    jamtis_mock_keys sp_keys;
+    make_jamtis_mock_keys(sp_keys);
+
+    // 5. user seraphis address
+    JamtisDestinationV1 sp_destination;
+    make_random_address_for_user(sp_keys, sp_destination);
+
+    // 6. random user address
+    JamtisDestinationV1 sp_destination_random;
+    sp_destination_random.gen();
+
+
+    /// test
+
+    // 2. legacy in pre-transition zone into mixed seraphis/legacy enotes in transition zone
+    MockLedgerContext ledger_context{first_sp_allowed_block, first_sp_only_block};
+    SpEnoteStoreMockV1 enote_store_full{0, first_sp_allowed_block, 0};
+    SpEnoteStoreMockV1 enote_store_view{0, first_sp_allowed_block, 0};
+    InputSelectorMockV1 input_selector{enote_store_full};
+
+    //make two legacy enotes
+    LegacyEnoteV4 legacy_enote_1;
+    rct::key legacy_enote_ephemeral_pubkey_1;
+    crypto::key_image legacy_key_image_1;
+    LegacyEnoteV4 legacy_enote_2;
+    rct::key legacy_enote_ephemeral_pubkey_2;
+    crypto::key_image legacy_key_image_2;
+
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        0,  //index in planned mock coinbase tx (block 0)
+        make_secret_key(),
+        legacy_enote_1,
+        legacy_enote_ephemeral_pubkey_1,
+        legacy_key_image_1);
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        1,  //index in planned mock coinbase tx (block 0)
+        make_secret_key(),
+        legacy_enote_2,
+        legacy_enote_ephemeral_pubkey_2,
+        legacy_key_image_2);
+
+    TxExtra tx_extra_1;
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+            {
+                legacy_enote_ephemeral_pubkey_1,
+                legacy_enote_ephemeral_pubkey_2
+            },
+            tx_extra_1
+        ));
+
+    //block 0: legacy enote 1, legacy enote 2
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_1,
+            {},
+            {
+                legacy_enote_1,
+                legacy_enote_2
+            }
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        0, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //make legacy enote 3
+    LegacyEnoteV4 legacy_enote_3;
+    rct::key legacy_enote_ephemeral_pubkey_3;
+    crypto::key_image legacy_key_image_3;
+
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        2,  //amount
+        0,  //index in planned mock coinbase tx
+        make_secret_key(),
+        legacy_enote_3,
+        legacy_enote_ephemeral_pubkey_3,
+        legacy_key_image_3);
+
+    TxExtra tx_extra_2;
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+            {
+                legacy_enote_ephemeral_pubkey_3
+            },
+            tx_extra_2
+        ));
+
+    //block 1: legacy enote 3, spend legacy enote 2
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_2,
+            {
+                legacy_key_image_2
+            },
+            {
+                legacy_enote_3
+            }
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {
+            legacy_enote_3.m_onetime_address
+        }, //view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_3
+        }, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        3, //final_balance
+        1, //final_legacy_fullscan_height
+
+        3, //view_scan_expected_balance_after_intermediate_scan
+        3, //view_scan_expected_balance_after_importing_key_images
+        3, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 2: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+
+    //test recovery
+    //seraphis scan should throw if this line in mock ledger context is changed to '> 0'
+    //            if (chunk_start_adjusted > m_first_seraphis_allowed_block)
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        13, //final_balance
+        2, //final_legacy_fullscan_height
+
+        3, //view_scan_expected_balance_after_intermediate_scan
+        3, //view_scan_expected_balance_after_importing_key_images
+        3, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 3: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        23, //final_balance
+        2, //final_legacy_fullscan_height
+
+        13, //view_scan_expected_balance_after_intermediate_scan
+        13, //view_scan_expected_balance_after_importing_key_images
+        13, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 4: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        33, //final_balance
+        2, //final_legacy_fullscan_height
+
+        23, //view_scan_expected_balance_after_intermediate_scan
+        23, //view_scan_expected_balance_after_importing_key_images
+        23, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 5: send all to random
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{33, sp_destination_random, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        2, //final_legacy_fullscan_height
+
+        33, //view_scan_expected_balance_after_intermediate_scan
+        33, //view_scan_expected_balance_after_importing_key_images
+        33, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove blocks 1, 2, 3, 4, 5
+    ledger_context.pop_blocks(5);
+
+    //no recovery: pop then add a block to see what happens
+
+    //block 1: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        12, //final_balance
+        1, //final_legacy_fullscan_height
+
+        //note: legacy key images in seraphis txs removed by reorgs are only cleaned in seraphis scans, so if legacy
+        //      scanning after a reorg then it will look like legacy enotes older than the reorg are still spent
+        1, //view_scan_expected_balance_after_intermediate_scan
+        1, //view_scan_expected_balance_after_importing_key_images
+        1, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 2: legacy enote 3, spend legacy enote 1
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_2,
+            {
+                legacy_key_image_1
+            },
+            {
+                legacy_enote_3
+            }
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {
+            legacy_enote_3.m_onetime_address
+        }, //view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_3
+        }, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        13, //final_balance
+        2, //final_legacy_fullscan_height
+
+        13, //view_scan_expected_balance_after_intermediate_scan
+        13, //view_scan_expected_balance_after_importing_key_images
+        13, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 3: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        23, //final_balance
+        2, //final_legacy_fullscan_height
+
+        13, //view_scan_expected_balance_after_intermediate_scan
+        13, //view_scan_expected_balance_after_importing_key_images
+        13, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 4: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        33, //final_balance
+        2, //final_legacy_fullscan_height
+
+        23, //view_scan_expected_balance_after_intermediate_scan
+        23, //view_scan_expected_balance_after_importing_key_images
+        23, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 5: send all to random
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{33, sp_destination_random, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        2, //final_legacy_fullscan_height
+
+        33, //view_scan_expected_balance_after_intermediate_scan
+        33, //view_scan_expected_balance_after_importing_key_images
+        33, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove blocks 1, 2, 3, 4, 5
+    ledger_context.pop_blocks(5);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        0, //final_legacy_fullscan_height
+
+        1, //view_scan_expected_balance_after_intermediate_scan
+        1, //view_scan_expected_balance_after_importing_key_images
+        1, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 1: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        12, //final_balance
+        1, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 2: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        22, //final_balance
+        2, //final_legacy_fullscan_height
+
+        12, //view_scan_expected_balance_after_intermediate_scan
+        12, //view_scan_expected_balance_after_importing_key_images
+        12, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 3: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        32, //final_balance
+        2, //final_legacy_fullscan_height
+
+        22, //view_scan_expected_balance_after_intermediate_scan
+        22, //view_scan_expected_balance_after_importing_key_images
+        22, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 4: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        42, //final_balance
+        2, //final_legacy_fullscan_height
+
+        32, //view_scan_expected_balance_after_intermediate_scan
+        32, //view_scan_expected_balance_after_importing_key_images
+        32, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 5: send all to random
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{42, sp_destination_random, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        2, //final_legacy_fullscan_height
+
+        42, //view_scan_expected_balance_after_intermediate_scan
+        42, //view_scan_expected_balance_after_importing_key_images
+        42, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove blocks 3, 4, 5
+    ledger_context.pop_blocks(3);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        22, //final_balance
+        2, //final_legacy_fullscan_height
+
+        0, //view_scan_expected_balance_after_intermediate_scan
+        0, //view_scan_expected_balance_after_importing_key_images
+        0, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 3: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        32, //final_balance
+        2, //final_legacy_fullscan_height
+
+        22, //view_scan_expected_balance_after_intermediate_scan
+        22, //view_scan_expected_balance_after_importing_key_images
+        22, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 4: seraphis amount 10
+    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        42, //final_balance
+        2, //final_legacy_fullscan_height
 
         32, //view_scan_expected_balance_after_intermediate_scan
         32, //view_scan_expected_balance_after_importing_key_images

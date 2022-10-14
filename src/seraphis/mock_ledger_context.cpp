@@ -936,7 +936,7 @@ std::uint64_t MockLedgerContext::pop_chain_at_height_impl(const std::uint64_t po
     if (m_accumulated_sp_output_counts.find(pop_height) != m_accumulated_sp_output_counts.end())
     {
         // sanity check
-        if (pop_height > 0)
+        if (pop_height > m_first_seraphis_allowed_block)
         {
             CHECK_AND_ASSERT_THROW_MES(m_accumulated_sp_output_counts.find(pop_height - 1) !=
                     m_accumulated_sp_output_counts.end(),
@@ -945,7 +945,7 @@ std::uint64_t MockLedgerContext::pop_chain_at_height_impl(const std::uint64_t po
 
         // remove all outputs starting in the pop_height block
         const std::uint64_t first_output_to_remove =
-            pop_height > 0
+            pop_height > m_first_seraphis_allowed_block
             ? m_accumulated_sp_output_counts[pop_height - 1]
             : 0;
 
