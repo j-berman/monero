@@ -62,6 +62,23 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+template <typename MapT>
+static void erase_ledger_cache_map_from_height(const std::uint64_t pop_height, MapT &map_inout)
+{
+    if (map_inout.size() == 0)
+        return;
+
+    // erase entire map if pop height is below first known height, otherwise erase from pop height directly
+    const std::uint64_t height_to_erase_from =
+        map_inout.begin()->first >= pop_height
+        ? map_inout.begin()->first
+        : pop_height;
+
+    map_inout.erase(map_inout.find(height_to_erase_from), map_inout.end());
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 MockLedgerContext::MockLedgerContext(const std::uint64_t first_seraphis_allowed_block,
     const std::uint64_t first_seraphis_only_block) :
         m_first_seraphis_allowed_block{first_seraphis_allowed_block},
@@ -912,7 +929,7 @@ std::uint64_t MockLedgerContext::pop_chain_at_height_impl(const std::uint64_t po
     }
 
     // 2. remove legacy enote references
-    if (m_accumulated_legacy_output_counts.find(pop_height) != m_accumulated_legacy_output_counts.end())
+    if (m_accumulated_legacy_output_counts.size() > 0)
     {
         // sanity check
         if (pop_height > 0)
@@ -933,7 +950,7 @@ std::uint64_t MockLedgerContext::pop_chain_at_height_impl(const std::uint64_t po
     }
 
     // 3. remove squashed enotes
-    if (m_accumulated_sp_output_counts.find(pop_height) != m_accumulated_sp_output_counts.end())
+    if (m_accumulated_sp_output_counts.size() > 0)
     {
         // sanity check
         if (pop_height > m_first_seraphis_allowed_block)
@@ -953,16 +970,12 @@ std::uint64_t MockLedgerContext::pop_chain_at_height_impl(const std::uint64_t po
     }
 
     // 4. clean up block maps
-    m_blocks_of_tx_key_images.erase(m_blocks_of_tx_key_images.find(pop_height), m_blocks_of_tx_key_images.end());
-    m_accumulated_legacy_output_counts.erase(m_accumulated_legacy_output_counts.find(pop_height),
-        m_accumulated_legacy_output_counts.end());
-    m_accumulated_sp_output_counts.erase(m_accumulated_sp_output_counts.find(pop_height),
-        m_accumulated_sp_output_counts.end());
-    m_blocks_of_legacy_tx_output_contents.erase(m_blocks_of_legacy_tx_output_contents.find(pop_height),
-        m_blocks_of_legacy_tx_output_contents.end());
-    m_blocks_of_sp_tx_output_contents.erase(m_blocks_of_sp_tx_output_contents.find(pop_height),
-        m_blocks_of_sp_tx_output_contents.end());
-    m_block_infos.erase(m_block_infos.find(pop_height), m_block_infos.end());
+    erase_ledger_cache_map_from_height(pop_height, m_blocks_of_tx_key_images);
+    erase_ledger_cache_map_from_height(pop_height, m_accumulated_legacy_output_counts);
+    erase_ledger_cache_map_from_height(pop_height, m_accumulated_sp_output_counts);
+    erase_ledger_cache_map_from_height(pop_height, m_blocks_of_legacy_tx_output_contents);
+    erase_ledger_cache_map_from_height(pop_height, m_blocks_of_sp_tx_output_contents);
+    erase_ledger_cache_map_from_height(pop_height, m_block_infos);
 
     return num_blocks_to_pop;
 }
