@@ -54,6 +54,7 @@
 
 //standard headers
 #include <algorithm>
+#include <type_traits>
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -66,6 +67,8 @@ namespace sp
 template <typename MapT>
 static void erase_ledger_cache_map_from_height(const std::uint64_t pop_height, MapT &map_inout)
 {
+    static_assert(std::is_same<typename MapT::key_type, std::uint64_t>::value, "erase ledger map key is not uint64_t");
+
     if (map_inout.size() == 0)
         return;
 

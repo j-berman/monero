@@ -7555,13 +7555,13 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
 
     /// test
 
-    // 2. legacy in pre-transition zone into mixed seraphis/legacy enotes in transition zone
+    // 3. pop into the pre-transition zone
     MockLedgerContext ledger_context{first_sp_allowed_block, first_sp_only_block};
     SpEnoteStoreMockV1 enote_store_full{0, first_sp_allowed_block, 0};
     SpEnoteStoreMockV1 enote_store_view{0, first_sp_allowed_block, 0};
     InputSelectorMockV1 input_selector{enote_store_full};
 
-    //make two legacy enotes
+    //make one legacy enote
     LegacyEnoteV4 legacy_enote_1;
     rct::key legacy_enote_ephemeral_pubkey_1;
     crypto::key_image legacy_key_image_1;
@@ -8019,4 +8019,1176 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
 
         enote_store_full,
         enote_store_view);
+}
+//-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_enote_scanning, legacy_sp_transition_4)
+{
+/*
+    - test 4:
+        - [first sp allowed: 0, first sp only: 2, chunk size: 2]
+        - 0: legacy x2
+        - 1: spend legacy
+        - pop 1
+        //don't scan
+        - 1: send all to random with seraphis tx
+        //scan
+        //scan
+        - pop 1
+        //scan
+        //scan
+        - 1: send all to self with seraphis tx
+        //scan
+        - pop 1
+        //don't scan
+        - 1: spend legacy
+        //scan
+        //scan
+*/
+    using namespace sp;
+    using namespace jamtis;
+
+    /// setup
+
+    // 1. config
+    const RefreshLedgerEnoteStoreConfig refresh_config{
+            .m_reorg_avoidance_depth = 1,
+            .m_max_chunk_size = 2,
+            .m_max_partialscan_attempts = 0
+        };
+
+    const std::size_t max_inputs{1000};
+    const std::size_t fee_per_tx_weight{0};  // 0 fee here
+    const std::size_t legacy_ring_size{2};
+    const std::size_t ref_set_decomp_n{2};
+    const std::size_t ref_set_decomp_m{2};
+
+    const FeeCalculatorMockTrivial fee_calculator;  //just do a trivial calculator here (fee = fee/weight * 1 weight)
+
+    const SpBinnedReferenceSetConfigV1 bin_config{
+            .m_bin_radius = 1,
+            .m_num_bin_members = 2
+        };
+
+    const std::uint64_t first_sp_allowed_block{0};
+    const std::uint64_t first_sp_only_block{2};
+
+    // 2. legacy user keys
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
+
+    // 3. user legacy subaddress
+    rct::key subaddr_spendkey;
+    rct::key subaddr_viewkey;
+    cryptonote::subaddress_index subaddr_index;
+
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
+    legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
+
+    // 4. seraphis user keys
+    jamtis_mock_keys sp_keys;
+    make_jamtis_mock_keys(sp_keys);
+
+    // 5. user seraphis address
+    JamtisDestinationV1 sp_destination;
+    make_random_address_for_user(sp_keys, sp_destination);
+
+    // 6. random user address
+    JamtisDestinationV1 sp_destination_random;
+    sp_destination_random.gen();
+
+
+    /// test
+
+    // 4. legacy spends legacy X, then pop the spender and spend legacy X again in a seraphis tx
+    MockLedgerContext ledger_context{first_sp_allowed_block, first_sp_only_block};
+    SpEnoteStoreMockV1 enote_store_full{0, first_sp_allowed_block, 0};
+    SpEnoteStoreMockV1 enote_store_view{0, first_sp_allowed_block, 0};
+    InputSelectorMockV1 input_selector{enote_store_full};
+
+    SpEnoteStoreMockV1 enote_store_temp{0, first_sp_allowed_block, 0};
+    InputSelectorMockV1 input_selector_temp{enote_store_temp};
+
+    //make two legacy enotes
+    LegacyEnoteV4 legacy_enote_1;
+    rct::key legacy_enote_ephemeral_pubkey_1;
+    crypto::key_image legacy_key_image_1;
+    LegacyEnoteV4 legacy_enote_2;
+    rct::key legacy_enote_ephemeral_pubkey_2;
+    crypto::key_image legacy_key_image_2;
+
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        0,  //index in planned mock coinbase tx
+        make_secret_key(),
+        legacy_enote_1,
+        legacy_enote_ephemeral_pubkey_1,
+        legacy_key_image_1);
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        1,  //index in planned mock coinbase tx
+        make_secret_key(),
+        legacy_enote_2,
+        legacy_enote_ephemeral_pubkey_2,
+        legacy_key_image_2);
+
+    TxExtra tx_extra_1;
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+            {
+                legacy_enote_ephemeral_pubkey_1,
+                legacy_enote_ephemeral_pubkey_2
+            },
+            tx_extra_1
+        ));
+
+    //block 0: legacy enote 1, legacy enote 2
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_1,
+            {},
+            {
+                legacy_enote_1,
+                legacy_enote_2
+            }
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        0, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //make legacy enote 3
+    LegacyEnoteV4 legacy_enote_3;
+    rct::key legacy_enote_ephemeral_pubkey_3;
+    crypto::key_image legacy_key_image_3;
+
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        2,  //amount
+        0,  //index in planned mock coinbase tx
+        make_secret_key(),
+        legacy_enote_3,
+        legacy_enote_ephemeral_pubkey_3,
+        legacy_key_image_3);
+
+    TxExtra tx_extra_2;
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+            {
+                legacy_enote_ephemeral_pubkey_3
+            },
+            tx_extra_2
+        ));
+
+    //block 1: legacy enote 3, spend legacy enote 2
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_2,
+            {
+                legacy_key_image_2
+            },
+            {
+                legacy_enote_3
+            }
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {
+            legacy_enote_3.m_onetime_address
+        }, //view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_3
+        }, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address,
+            legacy_enote_3.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2,
+            legacy_key_image_3
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        3, //final_balance
+        1, //final_legacy_fullscan_height
+
+        3, //view_scan_expected_balance_after_intermediate_scan
+        3, //view_scan_expected_balance_after_importing_key_images
+        3, //view_scan_expected_balance_after_keyimage_refresh
+
+        4, //re_view_scan_expected_balance_after_intermediate_scan
+        4, //re_view_scan_expected_balance_after_importing_key_images
+        3, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove block 1
+    ledger_context.pop_blocks(1);
+
+    //don't scan
+
+    //block 1: send all to random (use temporary enote store)
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        refresh_config,
+        ledger_context,
+        enote_store_temp);
+
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector_temp,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{2, sp_destination_random, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        1, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        1, //final_legacy_fullscan_height
+
+        0, //view_scan_expected_balance_after_intermediate_scan
+        0, //view_scan_expected_balance_after_importing_key_images
+        0, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove block 1
+    ledger_context.pop_blocks(1);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        0, //final_legacy_fullscan_height
+
+        0, //view_scan_expected_balance_after_intermediate_scan
+        0, //view_scan_expected_balance_after_importing_key_images
+        0, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        0, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 1: churn all to self
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{2, sp_destination, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        1, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        1, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove block 1
+    ledger_context.pop_blocks(1);
+
+    //don't scan
+
+    //block 1: legacy enote 1
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            TxExtra{},
+            {
+                legacy_key_image_1
+            },
+            {}
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        1, //final_balance
+        1, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        1, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        1, //final_balance
+        1, //final_legacy_fullscan_height
+
+        1, //view_scan_expected_balance_after_intermediate_scan
+        1, //view_scan_expected_balance_after_importing_key_images
+        1, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        1, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+}
+//-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_enote_scanning, legacy_sp_transition_5)
+{
+/*
+    - test 5:
+        - [first sp allowed: 0, first sp only: 3, chunk size: 2]
+        - 0: legacy x2
+        - 1: legacy spend
+        //scan
+        - pop 1
+        //don't scan
+        - 1: sp
+        //don't scan
+        - 2: sp spend
+        //scan
+        //scan
+
+        - pop 2
+        - 1: sp spend legacy x2
+            - scan fresh store: seraphis only
+        //scan
+        - pop 1
+        //don't scan
+        - 1: sp
+        //don't scan
+        - 2: legacy spend
+            - scan fresh store: legacy intermediate; after importing key images the balance should be 0,
+              then after key image refresh it is still 0 but one of the key images is marked spent by the legacy tx
+        //scan
+        //scan
+        - pop 1
+            - scan fresh store: legacy intermediate; reorg should remove spent context on key image spent by legacy tx,
+              but not the remaining one spent by the seraphis tx from a while ago
+            - scan fresh store: seraphis only; scan should remove spent context from the remaining legacy key image
+*/
+    using namespace sp;
+    using namespace jamtis;
+
+    /// setup
+
+    // 1. config
+    const RefreshLedgerEnoteStoreConfig refresh_config{
+            .m_reorg_avoidance_depth = 1,
+            .m_max_chunk_size = 2,
+            .m_max_partialscan_attempts = 0
+        };
+
+    const std::size_t max_inputs{1000};
+    const std::size_t fee_per_tx_weight{0};  // 0 fee here
+    const std::size_t legacy_ring_size{2};
+    const std::size_t ref_set_decomp_n{2};
+    const std::size_t ref_set_decomp_m{2};
+
+    const FeeCalculatorMockTrivial fee_calculator;  //just do a trivial calculator here (fee = fee/weight * 1 weight)
+
+    const SpBinnedReferenceSetConfigV1 bin_config{
+            .m_bin_radius = 1,
+            .m_num_bin_members = 2
+        };
+
+    const std::uint64_t first_sp_allowed_block{0};
+    const std::uint64_t first_sp_only_block{3};
+
+    // 2. legacy user keys
+    legacy_mock_keys legacy_keys;
+    make_legacy_mock_keys(legacy_keys);
+
+    // 3. user legacy subaddress
+    rct::key subaddr_spendkey;
+    rct::key subaddr_viewkey;
+    cryptonote::subaddress_index subaddr_index;
+
+    gen_legacy_subaddress(legacy_keys.Ks, legacy_keys.k_v, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
+    legacy_subaddress_map[subaddr_spendkey] = subaddr_index;
+
+    // 4. seraphis user keys
+    jamtis_mock_keys sp_keys;
+    make_jamtis_mock_keys(sp_keys);
+
+    // 5. user seraphis address
+    JamtisDestinationV1 sp_destination;
+    make_random_address_for_user(sp_keys, sp_destination);
+
+    // 6. random user address
+    JamtisDestinationV1 sp_destination_random;
+    sp_destination_random.gen();
+
+
+    /// test
+
+    // 5. spend legacy X, then pop, add 1 block, spend legacy X in other tx type (between legacy, seraphis tx types)
+    MockLedgerContext ledger_context{first_sp_allowed_block, first_sp_only_block};
+    SpEnoteStoreMockV1 enote_store_full{0, first_sp_allowed_block, 0};
+    SpEnoteStoreMockV1 enote_store_view{0, first_sp_allowed_block, 0};
+    InputSelectorMockV1 input_selector{enote_store_full};
+
+    SpEnoteStoreMockV1 enote_store_temp{0, first_sp_allowed_block, 0};
+    InputSelectorMockV1 input_selector_temp{enote_store_temp};
+
+    //make two legacy enotes
+    LegacyEnoteV4 legacy_enote_1;
+    rct::key legacy_enote_ephemeral_pubkey_1;
+    crypto::key_image legacy_key_image_1;
+    LegacyEnoteV4 legacy_enote_2;
+    rct::key legacy_enote_ephemeral_pubkey_2;
+    crypto::key_image legacy_key_image_2;
+
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        0,  //index in planned mock coinbase tx
+        make_secret_key(),
+        legacy_enote_1,
+        legacy_enote_ephemeral_pubkey_1,
+        legacy_key_image_1);
+    prepare_mock_v4_legacy_enote_for_transfer(subaddr_spendkey,
+        subaddr_viewkey,
+        legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        1,  //amount
+        1,  //index in planned mock coinbase tx
+        make_secret_key(),
+        legacy_enote_2,
+        legacy_enote_ephemeral_pubkey_2,
+        legacy_key_image_2);
+
+    TxExtra tx_extra_1;
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(
+            {
+                legacy_enote_ephemeral_pubkey_1,
+                legacy_enote_ephemeral_pubkey_2
+            },
+            tx_extra_1
+        ));
+
+    //block 0: legacy enote 1, legacy enote 2
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            tx_extra_1,
+            {},
+            {
+                legacy_enote_1,
+                legacy_enote_2
+            }
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        2, //final_balance
+        0, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //block 1: legacy enote 1
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            TxExtra{},
+            {
+                legacy_key_image_1
+            },
+            {}
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        1, //final_balance
+        1, //final_legacy_fullscan_height
+
+        1, //view_scan_expected_balance_after_intermediate_scan
+        1, //view_scan_expected_balance_after_importing_key_images
+        1, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        1, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove block 1
+    ledger_context.pop_blocks(1);
+
+    //don't scan
+
+    //block 1: seraphis block
+    send_coinbase_amounts_to_users({{0}}, {sp_destination_random}, ledger_context);
+
+    //don't scan
+
+    //block 2: send all to random (use temporary enote store)
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        refresh_config,
+        ledger_context,
+        enote_store_temp);
+
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector_temp,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{2, sp_destination_random, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        2, //final_legacy_fullscan_height
+
+        2, //view_scan_expected_balance_after_intermediate_scan
+        2, //view_scan_expected_balance_after_importing_key_images
+        2, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        2, //final_legacy_fullscan_height
+
+        0, //view_scan_expected_balance_after_intermediate_scan
+        0, //view_scan_expected_balance_after_importing_key_images
+        0, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+
+    //remove blocks 1, 2
+    ledger_context.pop_blocks(2);
+
+    //don't scan
+
+    //block 1: send all to random (use temporary enote store)
+    refresh_user_enote_store_legacy_full(legacy_keys.Ks,
+        legacy_subaddress_map,
+        legacy_keys.k_s,
+        legacy_keys.k_v,
+        refresh_config,
+        ledger_context,
+        enote_store_temp);
+    refresh_user_enote_store(sp_keys, refresh_config, ledger_context, enote_store_temp);
+
+    transfer_funds_single_mock_v1_unconfirmed(legacy_keys,
+        sp_keys,
+        input_selector_temp,
+        fee_calculator,
+        fee_per_tx_weight,
+        max_inputs,
+        {{2, sp_destination_random, TxExtra{}}},
+        legacy_ring_size,
+        ref_set_decomp_n,
+        ref_set_decomp_m,
+        bin_config,
+        ledger_context);
+    ledger_context.commit_unconfirmed_txs_v1(rct::key{}, SpTxSupplementV1{}, std::vector<SpEnoteV1>{});
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        0, //final_balance
+        1, //final_legacy_fullscan_height
+
+        0, //view_scan_expected_balance_after_intermediate_scan
+        0, //view_scan_expected_balance_after_importing_key_images
+        0, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        2, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //recover fresh enote store with seraphis-only scan
+    SpEnoteStoreMockV1 enote_store_fresh{0, first_sp_allowed_block, 0};
+    refresh_user_enote_store(sp_keys, refresh_config, ledger_context, enote_store_fresh);
+
+    ASSERT_TRUE(enote_store_fresh.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 0);
+
+    //remove block 1
+    ledger_context.pop_blocks(1);
+
+    //don't scan
+
+    //block 1: seraphis block
+    send_coinbase_amounts_to_users({{0}}, {sp_destination_random}, ledger_context);
+
+    //don't scan
+
+    //block 2: legacy enote 2
+    ASSERT_NO_THROW(ledger_context.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            TxExtra{},
+            {
+                legacy_key_image_2
+            },
+            {}
+        ));
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        1, //final_balance
+        2, //final_legacy_fullscan_height
+
+        0, //view_scan_expected_balance_after_intermediate_scan
+        0, //view_scan_expected_balance_after_importing_key_images
+        0, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        1, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //test recovery
+    legacy_sp_transition_test_recovery_assertions(legacy_keys,
+        legacy_subaddress_map,
+        sp_keys,
+        refresh_config,
+        ledger_context,
+
+        {}, //view_scan_legacy_onetime_addresses_expected
+        {}, //view_scan_legacy_key_images_expected
+
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //re_view_scan_legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //re_view_scan_legacy_key_images_expected
+
+        first_sp_allowed_block, //first_sp_allowed_block
+
+        1, //final_balance
+        2, //final_legacy_fullscan_height
+
+        1, //view_scan_expected_balance_after_intermediate_scan
+        1, //view_scan_expected_balance_after_importing_key_images
+        1, //view_scan_expected_balance_after_keyimage_refresh
+
+        2, //re_view_scan_expected_balance_after_intermediate_scan
+        2, //re_view_scan_expected_balance_after_importing_key_images
+        1, //re_view_scan_expected_balance_after_keyimage_refresh
+
+        enote_store_full,
+        enote_store_view);
+
+    //legacy intermediate balance recovery (fresh enote store): intermediate scan (find 2 legacy enotes)
+    //legacy intermediate balance recovery (fresh enote store): import key images
+    // - should expect key images found by seraphis scan to be used to set the spent context of intermediate records
+    //   promoted to full
+    //legacy intermediate balance recovery (fresh enote store): refresh key images
+    // - should expect key image found in block 2 to be used to update the spent context of legacy enote 2, however
+    //   legacy enote 1 should still have the spent context from the seraphis scan (can use debugger to verify this,
+    //   but view-scan recovery after popping 1 block should also confirm it)
+    legacy_view_scan_recovery_cycle(legacy_keys,
+        legacy_subaddress_map,
+        refresh_config,
+        ledger_context,
+        {
+            legacy_enote_1.m_onetime_address,
+            legacy_enote_2.m_onetime_address
+        }, //legacy_onetime_addresses_expected
+        {
+            legacy_key_image_1,
+            legacy_key_image_2
+        }, //legacy_key_images_expected
+        2, //expected_balance_after_intermediate_scan
+        0, //expected_balance_after_importing
+        0, //expected_balance_after_key_image_refresh
+        2, //expected_final_legacy_fullscan_height
+        enote_store_fresh);
+
+    //remove block 2
+    ledger_context.pop_blocks(1);
+
+    //legacy intermediate balance recovery (fresh enote store): intermediate scan
+    // - should expect reorg to remove spent context on legacy enote 2, but not on legacy enote 1 which still has the spent
+    //   context from the seraphis scan
+    //legacy intermediate balance recovery (fresh enote store): import key images (not needed, they are known)
+    //legacy intermediate balance recovery (fresh enote store): refresh key images (not needed, no key images to import)
+    legacy_view_scan_recovery_cycle(legacy_keys,
+        legacy_subaddress_map,
+        refresh_config,
+        ledger_context,
+        {}, //legacy_onetime_addresses_expected
+        {}, //legacy_key_images_expected
+        1, //expected_balance_after_intermediate_scan
+        1, //expected_balance_after_importing
+        1, //expected_balance_after_key_image_refresh
+        1, //expected_final_legacy_fullscan_height
+        enote_store_fresh);
+
+    //seraphis scan (fresh enote store)
+    // - now the spent context on legacy enote 1 should be cleared
+    refresh_user_enote_store(sp_keys, refresh_config, ledger_context, enote_store_fresh);
+
+    ASSERT_TRUE(enote_store_fresh.get_balance({SpEnoteOriginStatus::ONCHAIN},
+        {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 2);
 }

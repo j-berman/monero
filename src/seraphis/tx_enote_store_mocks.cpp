@@ -620,8 +620,8 @@ void SpEnoteStoreMockV1::update_with_new_blocks_from_ledger(const ScanUpdateMode
     if (new_block_ids.size() > 0 ||
         scan_update_mode == ScanUpdateMode::SERAPHIS)
     {
-        // a. find the first new block id (there can be some overlap in 'new_block_ids' with 'm_block_ids' if a prior
-        //   scan with a different mode collected some of the same blocks)
+        // a. find the highest block that the new block ids align with (there can be some overlap in 'new_block_ids' with
+        //   'm_block_ids' if a prior scan with a different mode collected some of the same blocks)
         std::uint64_t alignment_block_height{first_new_block - 1};  //we align on the input alignment block (first new - 1)
         for (const rct::key &new_block_id : new_block_ids)
         {
@@ -728,8 +728,19 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
     // 2. if a found legacy key image is in the 'legacy key images from sp txs' map, remove it from that map
     // - a fresh spent context for legacy key images implies seraphis txs were reorged; we want to guarantee that the
     //   fresh spent contexts are applied to our stored enotes, and doing this step achieves that
+    // - save the key images removed so we can clear the corresponding spent contexts in the enote records
+    std::unordered_map<crypto::key_image, rct::key> key_images_removed_from_sp_selfsends;
     for (const auto &found_spent_key_image : found_spent_key_images)
+    {
+        if (m_legacy_key_images_in_sp_selfsends.find(found_spent_key_image.first) ==
+            m_legacy_key_images_in_sp_selfsends.end())
+            continue;
+
+        key_images_removed_from_sp_selfsends[found_spent_key_image.first] =
+            m_legacy_key_images_in_sp_selfsends.at(found_spent_key_image.first).m_transaction_id;
+
         m_legacy_key_images_in_sp_selfsends.erase(found_spent_key_image.first);
+    }
 
     // 3. clear spent contexts referencing removed blocks or the unconfirmed cache if the corresponding legacy key image
     //    is not in the seraphis legacy key image tracker
@@ -747,6 +758,15 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
 
         // clear spent contexts in the unconfirmed cache
         if (mapped_contextual_enote_record.second.m_spent_context.m_spent_status == SpEnoteSpentStatus::SPENT_UNCONFIRMED)
+            mapped_contextual_enote_record.second.m_spent_context = SpEnoteSpentContextV1{};
+
+        // clear spent contexts of key images removed from the seraphis selfsends tracker if the entries removed from the
+        //   tracker have the same transaction id (i.e. the spent context recorded next to the key image corresponds with
+        //   the removed tracker)
+        if (key_images_removed_from_sp_selfsends.find(mapped_contextual_enote_record.second.m_record.m_key_image) !=
+                key_images_removed_from_sp_selfsends.end() &&
+            key_images_removed_from_sp_selfsends.at(mapped_contextual_enote_record.second.m_record.m_key_image) ==
+                mapped_contextual_enote_record.second.m_spent_context.m_transaction_id)
             mapped_contextual_enote_record.second.m_spent_context = SpEnoteSpentContextV1{};
     }
 
