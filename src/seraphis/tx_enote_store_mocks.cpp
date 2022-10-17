@@ -729,14 +729,14 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
     // - a fresh spent context for legacy key images implies seraphis txs were reorged; we want to guarantee that the
     //   fresh spent contexts are applied to our stored enotes, and doing this step achieves that
     // - save the key images removed so we can clear the corresponding spent contexts in the enote records
-    std::unordered_map<crypto::key_image, rct::key> key_images_removed_from_sp_selfsends;
+    std::unordered_map<crypto::key_image, rct::key> spent_contexts_removed_from_sp_selfsends;
     for (const auto &found_spent_key_image : found_spent_key_images)
     {
         if (m_legacy_key_images_in_sp_selfsends.find(found_spent_key_image.first) ==
             m_legacy_key_images_in_sp_selfsends.end())
             continue;
 
-        key_images_removed_from_sp_selfsends[found_spent_key_image.first] =
+        spent_contexts_removed_from_sp_selfsends[found_spent_key_image.first] =
             m_legacy_key_images_in_sp_selfsends.at(found_spent_key_image.first).m_transaction_id;
 
         m_legacy_key_images_in_sp_selfsends.erase(found_spent_key_image.first);
@@ -746,7 +746,7 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
     //    is not in the seraphis legacy key image tracker
     for (auto &mapped_contextual_enote_record : m_mapped_legacy_contextual_enote_records)
     {
-        // ignore legacy key images found in seraphis txs
+        // ignore legacy key images found in seraphis txs that still exist
         if (m_legacy_key_images_in_sp_selfsends.find(mapped_contextual_enote_record.second.m_record.m_key_image) !=
                 m_legacy_key_images_in_sp_selfsends.end())
             continue;
@@ -763,9 +763,9 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
         // clear spent contexts of key images removed from the seraphis selfsends tracker if the entries removed from the
         //   tracker have the same transaction id (i.e. the spent context recorded next to the key image corresponds with
         //   the removed tracker)
-        if (key_images_removed_from_sp_selfsends.find(mapped_contextual_enote_record.second.m_record.m_key_image) !=
-                key_images_removed_from_sp_selfsends.end() &&
-            key_images_removed_from_sp_selfsends.at(mapped_contextual_enote_record.second.m_record.m_key_image) ==
+        if (spent_contexts_removed_from_sp_selfsends.find(mapped_contextual_enote_record.second.m_record.m_key_image) !=
+                spent_contexts_removed_from_sp_selfsends.end() &&
+            spent_contexts_removed_from_sp_selfsends.at(mapped_contextual_enote_record.second.m_record.m_key_image) ==
                 mapped_contextual_enote_record.second.m_spent_context.m_transaction_id)
             mapped_contextual_enote_record.second.m_spent_context = SpEnoteSpentContextV1{};
     }
