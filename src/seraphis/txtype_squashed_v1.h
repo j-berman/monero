@@ -78,6 +78,9 @@ struct SpTxSquashedV1 final
         ONE = 1
     };
 
+    /// semantic rules version
+    SemanticRulesVersion m_tx_semantic_rules_version;
+
     /// legacy tx input images (spent legacy enotes)
     std::vector<LegacyEnoteImageV2> m_legacy_input_images;
     /// seraphis tx input images (spent seraphis enotes)
@@ -96,9 +99,6 @@ struct SpTxSquashedV1 final
     SpTxSupplementV1 m_tx_supplement;
     /// the transaction fee (discretized representation)
     DiscretizedFee m_tx_fee;
-
-    /// semantic rules version
-    SemanticRulesVersion m_tx_semantic_rules_version;
 
     /// get the tx hash
     void get_hash(rct::key &tx_hash_out) const;
@@ -132,7 +132,8 @@ struct SpTxSquashedV1 final
 * ...
 * outparam: tx_out -
 */
-void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_images,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    std::vector<LegacyEnoteImageV2> legacy_input_images,
     std::vector<SpEnoteImageV1> sp_input_images,
     std::vector<SpEnoteV1> outputs,
     SpBalanceProofV1 balance_proof,
@@ -141,34 +142,34 @@ void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_i
     std::vector<SpMembershipProofV1> sp_membership_proofs,
     SpTxSupplementV1 tx_supplement,
     const DiscretizedFee &discretized_transaction_fee,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out);
-void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    SpPartialTxV1 partial_tx,
     std::vector<SpMembershipProofV1> sp_membership_proofs,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out);
-void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    SpPartialTxV1 partial_tx,
     std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out);
-void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const SpTxProposalV1 &tx_proposal,
     std::vector<LegacyInputV1> legacy_inputs,
     std::vector<SpPartialInputV1> sp_partial_inputs,
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const rct::key &legacy_spend_pubkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpTxSquashedV1 &tx_out);
-void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const SpTxProposalV1 &tx_proposal,
     std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const crypto::secret_key &legacy_spend_privkey,
     const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &k_view_balance,
     SpTxSquashedV1 &tx_out);
-void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     const DiscretizedFee &tx_fee,
     std::vector<LegacyInputProposalV1> legacy_input_proposals,
@@ -176,7 +177,6 @@ void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> n
     std::vector<ExtraFieldElement> additional_memo_elements,
     std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const crypto::secret_key &legacy_spend_privkey,
     const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &k_view_balance,

@@ -254,7 +254,8 @@ void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
     sp_hash_to_32(transcript, tx_hash_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_images,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    std::vector<LegacyEnoteImageV2> legacy_input_images,
     std::vector<SpEnoteImageV1> sp_input_images,
     std::vector<SpEnoteV1> outputs,
     SpBalanceProofV1 balance_proof,
@@ -263,9 +264,9 @@ void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_i
     std::vector<SpMembershipProofV1> sp_membership_proofs,
     SpTxSupplementV1 tx_supplement,
     const DiscretizedFee &discretized_transaction_fee,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out)
 {
+    tx_out.m_tx_semantic_rules_version = semantic_rules_version;
     tx_out.m_legacy_input_images = std::move(legacy_input_images);
     tx_out.m_sp_input_images = std::move(sp_input_images);
     tx_out.m_outputs = std::move(outputs);
@@ -275,14 +276,13 @@ void make_seraphis_tx_squashed_v1(std::vector<LegacyEnoteImageV2> legacy_input_i
     tx_out.m_sp_membership_proofs = std::move(sp_membership_proofs);
     tx_out.m_tx_supplement = std::move(tx_supplement);
     tx_out.m_tx_fee = discretized_transaction_fee;
-    tx_out.m_tx_semantic_rules_version = semantic_rules_version;
 
     CHECK_AND_ASSERT_THROW_MES(validate_tx_semantics(tx_out), "Failed to assemble an SpTxSquashedV1.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    SpPartialTxV1 partial_tx,
     std::vector<SpMembershipProofV1> sp_membership_proofs,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out)
 {
     // check partial tx semantics
@@ -292,7 +292,7 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
     //       check here
 
     // finish tx
-    make_seraphis_tx_squashed_v1(
+    make_seraphis_tx_squashed_v1(semantic_rules_version,
         std::move(partial_tx.m_legacy_input_images),
         std::move(partial_tx.m_sp_input_images),
         std::move(partial_tx.m_outputs),
@@ -302,13 +302,12 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
         std::move(sp_membership_proofs),
         std::move(partial_tx.m_tx_supplement),
         partial_tx.m_tx_fee,
-        semantic_rules_version,
         tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    SpPartialTxV1 partial_tx,
     std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     SpTxSquashedV1 &tx_out)
 {
     // line up the the membership proofs with the partial tx's input images (which are sorted)
@@ -318,14 +317,14 @@ void make_seraphis_tx_squashed_v1(SpPartialTxV1 partial_tx,
         tx_membership_proofs);
 
     // finish tx
-    make_seraphis_tx_squashed_v1(std::move(partial_tx), std::move(tx_membership_proofs), semantic_rules_version, tx_out);
+    make_seraphis_tx_squashed_v1(semantic_rules_version, std::move(partial_tx), std::move(tx_membership_proofs), tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const SpTxProposalV1 &tx_proposal,
     std::vector<LegacyInputV1> legacy_inputs,
     std::vector<SpPartialInputV1> sp_partial_inputs,
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const rct::key &legacy_spend_pubkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
@@ -352,16 +351,16 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
     make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps), alignable_membership_proofs);
 
     // finish tx
-    make_seraphis_tx_squashed_v1(std::move(partial_tx),
+    make_seraphis_tx_squashed_v1(semantic_rules_version,
+        std::move(partial_tx),
         std::move(alignable_membership_proofs),
-        semantic_rules_version,
         tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const SpTxProposalV1 &tx_proposal,
     std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const crypto::secret_key &legacy_spend_privkey,
     const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &k_view_balance,
@@ -397,18 +396,19 @@ void make_seraphis_tx_squashed_v1(const SpTxProposalV1 &tx_proposal,
     make_seraphis_spendkey(k_view_balance, sp_spend_privkey, jamtis_spend_pubkey);
 
     // finish tx
-    make_seraphis_tx_squashed_v1(tx_proposal,
+    make_seraphis_tx_squashed_v1(semantic_rules_version,
+        tx_proposal,
         std::move(legacy_inputs),
         std::move(sp_partial_inputs),
         std::move(sp_membership_proof_preps),
-        semantic_rules_version,
         legacy_spend_pubkey,
         jamtis_spend_pubkey,
         k_view_balance,
         tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
+void make_seraphis_tx_squashed_v1(const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     const DiscretizedFee &tx_fee,
     std::vector<LegacyInputProposalV1> legacy_input_proposals,
@@ -416,7 +416,6 @@ void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> n
     std::vector<ExtraFieldElement> additional_memo_elements,
     std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps,
-    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const crypto::secret_key &legacy_spend_privkey,
     const crypto::secret_key &sp_spend_privkey,
     const crypto::secret_key &k_view_balance,
@@ -433,10 +432,10 @@ void make_seraphis_tx_squashed_v1(std::vector<jamtis::JamtisPaymentProposalV1> n
         tx_proposal);
 
     // finish tx
-    make_seraphis_tx_squashed_v1(tx_proposal,
+    make_seraphis_tx_squashed_v1(semantic_rules_version,
+        tx_proposal,
         std::move(legacy_ring_signature_preps),
         std::move(sp_membership_proof_preps),
-        semantic_rules_version,
         legacy_spend_privkey,
         sp_spend_privkey,
         k_view_balance,
@@ -815,9 +814,9 @@ void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
     make_v1_membership_proofs_v1(std::move(sp_membership_proof_preps), sp_alignable_membership_proofs);
 
     // make tx
-    make_seraphis_tx_squashed_v1(std::move(partial_tx),
+    make_seraphis_tx_squashed_v1(semantic_rules_version,
+        std::move(partial_tx),
         std::move(sp_alignable_membership_proofs),
-        semantic_rules_version,
         tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------

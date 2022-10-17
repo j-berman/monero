@@ -446,10 +446,10 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
         sp_membership_proof_preps));
 
     // 6. complete tx
-    ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(tx_proposal,
+    ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(SpTxSquashedV1::SemanticRulesVersion::MOCK,
+        tx_proposal,
         std::move(legacy_ring_signature_preps),
         std::move(sp_membership_proof_preps),
-        SpTxSquashedV1::SemanticRulesVersion::MOCK,
         local_user_legacy_keys.k_s,
         local_user_sp_keys.k_m,
         local_user_sp_keys.k_vb,

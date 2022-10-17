@@ -417,10 +417,9 @@ static void make_sp_txtype_squashed_v1(const std::size_t legacy_ring_size,
         tx_sp_alignable_membership_proofs);  //alignable membership proofs could theoretically be user inputs as well
     align_v1_membership_proofs_v1(sp_input_images, std::move(tx_sp_alignable_membership_proofs), tx_sp_membership_proofs);
 
-    make_seraphis_tx_squashed_v1(std::move(legacy_input_images), std::move(sp_input_images), std::move(outputs),
-        std::move(balance_proof), std::move(tx_legacy_ring_signatures), std::move(tx_sp_image_proofs),
-        std::move(tx_sp_membership_proofs), std::move(tx_supplement), discretized_transaction_fee, semantic_rules_version,
-        tx_out);
+    make_seraphis_tx_squashed_v1(semantic_rules_version, std::move(legacy_input_images), std::move(sp_input_images),
+        std::move(outputs), std::move(balance_proof), std::move(tx_legacy_ring_signatures), std::move(tx_sp_image_proofs),
+        std::move(tx_sp_membership_proofs), std::move(tx_supplement), discretized_transaction_fee, tx_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

@@ -646,9 +646,9 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // e) complete tx
     SpTxSquashedV1 completed_tx;
 
-    ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(partial_tx,
+    ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(semantic_rules_version,
+        partial_tx,
         std::move(alignable_membership_proofs),
-        semantic_rules_version,
         completed_tx));
 
     // - sanity check fee (can't do this with the trivial fee calculator)

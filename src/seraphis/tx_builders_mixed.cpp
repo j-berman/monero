@@ -761,7 +761,7 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
 
     // 6. make tx (use raw constructor instead of partial tx constructor to avoid infinite loop)
     SpTxSquashedV1 test_tx;
-    make_seraphis_tx_squashed_v1(
+    make_seraphis_tx_squashed_v1(semantic_rules_version,
         partial_tx.m_legacy_input_images,
         partial_tx.m_sp_input_images,
         partial_tx.m_outputs,
@@ -771,7 +771,6 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
         std::move(sp_membership_proofs),
         partial_tx.m_tx_supplement,
         partial_tx.m_tx_fee,
-        semantic_rules_version,
         test_tx);
 
     // 7. validate tx
