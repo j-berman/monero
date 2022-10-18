@@ -119,7 +119,7 @@ void append_to_transcript(const SpEnoteImageV1 &container, SpTranscriptBuilder &
 struct SpMembershipProofV1 final
 {
     /// a grootle proof
-    sp::GrootleProof m_grootle_proof;
+    GrootleProof m_grootle_proof;
     /// binned representation of ledger indices of enotes referenced by the proof
     SpBinnedReferenceSetV1 m_binned_reference_set;
     /// ref set size = n^m
@@ -141,9 +141,9 @@ void append_to_transcript(const SpMembershipProofV1 &container, SpTranscriptBuil
 struct SpImageProofV1 final
 {
     /// a seraphis composition proof
-    sp::SpCompositionProof m_composition_proof;
+    SpCompositionProof m_composition_proof;
 
-    static std::size_t get_size_bytes() { return sp::SpCompositionProof::get_size_bytes(); }
+    static std::size_t get_size_bytes() { return SpCompositionProof::get_size_bytes(); }
 };
 inline const boost::string_ref get_container_name(const SpImageProofV1&) { return "SpImageProofV1"; }
 void append_to_transcript(const SpImageProofV1 &container, SpTranscriptBuilder &transcript_inout);

@@ -92,7 +92,7 @@ void append_to_transcript(const LegacyEnoteImageV2 &container, SpTranscriptBuild
 ///
 struct LegacyRingSignatureV3 final
 {
-    /// a grootle proof
+    /// a clsag proof
     rct::clsag m_clsag_proof;
     /// on-chain indices of the proof's ring members
     std::vector<std::uint64_t> m_reference_set;

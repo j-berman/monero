@@ -88,6 +88,7 @@ set(unit_tests_sources
   seraphis_integration.cpp
   seraphis_legacy.cpp
   seraphis_multisig.cpp
+  seraphis_serialization.cpp
   seraphis_tx.cpp
   sha256.cpp
   slow_memmem.cpp

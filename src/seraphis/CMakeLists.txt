@@ -42,6 +42,7 @@ set(seraphis_sources
   legacy_enote_utils.cpp
   mock_ledger_context.cpp
   mock_offchain_context.cpp
+  serialization_demo_utils.cpp
   sp_composition_proof.cpp
   sp_core_enote_utils.cpp
   sp_core_types.cpp
