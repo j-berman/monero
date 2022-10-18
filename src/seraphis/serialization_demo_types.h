@@ -57,7 +57,8 @@ namespace sp
 namespace serialization
 {
 
-struct ser_encrypted_address_tag final
+/// serializable jamtis::encrypted_address_tag_t
+struct ser_encrypted_address_tag_t final
 {
     unsigned char bytes[sizeof(jamtis::encrypted_address_tag_t)];
 };
@@ -221,7 +222,7 @@ struct ser_SpEnoteV1 final
     /// enc(a)
     rct::xmr_amount m_encoded_amount;
     /// addr_tag_enc
-    ser_encrypted_address_tag m_addr_tag_enc;
+    ser_encrypted_address_tag_t m_addr_tag_enc;
 
     /// view_tag
     unsigned char m_view_tag;
@@ -346,4 +347,4 @@ struct ser_SpTxSquashedV1 final
 } //namespace serialization
 } //namespace sp
 
-BLOB_SERIALIZER(sp::serialization::ser_encrypted_address_tag);
+BLOB_SERIALIZER(sp::serialization::ser_encrypted_address_tag_t);
