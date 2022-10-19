@@ -31,7 +31,9 @@
 #include "multisig/account_generator_era.h"
 #include "multisig/dual_base_vector_proof.h"
 #include "multisig/multisig_account.h"
+#include "multisig/multisig_account_era_conversion_msg.h"
 #include "multisig/multisig_kex_msg.h"
+#include "multisig/multisig_partial_cn_key_image_msg.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctOps.h"
 #include "wallet/wallet2.h"
@@ -584,6 +586,77 @@ TEST(multisig, dual_base_vector_proof)
   // U, U, 3 keys
   EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_U, gen_U, make_keys(3)));
   EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_U, gen_U));
+}
+
+TEST(multisig, multisig_partial_cn_ki_msg)
+{
+  using namespace multisig;
+
+  std::vector<crypto::secret_key> privkeys;
+  for (std::size_t i{0}; i < 3; ++i)
+    privkeys.emplace_back(rct::rct2sk(rct::skGen()));
+
+  crypto::secret_key signing_skey{rct::rct2sk(rct::skGen())};
+  crypto::public_key signing_pubkey;
+  crypto::secret_key_to_public_key(signing_skey, signing_pubkey);
+
+  // misc. edge cases
+  const crypto::public_key rand_Ko{rct::rct2pk(rct::pkGen())};
+
+  EXPECT_NO_THROW((multisig_partial_cn_key_image_msg{}));
+  EXPECT_NO_THROW((multisig_partial_cn_key_image_msg{multisig_partial_cn_key_image_msg{}.get_msg()}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{"abc"}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{crypto::null_skey, crypto::null_pkey, std::vector<crypto::secret_key>{}}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{crypto::null_skey, rand_Ko, std::vector<crypto::secret_key>{}}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{signing_skey, crypto::null_pkey, std::vector<crypto::secret_key>{}}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{crypto::null_skey, rand_Ko, privkeys}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{signing_skey, crypto::null_pkey, privkeys}));
+  EXPECT_ANY_THROW((multisig_partial_cn_key_image_msg{signing_skey, rand_Ko, std::vector<crypto::secret_key>{}}));
+
+  // test that messages are both constructible and reversible
+  EXPECT_NO_THROW((multisig_partial_cn_key_image_msg{
+      multisig_partial_cn_key_image_msg{signing_skey, rand_Ko, std::vector<crypto::secret_key>{privkeys[0]}}.get_msg()
+    }));
+  EXPECT_NO_THROW((multisig_partial_cn_key_image_msg{
+      multisig_partial_cn_key_image_msg{signing_skey, rand_Ko, privkeys}.get_msg()
+    }));
+
+  // test that message contents can be recovered if stored in a message and the message's reverse
+  auto test_recovery = [&](const crypto::public_key &Ko, const crypto::key_image &KI_base)
+  {
+    std::vector<crypto::public_key> expected_multisig_keyshares;
+    std::vector<crypto::public_key> expected_partial_keyimages;
+    expected_multisig_keyshares.reserve(privkeys.size());
+    expected_partial_keyimages.reserve(privkeys.size());
+    for (const crypto::secret_key &privkey : privkeys)
+    {
+      expected_multisig_keyshares.emplace_back(
+          rct::rct2pk(rct::scalarmultKey(rct::pk2rct(crypto::get_G()), rct::sk2rct(privkey)))
+        );
+      expected_partial_keyimages.emplace_back(
+          rct::rct2pk(rct::scalarmultKey(rct::ki2rct(KI_base), rct::sk2rct(privkey)))
+        );
+    }
+
+    multisig_partial_cn_key_image_msg recovery_test_msg{signing_skey, Ko, privkeys};
+    multisig_partial_cn_key_image_msg recovery_test_msg_reverse{recovery_test_msg.get_msg()};
+    EXPECT_EQ(recovery_test_msg.get_onetime_address(), Ko);
+    EXPECT_EQ(recovery_test_msg.get_signing_pubkey(), signing_pubkey);
+    EXPECT_EQ(recovery_test_msg.get_signing_pubkey(), recovery_test_msg_reverse.get_signing_pubkey());
+    EXPECT_EQ(recovery_test_msg.get_partial_key_images().size(), privkeys.size());
+    EXPECT_EQ(recovery_test_msg.get_partial_key_images(), recovery_test_msg_reverse.get_partial_key_images());
+    EXPECT_EQ(recovery_test_msg.get_partial_key_images().size(), recovery_test_msg.get_multisig_keyshares().size());
+    EXPECT_EQ(recovery_test_msg.get_multisig_keyshares(), recovery_test_msg_reverse.get_multisig_keyshares());
+    EXPECT_EQ(recovery_test_msg.get_multisig_keyshares(), expected_multisig_keyshares);
+    EXPECT_EQ(recovery_test_msg.get_partial_key_images(), expected_partial_keyimages);
+  };
+
+  // get key image base
+  crypto::key_image KI_base;
+  crypto::generate_key_image(rand_Ko, rct::rct2sk(rct::I), KI_base);
+
+  // test recovery
+  EXPECT_NO_THROW(test_recovery(rand_Ko, KI_base));
 }
 
 TEST(multisig, multisig_conversion_msg)

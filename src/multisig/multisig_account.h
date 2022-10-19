@@ -32,6 +32,7 @@
 #include "crypto/crypto.h"
 #include "multisig_account_era_conversion_msg.h"
 #include "multisig_kex_msg.h"
+#include "multisig_partial_cn_key_image_msg.h"
 #include "multisig_signer_set_filter.h"
 
 #include <cstdint>
@@ -305,8 +306,18 @@ namespace multisig
   std::uint32_t multisig_kex_rounds_required(const std::uint32_t num_signers, const std::uint32_t threshold);
 
   //todo
+  // - all messages must have the same onetime address
+  // - need at least M - 1 other signers from our multisig group
+  // - verify multisig pubkey can be reproduced by summing together unique multisig keyshares from the input messages
+  // note: KI_base returned is just k^s * Hp(Ko), and does not include material related to the private view key
+  void multisig_recover_cn_keyimage_base(const multisig_account &original_account,
+    const std::vector<multisig_partial_cn_key_image_msg> &partial_ki_msgs,
+    crypto::public_key &onetime_address_out,
+    crypto::key_image &key_image_base_out);
+
+  //todo
   // - new era != old era
-  // - need at least M - 1 other signers (all members of account)
+  // - need at least M - 1 other signers from our multisig group
   // - verify old multisig pubkey can be recomputed from local keyshares + unique sent keyshares
   // - make keyshare_origins_map with local keyshares mapped to matching recommendations from input list
   //   - can be extended with add_signer_recommendations() later on

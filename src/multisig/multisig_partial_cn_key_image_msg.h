@@ -28,7 +28,6 @@
 
 #pragma once
 
-#include "account_generator_era.h"
 #include "crypto/crypto.h"
 
 #include <cstdint>
@@ -41,54 +40,52 @@ namespace crypto { struct DualBaseVectorProof; }
 namespace multisig
 {
   ////
-  // multisig account era conversion msg
-  // - This message contains a proof that one set of keys correspond 1:1 with another set across two generators, which
-  //   are defined by account_generator_eras.
-  //     e.x. {a G, b G, c G} -> {a U, b U, c U}
-  // - In an M-of-N multisig, if M players send each other account conversion messages, that set of messages can be used
-  //   to trustlessly convert an old account to one with a new account_generator_era.
-  //   See the multisig::get_multisig_account_with_new_generator_era() method for more information.
+  // multisig partial cryptonote key image msg
+  // - This message contains a proof that a set of public keys on generator G have 1:1 discrete log relations with a set
+  //   of partial key images on base key Hp(Ko) for hash-to-point algorithm Hp() and some onetime address Ko.
+  // - A multisig group member (for an M-of-N multisig) can recover the key image KI for a cryptonote onetime address Ko owned
+  //   by the group by collecting messages from M group members (where the private signing keys are shares of the group key
+  //   held by each group member). Once at least M messages are collected, sum together unique partial KI keys plus the
+  //   onetime address's view component times Hp(Ko) to get the actual key image KI. Verify the key image by summing the unique
+  //   multisig public keyshares and expecting it to equal the group's base spend key.
   //
-  // dualbase_proof_msg = versioning-domain-sep || signing_pubkey || old_era || new_era
+  // dualbase_proof_msg = domain-sep || signing_pubkey || Ko
   //
   // msg = versioning-domain-sep ||
-  //       b58(signing_pubkey || old_era || new_era || {old_keyshares} || {new_keyshares} || dualbase_proof_challenge ||
-  //           dualbase_proof_response || crypto_sig[signing_privkey](dualbase_proof_challenge || dualbase_proof_response))
-  ///
-  class multisig_account_era_conversion_msg final
+  //       b58(signing_pubkey || Ko || {multisig_keyshares} || {partial_KI} || dualbase_proof_challenge ||
+  //           dualbase_proof_response ||
+  //           crypto_sig[signing_privkey](Ko || dualbase_proof_challenge || dualbase_proof_response))  ///
+  class multisig_partial_cn_key_image_msg final
   {
   //constructors
   public:
     // default constructor
-    multisig_account_era_conversion_msg() = default;
+    multisig_partial_cn_key_image_msg() = default;
 
     // construct from info
-    multisig_account_era_conversion_msg(const crypto::secret_key &signing_privkey,
-      const cryptonote::account_generator_era old_account_era,
-      const cryptonote::account_generator_era new_account_era,
+    multisig_partial_cn_key_image_msg(const crypto::secret_key &signing_privkey,
+      const crypto::public_key &onetime_address,
       const std::vector<crypto::secret_key> &keyshare_privkeys);
 
     // construct from string
-    multisig_account_era_conversion_msg(std::string msg);
+    multisig_partial_cn_key_image_msg(std::string msg);
 
     // copy constructor: default
 
   //destructor: default
-    ~multisig_account_era_conversion_msg() = default;
+    ~multisig_partial_cn_key_image_msg() = default;
 
   //overloaded operators: none
 
   //member functions
     // get msg string
     const std::string& get_msg() const { return m_msg; }
-    // get generator era of old account
-    cryptonote::account_generator_era get_old_era() const { return m_old_era; }
-    // get generator era of new account
-    cryptonote::account_generator_era get_new_era() const { return m_new_era; }
-    // get the msg signer's old keyshares
-    const std::vector<crypto::public_key>& get_old_keyshares() const { return m_old_keyshares; }
-    // get the msg signer's new keyshares
-    const std::vector<crypto::public_key>& get_new_keyshares() const { return m_new_keyshares; }
+    // get onetime address this message is built for
+    const crypto::public_key& get_onetime_address() const { return m_onetime_address; }
+    // get the multisig group key keyshares
+    const std::vector<crypto::public_key>& get_multisig_keyshares() const { return m_multisig_keyshares; }
+    // get the partial key image keys
+    const std::vector<crypto::public_key>& get_partial_key_images() const { return m_partial_key_images; }
     // get msg signing pubkey
     const crypto::public_key& get_signing_pubkey() const { return m_signing_pubkey; }
 
@@ -103,14 +100,12 @@ namespace multisig
     // message as string
     std::string m_msg;
 
-    // generator era of old account
-    cryptonote::account_generator_era m_old_era;
-    // generator era of new account (being converted to)
-    cryptonote::account_generator_era m_new_era;
-    // the msg signer's old keyshares
-    std::vector<crypto::public_key> m_old_keyshares;
-    // the msg signer's new keyshares (1:1 with old keyshares)
-    std::vector<crypto::public_key> m_new_keyshares;
+    // onetime address this message is built for
+    crypto::public_key m_onetime_address;
+    // the msg signer's multisig key keyshares
+    std::vector<crypto::public_key> m_multisig_keyshares;
+    // the msg signer's partial key images for the designated onetime address using their multisig private keyshares
+    std::vector<crypto::public_key> m_partial_key_images;
 
     // pubkey used to sign this msg
     crypto::public_key m_signing_pubkey;
