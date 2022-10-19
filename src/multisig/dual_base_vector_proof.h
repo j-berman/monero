@@ -29,17 +29,20 @@
 ////
 // Schnorr-like dual-base proof for a pair of vectors: V_1 = {k_1 G1, k_2 G1, ...}, V_2 = {k_1 G2, k_2 G2, ...}
 // - demonstrates knowledge of all k_1, k_2, k_3, ...
-// - demonstrates that members of V_1 have a 1:1 discrete-log equivalence with the members of V_2, across generators G1, G2
+// - demonstrates that members of V_1 have a 1:1 discrete-log equivalence with the members of V_2, across base keys G1, G2
 //
 // proof outline
 // 0. preliminaries
 //    H(...)   = keccak(...) -> 32 bytes    hash to 32 bytes
 //    H_n(...) = H(...) mod l               hash to ed25519 scalar
-//    G1, G2: assumed to be ed25519 generators
+//    G1, G2: assumed to be ed25519 base keys
 // 1. proof nonce and challenge
-//    mu = H_n(H("domain-sep"), m, {V_1}, {V_2})  aggregation coefficient
-//    cm = H(mu)                                  challenge message
-//    a = rand()                                  prover nonce
+//    given: m, G_1, G_2, {k}
+//    {V_1} = {k} * G_1
+//    {V_2} = {k} * G_2
+//    mu = H_n(H("domain-sep"), m, G_1, G_2, {V_1}, {V_2})  aggregation coefficient
+//    cm = H(mu)                                            challenge message
+//    a = rand()                                            prover nonce
 //    c = H_n(cm, [a*G1], [a*G2])
 // 2. aggregate response
 //    r = a - sum_i(mu^i * k_i)
@@ -78,38 +81,38 @@ namespace crypto
 
 struct DualBaseVectorProof
 {
+    // message
+    rct::key m;
     // challenge
     rct::key c;
     // response
     rct::key r;
     // pubkeys
-    rct::keyV V_1;
-    rct::keyV V_2;
-    // message
-    rct::key m;
+    std::vector<crypto::public_key> V_1;
+    std::vector<crypto::public_key> V_2;
 };
 
 /**
 * brief: dual_base_vector_prove - create a dual base vector proof
-* param: G_1 - generator of first vector
-* param: G_2 - generator of second
-* param: k - secret keys k_1, k_2, ...
 * param: message - message to insert in Fiat-Shamir transform hash
+* param: G_1 - base key of first vector
+* param: G_2 - base key of second
+* param: k - secret keys k_1, k_2, ...
 * return: proof
 */
-DualBaseVectorProof dual_base_vector_prove(const rct::key &G_1,
-    const rct::key &G_2,
-    const std::vector<crypto::secret_key> &k,
-    const rct::key &message);
+DualBaseVectorProof dual_base_vector_prove(const rct::key &message,
+    const crypto::public_key &G_1,
+    const crypto::public_key &G_2,
+    const std::vector<crypto::secret_key> &k);
 /**
 * brief: dual_base_vector_verify - verify a dual base vector proof
 * param: proof - proof to verify
-* param: G_1 - generator of first vector
-* param: G_2 - generator of second vector
+* param: G_1 - base key of first vector
+* param: G_2 - base key of second vector
 * return: true/false on verification result
 */
 bool dual_base_vector_verify(const DualBaseVectorProof &proof,
-    const rct::key &G_1,
-    const rct::key &G_2);
+    const crypto::public_key &G_1,
+    const crypto::public_key &G_2);
 
 } //namespace crypto

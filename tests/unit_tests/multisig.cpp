@@ -559,31 +559,31 @@ TEST(multisig, dual_base_vector_proof)
       return skeys;
     };
 
+  const crypto::public_key gen_G{crypto::get_G()};
+  const crypto::public_key gen_U{crypto::get_U()};
+
   // G, G, 0 keys
-  EXPECT_ANY_THROW(proof = crypto::dual_base_vector_prove(rct::G, rct::G, make_keys(0), rct::zero()));
+  EXPECT_ANY_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_G, gen_G, make_keys(0)));
 
   // G, G, 1 key
-  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::G, rct::G, make_keys(1), rct::zero()));
-  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, rct::G, rct::G));
+  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_G, gen_G, make_keys(1)));
+  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_G, gen_G));
 
   // G, G, 2 keys
-  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::G, rct::G, make_keys(2), rct::zero()));
-  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, rct::G, rct::G));
+  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_G, gen_G, make_keys(2)));
+  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_G, gen_G));
 
   // G, U, 2 keys
-  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::G, rct::pk2rct(crypto::get_U()), make_keys(2), rct::zero()));
-  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, rct::G, rct::pk2rct(crypto::get_U())));
+  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_G, gen_U, make_keys(2)));
+  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_G, gen_U));
 
   // U, G, 3 keys
-  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::pk2rct(crypto::get_U()), rct::G, make_keys(3), rct::zero()));
-  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, rct::pk2rct(crypto::get_U()), rct::G));
+  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_U, gen_G, make_keys(3)));
+  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_U, gen_G));
 
   // U, U, 3 keys
-  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::pk2rct(crypto::get_U()),
-    rct::pk2rct(crypto::get_U()),
-    make_keys(3),
-    rct::zero()));
-  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, rct::pk2rct(crypto::get_U()), rct::pk2rct(crypto::get_U())));
+  EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_U, gen_U, make_keys(3)));
+  EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_U, gen_U));
 }
 
 TEST(multisig, multisig_conversion_msg)

@@ -59,7 +59,7 @@ namespace crypto
 //-------------------------------------------------------------------------------------------------------------------
 // return: [scalar^0], [scalar^1], ..., [scalar^{num_pows - 1}]
 //-------------------------------------------------------------------------------------------------------------------
-rct::keyV powers_of_scalar(const rct::key &scalar, const std::size_t num_pows)
+static rct::keyV powers_of_scalar(const rct::key &scalar, const std::size_t num_pows)
 {
     if (num_pows == 0)
         return rct::keyV{};
@@ -74,21 +74,38 @@ rct::keyV powers_of_scalar(const rct::key &scalar, const std::size_t num_pows)
     return pows;
 }
 //-------------------------------------------------------------------------------------------------------------------
+// compute: A_inout += k * P
+//-------------------------------------------------------------------------------------------------------------------
+static void mul_add(const rct::key &k, const crypto::public_key &P, ge_p3 &A_inout)
+{
+    ge_p3 temp_p3;
+    ge_cached temp_cache;
+    ge_p1p1 temp_p1p1;
+
+    CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&temp_p3, to_bytes(P)) == 0, "ge_frombytes_vartime failed!");
+    ge_scalarmult_p3(&temp_p3, k.bytes, &temp_p3);  //k * P
+    ge_p3_to_cached(&temp_cache, &temp_p3);
+    ge_add(&temp_p1p1, &A_inout, &temp_cache);  //+ k * P
+    ge_p1p1_to_p3(&A_inout, &temp_p1p1);
+}
+//-------------------------------------------------------------------------------------------------------------------
 // Initialize transcript
 //-------------------------------------------------------------------------------------------------------------------
 static void transcript_init(rct::key &transcript)
 {
-    std::string salt(config::HASH_KEY_CRYPTO_DUAL_BASE_VECTOR_PROOF);
+    const std::string salt{config::HASH_KEY_CRYPTO_DUAL_BASE_VECTOR_PROOF};
     rct::cn_fast_hash(transcript, salt.data(), salt.size());
 }
 //-------------------------------------------------------------------------------------------------------------------
 // Aggregation coefficient 'mu' for concise structure
 //
-// mu = H_n(H("domain-sep"), message, {V_1}, {V_2})
+// mu = H_n(H("domain-sep"), message, G_1, G_2, {V_1}, {V_2})
 //-------------------------------------------------------------------------------------------------------------------
 static rct::key compute_base_aggregation_coefficient(const rct::key &message,
-    const rct::keyV &V_1,
-    const rct::keyV &V_2)
+    const crypto::public_key &G_1,
+    const crypto::public_key &G_2,
+    const std::vector<crypto::public_key> &V_1,
+    const std::vector<crypto::public_key> &V_2)
 {
     CHECK_AND_ASSERT_THROW_MES(V_1.size() == V_2.size(), "Transcript challenge inputs have incorrect size!");
 
@@ -98,13 +115,15 @@ static rct::key compute_base_aggregation_coefficient(const rct::key &message,
 
     // collect challenge string
     std::string hash;
-    hash.reserve((2 + 2*(V_1.size()))*sizeof(rct::key));
+    hash.reserve((2 + 2*(V_1.size() + 1))*sizeof(rct::key));
     hash.append(reinterpret_cast<const char*>(challenge.bytes), sizeof(rct::key));
     hash.append(reinterpret_cast<const char*>(message.bytes), sizeof(rct::key));
-    for (const auto &V : V_1)
-        hash.append(reinterpret_cast<const char*>(V.bytes), sizeof(rct::key));
-    for (const auto &V : V_2)
-        hash.append(reinterpret_cast<const char*>(V.bytes), sizeof(rct::key));
+    hash.append(reinterpret_cast<const char*>(G_1.data), sizeof(crypto::public_key));
+    hash.append(reinterpret_cast<const char*>(G_2.data), sizeof(crypto::public_key));
+    for (const crypto::public_key &V : V_1)
+        hash.append(reinterpret_cast<const char*>(V.data), sizeof(crypto::public_key));
+    for (const crypto::public_key &V : V_2)
+        hash.append(reinterpret_cast<const char*>(V.data), sizeof(crypto::public_key));
     CHECK_AND_ASSERT_THROW_MES(hash.size() > 1, "Bad hash input size!");
 
     // challenge
@@ -178,17 +197,17 @@ static void compute_response(const std::vector<crypto::secret_key> &k,
 
     for (std::size_t i{0}; i < k.size(); ++i)
     {
-        sc_mul(r_temp.bytes, mu_pows[i].bytes, reinterpret_cast<const unsigned char*>(&k[i]));  // mu^i * k_i
+        sc_mul(r_temp.bytes, mu_pows[i].bytes, to_bytes(k[i]));  // mu^i * k_i
         sc_add(r_sum_temp.bytes, r_sum_temp.bytes, r_temp.bytes);  // sum_i(...)
     }
     sc_mulsub(r_out.bytes, challenge.bytes, r_sum_temp.bytes, alpha.bytes);  // alpha - c * sum_i(...)
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-DualBaseVectorProof dual_base_vector_prove(const rct::key &G_1,
-    const rct::key &G_2,
-    const std::vector<crypto::secret_key> &k,
-    const rct::key &message)
+DualBaseVectorProof dual_base_vector_prove(const rct::key &message,
+    const crypto::public_key &G_1,
+    const crypto::public_key &G_2,
+    const std::vector<crypto::secret_key> &k)
 {
     /// input checks and initialization
     const std::size_t num_keys{k.size()};
@@ -202,29 +221,29 @@ DualBaseVectorProof dual_base_vector_prove(const rct::key &G_1,
 
     for (std::size_t i{0}; i < num_keys; ++i)
     {
-        CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(reinterpret_cast<const unsigned char*>(&k[i])), "Bad private key (k[i] zero)!");
-        CHECK_AND_ASSERT_THROW_MES(sc_check(reinterpret_cast<const unsigned char*>(&k[i])) == 0, "Bad private key (k[i])!");
+        CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(k[i])), "Bad private key (k[i] zero)!");
+        CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(k[i])) == 0, "Bad private key (k[i])!");
 
-        // verify the input keys matche the input private keys
-        proof.V_1.emplace_back(rct::scalarmultKey(G_1, rct::sk2rct(k[i])));
-        proof.V_2.emplace_back(rct::scalarmultKey(G_2, rct::sk2rct(k[i])));
+        // create the pubkey vectors
+        proof.V_1.emplace_back(rct::rct2pk(rct::scalarmultKey(rct::pk2rct(G_1), rct::sk2rct(k[i]))));
+        proof.V_2.emplace_back(rct::rct2pk(rct::scalarmultKey(rct::pk2rct(G_2), rct::sk2rct(k[i]))));
 
-        CHECK_AND_ASSERT_THROW_MES(!(proof.V_1.back() == rct::identity()), "Bad proof key (V_1[i] identity)!");
-        CHECK_AND_ASSERT_THROW_MES(!(proof.V_2.back() == rct::identity()), "Bad proof key (V_2[i] identity)!");
+        CHECK_AND_ASSERT_THROW_MES(!(rct::pk2rct(proof.V_1.back()) == rct::identity()), "Bad proof key (V_1[i] identity)!");
+        CHECK_AND_ASSERT_THROW_MES(!(rct::pk2rct(proof.V_2.back()) == rct::identity()), "Bad proof key (V_2[i] identity)!");
     }
 
 
     /// signature openers: alpha * G_1, alpha * G_2
-    crypto::secret_key alpha{rct::rct2sk(rct::skGen())};
-    rct::key alpha_1_pub{rct::scalarmultKey(G_1, rct::sk2rct(alpha))};
-    rct::key alpha_2_pub{rct::scalarmultKey(G_2, rct::sk2rct(alpha))};
+    const crypto::secret_key alpha{rct::rct2sk(rct::skGen())};
+    const rct::key alpha_1_pub{rct::scalarmultKey(rct::pk2rct(G_1), rct::sk2rct(alpha))};
+    const rct::key alpha_2_pub{rct::scalarmultKey(rct::pk2rct(G_2), rct::sk2rct(alpha))};
 
 
     /// challenge message and aggregation coefficient
-    rct::key mu = compute_base_aggregation_coefficient(proof.m, proof.V_1, proof.V_2);
-    rct::keyV mu_pows = powers_of_scalar(mu, num_keys);
+    const rct::key mu{compute_base_aggregation_coefficient(proof.m, G_1, G_2, proof.V_1, proof.V_2)};
+    const rct::keyV mu_pows{powers_of_scalar(mu, num_keys)};
 
-    rct::key m = compute_challenge_message(mu);
+    const rct::key m{compute_challenge_message(mu)};
 
 
     /// compute proof challenge
@@ -232,11 +251,7 @@ DualBaseVectorProof dual_base_vector_prove(const rct::key &G_1,
 
 
     /// responses
-    compute_response(k,
-        mu_pows,
-        rct::sk2rct(alpha),
-        proof.c,
-        proof.r);
+    compute_response(k, mu_pows, rct::sk2rct(alpha), proof.c, proof.r);
 
 
     /// done
@@ -244,24 +259,24 @@ DualBaseVectorProof dual_base_vector_prove(const rct::key &G_1,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool dual_base_vector_verify(const DualBaseVectorProof &proof,
-    const rct::key &G_1,
-    const rct::key &G_2)
+    const crypto::public_key &G_1,
+    const crypto::public_key &G_2)
 {
     /// input checks and initialization
     const std::size_t num_keys{proof.V_1.size()};
 
     CHECK_AND_ASSERT_THROW_MES(num_keys > 0, "Proof has no keys!");
-    CHECK_AND_ASSERT_THROW_MES(num_keys == proof.V_1.size(), "Input key sets not the same size (V_2)!");
+    CHECK_AND_ASSERT_THROW_MES(num_keys == proof.V_2.size(), "Input key sets not the same size (V_2)!");
 
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(proof.r.bytes), "Bad response (r zero)!");
     CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r.bytes) == 0, "Bad resonse (r)!");
 
 
     /// challenge message and aggregation coefficient
-    rct::key mu = compute_base_aggregation_coefficient(proof.m, proof.V_1, proof.V_2);
-    rct::keyV mu_pows = powers_of_scalar(mu, num_keys);
+    const rct::key mu{compute_base_aggregation_coefficient(proof.m, G_1, G_2, proof.V_1, proof.V_2)};
+    const rct::keyV mu_pows{powers_of_scalar(mu, num_keys)};
 
-    rct::key m = compute_challenge_message(mu);
+    const rct::key m{compute_challenge_message(mu)};
 
 
     /// challenge pieces
@@ -272,9 +287,6 @@ bool dual_base_vector_verify(const DualBaseVectorProof &proof,
     CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&V_1_part_p3, rct::identity().bytes) == 0, "ge_frombytes_vartime failed!");
     ge_p3 V_2_part_p3{V_1_part_p3};
 
-    ge_p3 temp_p3;
-    ge_cached temp_cache;
-    ge_p1p1 temp_p1p1;
     rct::key coeff_temp;
 
     for (std::size_t i{0}; i < num_keys; ++i)
@@ -284,33 +296,17 @@ bool dual_base_vector_verify(const DualBaseVectorProof &proof,
         sc_mul(coeff_temp.bytes, coeff_temp.bytes, mu_pows[i].bytes);
 
         // V_1_part: + c * mu^i * V_1[i]
-        CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&temp_p3, proof.V_1[i].bytes) == 0, "ge_frombytes_vartime failed!");
-        ge_scalarmult_p3(&temp_p3, coeff_temp.bytes, &temp_p3);  //c * mu^i * V_1[i]
-        ge_p3_to_cached(&temp_cache, &temp_p3);
-        ge_add(&temp_p1p1, &V_1_part_p3, &temp_cache);  //+ c * mu^i * V_1[i]
-        ge_p1p1_to_p3(&V_1_part_p3, &temp_p1p1);
+        mul_add(coeff_temp, proof.V_1[i], V_1_part_p3);
 
         // V_2_part: + c * mu^i * V_2[i]
-        CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&temp_p3, proof.V_2[i].bytes) == 0, "ge_frombytes_vartime failed!");
-        ge_scalarmult_p3(&temp_p3, coeff_temp.bytes, &temp_p3);  //c * mu^i * V_2[i]
-        ge_p3_to_cached(&temp_cache, &temp_p3);
-        ge_add(&temp_p1p1, &V_2_part_p3, &temp_cache);  //+ c * mu^i * V_2[i]
-        ge_p1p1_to_p3(&V_2_part_p3, &temp_p1p1);
+        mul_add(coeff_temp, proof.V_2[i], V_2_part_p3);
     }
 
     // r G_1 + V_1_part
-    CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&temp_p3, G_1.bytes) == 0, "ge_frombytes_vartime failed!");
-    ge_scalarmult_p3(&temp_p3, proof.r.bytes, &temp_p3);  //r G_1
-    ge_p3_to_cached(&temp_cache, &temp_p3);
-    ge_add(&temp_p1p1, &V_1_part_p3, &temp_cache);  //r G_1 + V_1_part
-    ge_p1p1_to_p3(&V_1_part_p3, &temp_p1p1);
+    mul_add(proof.r, G_1, V_1_part_p3);
 
-    // r G_1 + V_2_part
-    CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&temp_p3, G_2.bytes) == 0, "ge_frombytes_vartime failed!");
-    ge_scalarmult_p3(&temp_p3, proof.r.bytes, &temp_p3);  //r G_2
-    ge_p3_to_cached(&temp_cache, &temp_p3);
-    ge_add(&temp_p1p1, &V_2_part_p3, &temp_cache);  //r G_2 + V_2_part
-    ge_p1p1_to_p3(&V_2_part_p3, &temp_p1p1);
+    // r G_2 + V_2_part
+    mul_add(proof.r, G_2, V_2_part_p3);
 
 
     /// compute nominal challenge and validate proof

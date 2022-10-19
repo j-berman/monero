@@ -49,9 +49,7 @@ namespace multisig
   //   to trustlessly convert an old account to one with a new account_generator_era.
   //   See the multisig::get_multisig_account_with_new_generator_era() method for more information.
   //
-  // proof_msg = versioning-domain-sep || signing_pubkey || old_era || new_era
-  // dualbase_proof_challenge = H(H(... || proof_msg || expand(old_keyshares) || expand(new_keyshares)))
-  // msg_to_sign = dualbase_proof_challenge || dualbase_proof_response
+  // dualbase_proof_msg = versioning-domain-sep || signing_pubkey || old_era || new_era
   //
   // msg = versioning-domain-sep ||
   //          b58(signing_pubkey || old_era || new_era || {old_keyshares} || {new_keyshares} || dualbase_proof_challenge ||

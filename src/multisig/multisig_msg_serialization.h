@@ -100,6 +100,32 @@ namespace multisig
     END_SERIALIZE()
   };
 
+  /// multisig partial cryptonote key image message
+  struct multisig_partial_cn_ki_msg_serializable
+  {
+    // onetime address
+    crypto::public_key onetime_address;
+    // old keyshares
+    std::vector<crypto::public_key> multisig_keyshares;
+    // new keyshares
+    std::vector<crypto::public_key> partial_key_images;
+    // pubkey used to sign this msg
+    crypto::public_key signing_pubkey;
+    // dual base vector proof (challenge/response shoved into crypto::signature structure)
+    crypto::signature dual_base_vector_proof_partial;
+    // message signature
+    crypto::signature signature;
+
+    BEGIN_SERIALIZE()
+      FIELD(onetime_address)
+      FIELD(multisig_keyshares)
+      FIELD(partial_key_images)
+      FIELD(signing_pubkey)
+      FIELD(dual_base_vector_proof_partial)
+      FIELD(signature)
+    END_SERIALIZE()
+  };
+
   /// multisig account era conversion message
   struct multisig_conversion_msg_serializable
   {
@@ -113,7 +139,7 @@ namespace multisig
     std::vector<crypto::public_key> new_keyshares;
     // pubkey used to sign this msg
     crypto::public_key signing_pubkey;
-    // dual base vector proof (challenge/response abuse crypto::signature structure)
+    // dual base vector proof (challenge/response shoved into crypto::signature structure)
     crypto::signature dual_base_vector_proof_partial;
     // message signature
     crypto::signature signature;

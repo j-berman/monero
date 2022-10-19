@@ -38,6 +38,7 @@ extern "C"
 #include "dual_base_vector_proof.h"
 #include "include_base_utils.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctTypes.h"
 #include "serialization/binary_archive.h"
 #include "serialization/serialization.h"
 
@@ -56,26 +57,6 @@ const boost::string_ref MULTISIG_CONVERSION_MSG_MAGIC_V1{"MultisigConversionV1"}
 
 namespace multisig
 {
-  //----------------------------------------------------------------------------------------------------------------------
-  // INTERNAL
-  //----------------------------------------------------------------------------------------------------------------------
-  static void pkv_to_rctv(const std::vector<crypto::public_key> &pkv, rct::keyV &rctv_out)
-  {
-    rctv_out.clear();
-    rctv_out.reserve(pkv.size());
-    for (const crypto::public_key &pk : pkv)
-      rctv_out.emplace_back(rct::pk2rct(pk));
-  }
-  //----------------------------------------------------------------------------------------------------------------------
-  // INTERNAL
-  //----------------------------------------------------------------------------------------------------------------------
-  static void rctv_to_pkv(const rct::keyV &rctv, std::vector<crypto::public_key> &pkv_out)
-  {
-    pkv_out.clear();
-    pkv_out.reserve(rctv.size());
-    for (const rct::key &rct_k : rctv)
-      pkv_out.emplace_back(rct::rct2pk(rct_k));
-  }
   //----------------------------------------------------------------------------------------------------------------------
   // INTERNAL
   //----------------------------------------------------------------------------------------------------------------------
@@ -143,16 +124,16 @@ namespace multisig
   // multisig_account_era_conversion_msg: EXTERNAL
   //----------------------------------------------------------------------------------------------------------------------
   multisig_account_era_conversion_msg::multisig_account_era_conversion_msg(const crypto::secret_key &signing_privkey,
-      const cryptonote::account_generator_era old_account_era,
-      const cryptonote::account_generator_era new_account_era,
-      const std::vector<crypto::secret_key> &keyshare_privkeys) :
-    m_old_era{old_account_era},
-    m_new_era{new_account_era}
+    const cryptonote::account_generator_era old_account_era,
+    const cryptonote::account_generator_era new_account_era,
+    const std::vector<crypto::secret_key> &keyshare_privkeys) :
+      m_old_era{old_account_era},
+      m_new_era{new_account_era}
   {
     CHECK_AND_ASSERT_THROW_MES(sc_check((const unsigned char*)&signing_privkey) == 0 &&
       signing_privkey != crypto::null_skey, "Invalid msg signing key.");
-    rct::key G_1{get_primary_generator(m_old_era)};
-    rct::key G_2{get_primary_generator(m_new_era)};
+    const rct::key G_1{get_primary_generator(m_old_era)};
+    const rct::key G_2{get_primary_generator(m_new_era)};
     CHECK_AND_ASSERT_THROW_MES(!(G_1 == rct::Z), "Unknown conversion msg old era.");
     CHECK_AND_ASSERT_THROW_MES(!(G_2 == rct::Z), "Unknown conversion msg new era.");
     CHECK_AND_ASSERT_THROW_MES(keyshare_privkeys.size() > 0, "Can't make conversion message with no keys to convert.");
@@ -164,11 +145,13 @@ namespace multisig
     // make dual base vector proof
     rct::key proof_msg;
     get_proof_msg(MULTISIG_CONVERSION_MSG_MAGIC_V1, m_signing_pubkey, m_old_era, m_new_era, proof_msg);
-    crypto::DualBaseVectorProof proof{crypto::dual_base_vector_prove(G_1, G_2, keyshare_privkeys, proof_msg)};
+    const crypto::DualBaseVectorProof proof{
+        crypto::dual_base_vector_prove(proof_msg, rct::rct2pk(G_1), rct::rct2pk(G_2), keyshare_privkeys)
+      };
 
     // set keyshares
-    rctv_to_pkv(proof.V_1, m_old_keyshares);
-    rctv_to_pkv(proof.V_2, m_new_keyshares);
+    m_old_keyshares = std::move(proof.V_1);
+    m_new_keyshares = std::move(proof.V_2);
 
     // sets message and signing pub key
     construct_msg(signing_privkey, proof);
@@ -199,7 +182,7 @@ namespace multisig
     crypto::generate_signature(get_signature_msg(dualbase_proof), m_signing_pubkey, signing_privkey, msg_signature);
 
     // mangle the dualbase proof into a crypto::signature
-    crypto::signature mangled_dualbase_proof{rct::rct2sk(dualbase_proof.c), rct::rct2sk(dualbase_proof.r)};
+    const crypto::signature mangled_dualbase_proof{rct::rct2sk(dualbase_proof.c), rct::rct2sk(dualbase_proof.r)};
 
     // prepare the message
     std::stringstream serialized_msg_ss;
@@ -256,13 +239,15 @@ namespace multisig
     else CHECK_AND_ASSERT_THROW_MES(false, "Deserializing conversion msg failed.");
 
     // checks
-    pkv_to_rctv(m_old_keyshares, dualbase_proof.V_1);
-    pkv_to_rctv(m_new_keyshares, dualbase_proof.V_2);
-    rct::key G_1{get_primary_generator(m_old_era)};
-    rct::key G_2{get_primary_generator(m_new_era)};
+    dualbase_proof.V_1 = m_old_keyshares;
+    dualbase_proof.V_2 = m_new_keyshares;
+    const rct::key G_1{get_primary_generator(m_old_era)};
+    const rct::key G_2{get_primary_generator(m_new_era)};
     CHECK_AND_ASSERT_THROW_MES(!(G_1 == rct::Z), "Unknown conversion msg old era.");
     CHECK_AND_ASSERT_THROW_MES(!(G_2 == rct::Z), "Unknown conversion msg new era.");
     CHECK_AND_ASSERT_THROW_MES(dualbase_proof.V_1.size() > 0, "Conversion message has no conversion keys.");
+    CHECK_AND_ASSERT_THROW_MES(dualbase_proof.V_1.size() == dualbase_proof.V_2.size(),
+      "Conversion message key vectors don't line up.");
     CHECK_AND_ASSERT_THROW_MES(m_signing_pubkey != crypto::null_pkey && m_signing_pubkey != rct::rct2pk(rct::identity()),
       "Message signing key was invalid.");
     CHECK_AND_ASSERT_THROW_MES(rct::isInMainSubgroup(rct::pk2rct(m_signing_pubkey)),
@@ -270,7 +255,7 @@ namespace multisig
 
     // validate dualbase proof
     get_proof_msg(MULTISIG_CONVERSION_MSG_MAGIC_V1, m_signing_pubkey, m_old_era, m_new_era, dualbase_proof.m);
-    CHECK_AND_ASSERT_THROW_MES(crypto::dual_base_vector_verify(dualbase_proof, G_1, G_2),
+    CHECK_AND_ASSERT_THROW_MES(crypto::dual_base_vector_verify(dualbase_proof, rct::rct2pk(G_1), rct::rct2pk(G_2)),
       "Conversion message dualbase proof invalid.");
 
     // validate signature
