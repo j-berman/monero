@@ -84,7 +84,10 @@ std::size_t SpMembershipProofV1::get_size_bytes(const std::size_t n, const std::
 {
     const std::size_t ref_set_size{ref_set_size_from_decomp(n, m)};
 
-    return sp::GrootleProof::get_size_bytes(n, m) + SpBinnedReferenceSetV1::get_size_bytes(ref_set_size / num_bin_members);
+    return sp::GrootleProof::get_size_bytes(n, m) +
+        (num_bin_members > 0
+        ? SpBinnedReferenceSetV1::get_size_bytes(ref_set_size / num_bin_members)
+        : 0);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::size_t SpMembershipProofV1::get_size_bytes() const
