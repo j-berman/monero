@@ -30,6 +30,7 @@
 
 #include "crypto/crypto.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "multisig_partial_cn_key_image_msg.h"
 #include "ringct/rctTypes.h"
 
 #include <unordered_map>
@@ -66,4 +67,35 @@ namespace multisig
     std::size_t real_output_index,
     const std::vector<crypto::key_image> &pkis,
     crypto::key_image &ki);
+  /**
+  * @brief multisig_recover_cn_keyimage_bases - recover cryptonote-style key image bases k^s * Hp(Ko) for onetime
+  *      addresses Ko owned by a multisig group with aggregate spend privkey k^s
+  *   - Processes multisig partial key image messages to collect key image bases for as many onetime addresses as possible
+  *     with the given messages. The algorithm only requires messages from 'at least' M signers to complete a key image base,
+  *     which means the algorithm works fine if there are more than M messages.
+  *   - Records onetime addresses that have messages but don't have enough messages to complete their key image bases.
+  *   - Records onetime addresses that have messages that record invalid key shares (e.g. because a keyshare that wasn't
+  *     produced by the canonical multisig account setup process was used to make a message).
+  *     - For each set of messages associated with a onetime address, the algorithm tries to compute the multisig group's base
+  *       spend key k^s G by summing together unique 'multisig keyshares' from the messages. If the computed key equals the
+  *       expected value, then the corresponding assembled key image base will equal k^s Hp(Ko).
+  * 
+  * @param multisig_signers - message-signing pubkeys of all members of the user's multisig group
+  * @param multisig_threshold - the threshold 'M' in the user's M-of-N multisig group
+  * @param multisig_base_spend_key - base spend key of the user's multisig group: K^s = k^s G
+  * @param partial_ki_msgs - map of partial key image messages with format [Ko : [signer : msg ]]
+  * @outparam recovered_key_image_bases_out - successfully assembled key image bases k^s Hp(Ko) for onetime addresses Ko with
+  *     format [Ko : partial Ki]
+  * @outparam onetime_addresses_with_insufficient_partial_kis_out - onetime addresses that don't have enough messages to
+  *     assemble they key image bases
+  * @outparam onetime_addresses_with_invalid_partial_kis_out - onetime addresses with messages that contain invalid key shares
+  */
+  void multisig_recover_cn_keyimage_bases(const std::vector<crypto::public_key> &multisig_signers,
+    const std::uint32_t multisig_threshold,
+    const crypto::public_key &multisig_base_spend_key,
+    const std::unordered_map<crypto::public_key,
+      std::unordered_map<crypto::public_key, multisig_partial_cn_key_image_msg>> &partial_ki_msgs, //[Ko : [signer : msg ]]
+    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_bases_out, //[Ko : partial Ki]
+    std::unordered_set<crypto::public_key> &onetime_addresses_with_insufficient_partial_kis_out, //[Ko]
+    std::unordered_set<crypto::public_key> &onetime_addresses_with_invalid_partial_kis_out); //[Ko]
 } //namespace multisig

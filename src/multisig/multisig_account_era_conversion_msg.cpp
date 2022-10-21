@@ -260,7 +260,8 @@ namespace multisig
     CHECK_AND_ASSERT_THROW_MES(crypto::check_signature(get_signature_msg(dualbase_proof), m_signing_pubkey, msg_signature),
       "Multisig conversion msg signature invalid.");
 
-    // save keyshares
+    // save keyshares (note: saving these after checking the signature ensures if the signature is invalid then the 
+    //   message's internal state won't be usable even if the invalid-signature exception is caught)
     m_old_keyshares = std::move(dualbase_proof.V_1);
     m_new_keyshares = std::move(dualbase_proof.V_2);
   }

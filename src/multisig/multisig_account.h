@@ -305,22 +305,19 @@ namespace multisig
   */
   std::uint32_t multisig_kex_rounds_required(const std::uint32_t num_signers, const std::uint32_t threshold);
 
-  //todo
-  // - all messages must have the same onetime address
-  // - need at least M - 1 other signers from our multisig group
-  // - verify multisig pubkey can be reproduced by summing together unique multisig keyshares from the input messages
-  // note: KI_base returned is just k^s * Hp(Ko), and does not include material related to the private view key
-  void multisig_recover_cn_keyimage_base(const multisig_account &original_account,
-    const std::vector<multisig_partial_cn_key_image_msg> &partial_ki_msgs,
-    crypto::public_key &onetime_address_out,
-    crypto::key_image &key_image_base_out);
-
-  //todo
-  // - new era != old era
-  // - need at least M - 1 other signers from our multisig group
-  // - verify old multisig pubkey can be recomputed from local keyshares + unique sent keyshares
-  // - make keyshare_origins_map with local keyshares mapped to matching recommendations from input list
-  //   - can be extended with add_signer_recommendations() later on
+  /**
+  * brief: get_multisig_account_with_new_generator_era - get a multisig account built around an account generator era
+  *     different from an existing account (i.e. migrate the old account to a different account generator era))
+  *   - Requires at least M - 1 other signers to contribute conversion messages.
+  *   - Conversion messages are needed to compute the new account's multisig group key (and prove that the new key
+  *     has the correct discrete-log equivalence with the old multisig group key), and to provide signer keyshare
+  *     recommendations to the new account so the new account can perform aggregation-style signing (more signers can
+  *     be added to the account later on with the .add_signer_recommendations() method).
+  * param: original_account - original account to migrate
+  * param: new_era - era of the new account
+  * param: conversion_msgs - account conversion messages from other signers (msgs from local signer are ignored)
+  * outparam: new_account_out - migrated account using the new era
+  */
   void get_multisig_account_with_new_generator_era(const multisig_account &original_account,
     const cryptonote::account_generator_era new_era,
     const std::vector<multisig_account_era_conversion_msg> &conversion_msgs,

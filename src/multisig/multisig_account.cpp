@@ -483,7 +483,7 @@ namespace multisig
       "conversion msgs.");
 
     // construct new multisig pubkey (new keyshares are 1:1 with old keyshares according to conversion msg invariants,
-    //   so if the old pubkey was preproduced then the new pubkey will have the expected cross-generator DL equivalence)
+    //   so if the old pubkey was reproduced then the new pubkey will have the expected cross-generator DL equivalence)
     rct::key new_multisig_pubkey{rct::identity()};
     for (const crypto::public_key &new_keyshare : new_keyshares)
       rct::addKeys(new_multisig_pubkey, new_multisig_pubkey, rct::pk2rct(new_keyshare));
@@ -500,7 +500,7 @@ namespace multisig
         rct::rct2pk(new_multisig_pubkey),
         std::move(keyshare_origins_map),
         original_account.get_kex_rounds_complete(),
-        multisig_keyset_map_memsafe_t{},  //note: only accounts that completed kex can be converted
+        multisig_keyset_map_memsafe_t{},  //note: no kex-origins map, only accounts that completed kex can be converted
         ""};
   }
   //----------------------------------------------------------------------------------------------------------------------

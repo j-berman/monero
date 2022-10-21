@@ -267,7 +267,8 @@ namespace multisig
         msg_signature),
       "Multisig cn key image msg signature invalid.");
 
-    // save keyshares
+    // save keyshares (note: saving these after checking the signature ensures if the signature is invalid then the 
+    //   message's internal state won't be usable even if the invalid-signature exception is caught)
     m_multisig_keyshares = std::move(dualbase_proof.V_1);
     m_partial_key_images = std::move(dualbase_proof.V_2);
   }

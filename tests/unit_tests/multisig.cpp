@@ -30,17 +30,22 @@
 #include "crypto/generators.h"
 #include "multisig/account_generator_era.h"
 #include "multisig/dual_base_vector_proof.h"
+#include "multisig/multisig.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_account_era_conversion_msg.h"
 #include "multisig/multisig_kex_msg.h"
 #include "multisig/multisig_partial_cn_key_image_msg.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctTypes.h"
 #include "wallet/wallet2.h"
 
 #include "gtest/gtest.h"
 
 #include <cstdint>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 static const struct
 {
@@ -344,43 +349,141 @@ static void test_multisig_signer_set_filter(const std::uint32_t num_signers, con
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
+static void test_multisig_cn_key_image_recovery(const std::uint32_t M, const std::uint32_t N)
+{
+  ASSERT_TRUE(M <= N);
+  ASSERT_TRUE(N > 0);
 
+  using namespace multisig;
+  const auto cn_era = cryptonote::account_generator_era::cryptonote;
+
+  // make M-of-N cryptonote-era multisig accounts
+  std::vector<multisig_account> accounts;
+  EXPECT_NO_THROW(make_multisig_accounts(cn_era, M, N, accounts));
+  ASSERT_TRUE(accounts.size() > 0);
+
+  // collect multisig account private spend key
+  std::unordered_set<crypto::secret_key> collected_multisig_privkeys;
+
+  for (const multisig_account &account : accounts)
+  {
+    const auto &privkeys = account.get_multisig_privkeys();
+
+    for (const crypto::secret_key &privkey : privkeys)
+      collected_multisig_privkeys.insert(privkey);
+  }
+
+  crypto::secret_key k_s{rct::rct2sk(rct::Z)};
+
+  for (const crypto::secret_key &k_s_partial : collected_multisig_privkeys)
+    sc_add(to_bytes(k_s), to_bytes(k_s), to_bytes(k_s_partial));
+
+  // santity check: multisig pubkey from private keys
+  const crypto::public_key recomputed_multisig_pubkey{rct::rct2pk(rct::scalarmultBase(rct::sk2rct(k_s)))};
+  ASSERT_TRUE(recomputed_multisig_pubkey == accounts[0].get_multisig_pubkey());
+
+  // generate random onetime addresses
+  const std::size_t num_Kos{3};
+
+  std::vector<crypto::public_key> rand_Kos;
+  rand_Kos.resize(num_Kos);
+
+  for (crypto::public_key &rand_Ko : rand_Kos)
+    rand_Ko = rct::rct2pk(rct::pkGen());
+
+  // compute expected key image bases k^s Hp(Ko)
+  std::vector<crypto::key_image> expected_KI_bases;
+  expected_KI_bases.resize(num_Kos);
+
+  for (std::size_t i{0}; i < num_Kos; ++i)
+    crypto::generate_key_image(rand_Kos[i], k_s, expected_KI_bases[i]);
+
+  // save Kos and key image bases in a map for convenience
+  std::unordered_map<crypto::public_key, crypto::public_key> expected_recovered_key_image_bases;
+
+  for (std::size_t i{0}; i < num_Kos; ++i)
+  {
+    expected_recovered_key_image_bases[rand_Kos[i]] = rct::rct2pk(rct::ki2rct(expected_KI_bases[i]));
+  }
+
+  // each account makes partial KI messages for each Ko
+  std::unordered_map<crypto::public_key,
+    std::unordered_map<crypto::public_key, multisig_partial_cn_key_image_msg>> partial_ki_msgs;
+
+  for (const multisig_account &account : accounts)
+  {
+    for (const crypto::public_key &rand_Ko : rand_Kos)
+    {
+      EXPECT_NO_THROW((partial_ki_msgs[rand_Ko][account.get_base_pubkey()] =
+        multisig_partial_cn_key_image_msg{account.get_base_privkey(), rand_Ko, account.get_multisig_privkeys()}));
+    }
+  }
+
+  // recover the key image bases
+  std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_bases;
+  std::unordered_set<crypto::public_key> onetime_addresses_with_insufficient_partial_kis;
+  std::unordered_set<crypto::public_key> onetime_addresses_with_invalid_partial_kis;
+
+  EXPECT_NO_THROW(multisig_recover_cn_keyimage_bases(accounts[0].get_signers(),
+    accounts[0].get_threshold(),
+    accounts[0].get_multisig_pubkey(),
+    partial_ki_msgs,
+    recovered_key_image_bases,
+    onetime_addresses_with_insufficient_partial_kis,
+    onetime_addresses_with_invalid_partial_kis));
+
+  // check that key image bases were recovered
+  EXPECT_TRUE(expected_recovered_key_image_bases.size() == recovered_key_image_bases.size());
+  EXPECT_TRUE(onetime_addresses_with_insufficient_partial_kis.size() == 0);
+  EXPECT_TRUE(onetime_addresses_with_invalid_partial_kis.size() == 0);
+
+  for (const auto &recovered_key_image_base : recovered_key_image_bases)
+  {
+    EXPECT_TRUE(expected_recovered_key_image_bases.find(recovered_key_image_base.first) != 
+      expected_recovered_key_image_bases.end());
+
+    EXPECT_TRUE(expected_recovered_key_image_bases.at(recovered_key_image_base.first) == 
+      recovered_key_image_base.second);
+  }
+}
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 TEST(multisig, make_1_2)
 {
   std::vector<tools::wallet2> wallets(2);
   make_wallets(wallets, 1);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, make_1_3)
 {
   std::vector<tools::wallet2> wallets(3);
   make_wallets(wallets, 1);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, make_2_2)
 {
   std::vector<tools::wallet2> wallets(2);
   make_wallets(wallets, 2);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, make_3_3)
 {
   std::vector<tools::wallet2> wallets(3);
   make_wallets(wallets, 3);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, make_2_3)
 {
   std::vector<tools::wallet2> wallets(3);
   make_wallets(wallets, 2);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, make_2_4)
 {
   std::vector<tools::wallet2> wallets(4);
   make_wallets(wallets, 2);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, multisig_kex_msg)
 {
   using namespace multisig;
@@ -476,7 +579,7 @@ TEST(multisig, multisig_kex_msg)
   EXPECT_NO_THROW(test_recovery(get_kex_msg_version(cryptonote::account_generator_era::cryptonote)));
   EXPECT_NO_THROW(test_recovery(get_kex_msg_version(cryptonote::account_generator_era::seraphis)));
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, multisig_signer_set_filter)
 {
   using namespace multisig;
@@ -546,7 +649,7 @@ TEST(multisig, multisig_signer_set_filter)
   EXPECT_TRUE(filtered_signers[0] == signer_list[1]);
   EXPECT_TRUE(filtered_signers[1] == signer_list[2]);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 //todo: move to better-suited file?
 TEST(multisig, dual_base_vector_proof)
 {
@@ -587,7 +690,7 @@ TEST(multisig, dual_base_vector_proof)
   EXPECT_NO_THROW(proof = crypto::dual_base_vector_prove(rct::zero(), gen_U, gen_U, make_keys(3)));
   EXPECT_TRUE(crypto::dual_base_vector_verify(proof, gen_U, gen_U));
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, multisig_partial_cn_ki_msg)
 {
   using namespace multisig;
@@ -658,7 +761,7 @@ TEST(multisig, multisig_partial_cn_ki_msg)
   // test recovery
   EXPECT_NO_THROW(test_recovery(rand_Ko, KI_base));
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, multisig_conversion_msg)
 {
   using namespace multisig;
@@ -738,7 +841,15 @@ TEST(multisig, multisig_conversion_msg)
   EXPECT_NO_THROW(test_recovery(cryptonote::account_generator_era::seraphis, cryptonote::account_generator_era::cryptonote));
   EXPECT_NO_THROW(test_recovery(cryptonote::account_generator_era::seraphis, cryptonote::account_generator_era::seraphis));
 }
-
+//-------------------------------------------------------------------------------------------------------------------
+TEST(multisig, multisig_cn_key_image_recovery)
+{
+  test_multisig_cn_key_image_recovery(1, 2);
+  test_multisig_cn_key_image_recovery(2, 2);
+  test_multisig_cn_key_image_recovery(2, 3);
+  test_multisig_cn_key_image_recovery(2, 4);
+}
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, multisig_account_conversions)
 {
   std::vector<multisig::multisig_account> accounts;
@@ -800,7 +911,7 @@ TEST(multisig, multisig_account_conversions)
   EXPECT_NO_THROW(get_multisig_account_with_new_generator_era(accounts[0], sp_era, conversion_msgs, converted_account));
   EXPECT_EQ(converted_account.get_era(), sp_era);
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 TEST(multisig, multisig_signer_recommendations_recovery)
 {
   std::vector<multisig::multisig_account> accounts;
@@ -849,3 +960,4 @@ TEST(multisig, multisig_signer_recommendations_recovery)
   available_signers = accounts[0].get_signers_available_for_aggregation_signing();
   EXPECT_TRUE(available_signers == accounts[0].get_signers());
 }
+//-------------------------------------------------------------------------------------------------------------------

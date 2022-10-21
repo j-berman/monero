@@ -32,7 +32,9 @@
 #include "cryptonote_config.h"
 #include "include_base_utils.h"
 #include "multisig.h"
+#include "multisig_partial_cn_key_image_msg.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctTypes.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -44,6 +46,106 @@
 
 namespace multisig
 {
+  //----------------------------------------------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------------------------------------------------
+  static bool try_process_partial_ki_msg(const std::vector<crypto::public_key> &multisig_signers,
+    const crypto::public_key &expected_onetime_address,
+    const crypto::public_key &expected_msg_signer,
+    const multisig_partial_cn_key_image_msg &partial_ki_msg,
+    std::unordered_set<crypto::public_key> &collected_multisig_keyshares_inout,
+    std::unordered_set<crypto::public_key> &collected_partial_key_images_inout)
+  {
+    // ignore messages from signers outside the designated list
+    if (std::find(multisig_signers.begin(), multisig_signers.end(), expected_msg_signer) == multisig_signers.end())
+      return false;
+
+    // ignore message with unexpected signer (probably an upstream mapping bug)
+    if (!(expected_msg_signer == partial_ki_msg.get_signing_pubkey()))
+      return false;
+
+    // ignore messages with unexpected onetime address (probably an upstream mapping bug)
+    if (!(expected_onetime_address == partial_ki_msg.get_onetime_address()))
+      return false;
+
+    // save the multisig keyshares
+    const auto &msg_multisig_keyshares = partial_ki_msg.get_multisig_keyshares();
+
+    for (const crypto::public_key &multisig_keyshare : msg_multisig_keyshares)
+      collected_multisig_keyshares_inout.insert(multisig_keyshare);
+
+    // save the partial key images
+    const auto &msg_partial_kis = partial_ki_msg.get_partial_key_images();
+
+    for (const crypto::public_key &partial_ki : msg_partial_kis)
+      collected_partial_key_images_inout.insert(partial_ki);
+
+    return true;
+  }
+  //----------------------------------------------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------------------------------------------------
+  static bool try_process_partial_ki_msgs(const std::vector<crypto::public_key> &multisig_signers,
+    const std::uint32_t multisig_threshold,
+    const crypto::public_key &multisig_base_spend_key,
+    const crypto::public_key &expected_onetime_address,
+    const std::unordered_map<crypto::public_key, multisig_partial_cn_key_image_msg> &partial_ki_msgs, //[signer : msg ]]
+    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_bases_inout, //[Ko : partial Ki]
+    std::unordered_set<crypto::public_key> &onetime_addresses_with_insufficient_partial_kis_inout, //[Ko]
+    std::unordered_set<crypto::public_key> &onetime_addresses_with_invalid_partial_kis_inout) //[Ko]
+  {
+    CHECK_AND_ASSERT_THROW_MES(multisig_threshold <= multisig_signers.size(),
+      "multisig recover cn key image bases: threshold is > the number of signers.");
+
+    // process the partial KI messages (ignore messages that for some reason have an unexpected onetime address)
+    std::unordered_set<crypto::public_key> collected_multisig_keyshares;
+    std::unordered_set<crypto::public_key> collected_partial_key_images;
+    std::uint32_t num_valid_messages_counted{0};
+
+    for (const auto &partial_ki_msg : partial_ki_msgs)
+    {
+      if (!try_process_partial_ki_msg(multisig_signers,
+          expected_onetime_address,
+          partial_ki_msg.first,
+          partial_ki_msg.second,
+          collected_multisig_keyshares,
+          collected_partial_key_images))
+        continue;
+
+      ++num_valid_messages_counted;
+    }
+
+    // partial ki messages are insufficient if there are not provided by at least 'threshold' signers
+    if (num_valid_messages_counted < multisig_threshold)
+    {
+      onetime_addresses_with_insufficient_partial_kis_inout.insert(expected_onetime_address);
+      return false;
+    }
+
+    // partial ki messages are invalid if the multisig base spend key can't be reproduced from the partial KI messages
+    // - the entire purpose of the partial KI messages (which contain dual-base vector proofs) is to prove that the
+    //   constructed key image base has a proper discrete-log relation with the multisig group's base spend key k^s G
+    rct::key nominal_base_spendkey{rct::identity()};
+
+    for (const crypto::public_key &multisig_keyshare : collected_multisig_keyshares)
+      rct::addKeys(nominal_base_spendkey, nominal_base_spendkey, rct::pk2rct(multisig_keyshare));
+
+    if (!(nominal_base_spendkey == rct::pk2rct(multisig_base_spend_key)))
+    {
+      onetime_addresses_with_invalid_partial_kis_inout.insert(expected_onetime_address);
+      return false;
+    }
+
+    // compute the constructed key image base
+    rct::key key_image_base{rct::identity()};
+
+    for (const crypto::public_key &partial_key_image : collected_partial_key_images)
+      rct::addKeys(key_image_base, key_image_base, rct::pk2rct(partial_key_image));
+
+    // save it
+    recovered_key_image_bases_inout[expected_onetime_address] = rct::rct2pk(key_image_base);
+
+    return true;
+  }
+  //----------------------------------------------------------------------------------------------------------------------
   //----------------------------------------------------------------------------------------------------------------------
   crypto::secret_key get_multisig_blinded_secret_key(const crypto::secret_key &key)
   {
@@ -135,6 +237,32 @@ namespace multisig
     //   then 'ki' will not be complete
 
     return true;
+  }
+  //----------------------------------------------------------------------------------------------------------------------
+  void multisig_recover_cn_keyimage_bases(const std::vector<crypto::public_key> &multisig_signers,
+    const std::uint32_t multisig_threshold,
+    const crypto::public_key &multisig_base_spend_key,
+    const std::unordered_map<crypto::public_key,
+      std::unordered_map<crypto::public_key, multisig_partial_cn_key_image_msg>> &partial_ki_msgs, //[Ko : [signer : msg ]]
+    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_bases_out, //[Ko : partial Ki]
+    std::unordered_set<crypto::public_key> &onetime_addresses_with_insufficient_partial_kis_out, //[Ko]
+    std::unordered_set<crypto::public_key> &onetime_addresses_with_invalid_partial_kis_out) //[Ko]
+  {
+    recovered_key_image_bases_out.clear();
+    onetime_addresses_with_insufficient_partial_kis_out.clear();
+    onetime_addresses_with_invalid_partial_kis_out.clear();
+
+    for (const auto &partial_ki_set : partial_ki_msgs)
+    {
+      try_process_partial_ki_msgs(multisig_signers,
+        multisig_threshold,
+        multisig_base_spend_key,
+        partial_ki_set.first,
+        partial_ki_set.second,
+        recovered_key_image_bases_out,
+        onetime_addresses_with_insufficient_partial_kis_out,
+        onetime_addresses_with_invalid_partial_kis_out);
+    }
   }
   //----------------------------------------------------------------------------------------------------------------------
 } //namespace multisig
