@@ -31,6 +31,7 @@ extern "C"
 {
 #include "crypto/crypto-ops.h"
 }
+#include "cryptonote_basic/subaddress_index.h"
 #include "device/device.hpp"
 #include "misc_language.h"
 #include "ringct/rctOps.h"

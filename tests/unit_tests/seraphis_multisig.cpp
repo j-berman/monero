@@ -29,9 +29,12 @@
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
 #include "crypto/generators.h"
+#include "cryptonote_basic/subaddress_index.h"
 #include "multisig/account_generator_era.h"
+#include "multisig/multisig.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_account_era_conversion_msg.h"
+#include "multisig/multisig_partial_cn_key_image_msg.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
@@ -39,6 +42,8 @@
 #include "seraphis/jamtis_destination.h"
 #include "seraphis/jamtis_payment_proposal.h"
 #include "seraphis/jamtis_support_types.h"
+#include "seraphis/legacy_core_utils.h"
+#include "seraphis/legacy_enote_utils.h"
 #include "seraphis/mock_ledger_context.h"
 #include "seraphis/sp_composition_proof.h"
 #include "seraphis/sp_core_enote_utils.h"
@@ -74,6 +79,8 @@
 
 #include <memory>
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
 
 
 //-------------------------------------------------------------------------------------------------------------------
@@ -89,7 +96,7 @@ static void make_multisig_jamtis_mock_keys(const multisig::multisig_account &acc
     using namespace sp;
     using namespace jamtis;
 
-    keys_out.k_m = rct::rct2sk(rct::Z);
+    keys_out.k_m = rct::rct2sk(rct::Z); //master key is not known in multisig
     keys_out.k_vb = account.get_common_privkey();
     make_jamtis_unlockamounts_key(keys_out.k_vb, keys_out.xk_ua);
     make_jamtis_findreceived_key(keys_out.k_vb, keys_out.xk_fr);
@@ -308,7 +315,56 @@ static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amou
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void send_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
+static void send_legacy_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
+    const rct::key &destination_subaddr_spend_pubkey,
+    const rct::key &destination_subaddr_view_pubkey,
+    sp::MockLedgerContext &ledger_context_inout)
+{
+    using namespace sp;
+
+    // prepare mock coinbase enotes
+    std::vector<LegacyEnoteVariant> coinbase_enotes;
+    std::vector<rct::key> collected_enote_ephemeral_pubkeys;
+    TxExtra tx_extra;
+    coinbase_enotes.reserve(coinbase_amounts.size());
+    coinbase_enotes.reserve(coinbase_amounts.size());
+
+    LegacyEnoteV4 enote_temp;
+
+    for (std::size_t amount_index{0}; amount_index < coinbase_amounts.size(); ++amount_index)
+    {
+        // legacy enote ephemeral pubkey
+        const crypto::secret_key enote_ephemeral_privkey{rct::rct2sk(rct::skGen())};
+        collected_enote_ephemeral_pubkeys.emplace_back(
+                rct::scalarmultKey(destination_subaddr_spend_pubkey, rct::sk2rct(enote_ephemeral_privkey))
+            );
+
+        // make legacy coinbase enote
+        ASSERT_NO_THROW(make_legacy_enote_v4(destination_subaddr_spend_pubkey,
+            destination_subaddr_view_pubkey,
+            coinbase_amounts[amount_index],
+            amount_index,
+            enote_ephemeral_privkey,
+            enote_temp));
+
+        coinbase_enotes.emplace_back(enote_temp);
+    }
+
+    // set tx extra
+    ASSERT_TRUE(try_append_legacy_enote_ephemeral_pubkeys_to_tx_extra(collected_enote_ephemeral_pubkeys, tx_extra));
+
+    // commit coinbase enotes as new block
+    ASSERT_NO_THROW(ledger_context_inout.add_legacy_coinbase(
+            rct::pkGen(),
+            0,
+            std::move(tx_extra),
+            {},
+            std::move(coinbase_enotes)
+        ));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void send_sp_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
     const sp::jamtis::JamtisDestinationV1 &user_address,
     sp::MockLedgerContext &ledger_context_inout)
 {
@@ -345,6 +401,147 @@ static void send_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &co
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void refresh_user_enote_store_legacy_intermediate(const rct::key &legacy_base_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
+    const bool key_image_refresh_mode,
+    const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
+    const sp::MockLedgerContext &ledger_context,
+    sp::SpEnoteStoreMockV1 &user_enote_store_inout)
+{
+    using namespace sp;
+
+    const EnoteFindingContextLedgerMockLegacy enote_finding_context{
+            ledger_context,
+            legacy_base_spend_pubkey,
+            legacy_subaddress_map,
+            key_image_refresh_mode
+                ? boost::optional<crypto::secret_key>{}
+                : legacy_view_privkey
+        };
+    EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
+    EnoteStoreUpdaterLedgerMockLegacyIntermediate enote_store_updater{
+            legacy_base_spend_pubkey,
+            legacy_view_privkey,
+            key_image_refresh_mode,
+            user_enote_store_inout
+        };
+
+    ASSERT_NO_THROW(refresh_enote_store_ledger(refresh_config, enote_scanning_context, enote_store_updater));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig::multisig_account> &accounts,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
+    const sp::MockLedgerContext &ledger_context,
+    sp::SpEnoteStoreMockV1 &enote_store_inout)
+{
+    using namespace sp;
+
+    ASSERT_TRUE(accounts.size() > 0);
+
+    // 1. legacy view-only scan
+    refresh_user_enote_store_legacy_intermediate(rct::pk2rct(accounts[0].get_multisig_pubkey()),
+        legacy_subaddress_map,
+        accounts[0].get_common_privkey(),
+        false,
+        refresh_config,
+        ledger_context,
+        enote_store_inout);
+
+    // 2. prepare key image import cycle
+    const std::uint64_t intermediate_height_pre_import_cycle{
+            enote_store_inout.get_top_legacy_partialscanned_block_height()
+        };
+
+    // 3. export intermediate onetime addresses that need key images
+    const auto &legacy_intermediate_records = enote_store_inout.get_legacy_intermediate_records();
+
+    // 4. get partial key image messages for the intermediate records' onetime addresses from all multisig group members
+    std::unordered_map<crypto::public_key,
+        std::unordered_map<crypto::public_key, multisig::multisig_partial_cn_key_image_msg>> partial_ki_msgs;
+    std::unordered_map<crypto::public_key, crypto::secret_key> saved_view_key_components;
+
+    for (const multisig::multisig_account &account : accounts)
+    {
+        for (const auto &intermediate_record : legacy_intermediate_records)
+        {
+            rct::key onetime_address_temp;
+            intermediate_record.second.get_onetime_address(onetime_address_temp);
+
+            EXPECT_NO_THROW((partial_ki_msgs[rct::rct2pk(onetime_address_temp)][account.get_base_pubkey()] =
+                    multisig::multisig_partial_cn_key_image_msg{
+                            account.get_base_privkey(),
+                            rct::rct2pk(onetime_address_temp),
+                            account.get_multisig_privkeys()
+                        }
+                ));
+
+            saved_view_key_components[rct::rct2pk(onetime_address_temp)] =
+                intermediate_record.second.m_record.m_enote_view_privkey;
+        }
+    }
+
+    // 5. process the messages
+    std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_bases;
+    std::unordered_set<crypto::public_key> onetime_addresses_with_insufficient_partial_kis;
+    std::unordered_set<crypto::public_key> onetime_addresses_with_invalid_partial_kis;
+
+    EXPECT_NO_THROW(multisig::multisig_recover_cn_keyimage_bases(accounts[0].get_signers(),
+        accounts[0].get_threshold(),
+        accounts[0].get_multisig_pubkey(),
+        partial_ki_msgs,
+        recovered_key_image_bases,
+        onetime_addresses_with_insufficient_partial_kis,
+        onetime_addresses_with_invalid_partial_kis));
+
+    EXPECT_TRUE(onetime_addresses_with_insufficient_partial_kis.size() == 0);
+    EXPECT_TRUE(onetime_addresses_with_invalid_partial_kis.size() == 0);
+
+    // 6. add the view-key component to each key image base
+    std::unordered_map<crypto::public_key, crypto::key_image> recovered_key_images;
+
+    for (const auto &recovered_key_image_base : recovered_key_image_bases)
+    {
+        EXPECT_TRUE(saved_view_key_components.find(recovered_key_image_base.first) != saved_view_key_components.end());
+
+        // enote view privkey = [address: Hn(r K^v, t)] [subaddress: Hn(r K^{v,i}, t) + Hn(k^v, i)]
+        // KI_view_key_component = enote_view_privkey * Hp(Ko)
+        crypto::key_image KI_view_key_component;
+        crypto::generate_key_image(recovered_key_image_base.first,
+            saved_view_key_components.at(recovered_key_image_base.first),
+            KI_view_key_component);
+
+        // KI = enote_view_privkey * Hp(Ko) + k^s * Hp(Ko)
+        recovered_key_images[recovered_key_image_base.first] =
+            rct::rct2ki(rct::addKeys(rct::ki2rct(KI_view_key_component), rct::pk2rct(recovered_key_image_base.second)));
+    }
+
+    // 7. import acquired key images (will fail if the onetime addresses and key images don't line up)
+    for (const auto &recovered_key_image : recovered_key_images)
+    {
+        ASSERT_NO_THROW(enote_store_inout.import_legacy_key_image(recovered_key_image.second,
+            rct::pk2rct(recovered_key_image.first)));
+    }
+
+    // 8. legacy key-image-refresh scan
+    refresh_user_enote_store_legacy_intermediate(rct::pk2rct(accounts[0].get_multisig_pubkey()),
+        legacy_subaddress_map,
+        accounts[0].get_common_privkey(),
+        true,  //true = legacy key image refresh mode
+        refresh_config,
+        ledger_context,
+        enote_store_inout);
+
+    // 9. check results of key image refresh scan
+    ASSERT_TRUE(enote_store_inout.get_legacy_intermediate_records().size() == 0);
+
+    // 10. update the legacy fullscan height to account for a complete view-only scan cycle with key image recovery
+    ASSERT_NO_THROW(enote_store_inout.set_last_legacy_fullscan_height(intermediate_height_pre_import_cycle));
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void refresh_user_enote_store(const sp::jamtis::jamtis_mock_keys &user_keys,
     const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
     const sp::MockLedgerContext &ledger_context,
@@ -365,7 +562,7 @@ static void refresh_user_enote_store(const sp::jamtis::jamtis_mock_keys &user_ke
 static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     const std::uint32_t num_signers,
     const std::vector<std::uint32_t> &requested_signers,
-    const std::vector<rct::xmr_amount> &in_amounts,
+    const std::vector<rct::xmr_amount> &sp_in_amounts,
     const std::vector<rct::xmr_amount> &out_amounts_normal,
     const std::vector<rct::xmr_amount> &out_amounts_selfsend,
     const sp::DiscretizedFee &fee,
@@ -401,7 +598,6 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
             .m_num_bin_members = num_bin_members
         };
 
-
     // global
     MockLedgerContext ledger_context{0, 0};
 
@@ -412,13 +608,19 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 1) setup multisig accounts
 
     // a) make accounts
-    std::vector<multisig::multisig_account> accounts;
-    ASSERT_NO_THROW(make_multisig_accounts(cryptonote::account_generator_era::seraphis, threshold, num_signers, accounts));
-    ASSERT_TRUE(accounts.size() == num_signers);
+    std::vector<multisig::multisig_account> legacy_accounts;
+    ASSERT_NO_THROW(make_multisig_accounts(cryptonote::account_generator_era::cryptonote,
+        threshold,
+        num_signers,
+        legacy_accounts));
+    std::vector<multisig::multisig_account> seraphis_accounts{legacy_accounts};
+    ASSERT_NO_THROW(convert_multisig_accounts(cryptonote::account_generator_era::seraphis, seraphis_accounts));
+    ASSERT_TRUE(legacy_accounts.size() == num_signers);
+    ASSERT_TRUE(seraphis_accounts.size() == num_signers);
 
-    // b) get shared multisig wallet keys
-    jamtis_mock_keys shared_keys;
-    ASSERT_NO_THROW(make_multisig_jamtis_mock_keys(accounts[0], shared_keys));
+    // b) get shared seraphis multisig wallet keys
+    jamtis_mock_keys shared_sp_keys;
+    ASSERT_NO_THROW(make_multisig_jamtis_mock_keys(seraphis_accounts[0], shared_sp_keys));
 
     // c) make an enote store for the multisig group
     SpEnoteStoreMockV1 enote_store{0, 0, 0};
@@ -426,36 +628,71 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     /// 2) fund the multisig address
 
-    // a) make a user address to receive funds
+    // a) make a legacy user address to receive funds
+    rct::key legacy_subaddr_spendkey;
+    rct::key legacy_subaddr_viewkey;
+    cryptonote::subaddress_index legacy_subaddr_index;
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
+
+    gen_legacy_subaddress(rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+        legacy_accounts[0].get_common_privkey(),
+        legacy_subaddr_spendkey,
+        legacy_subaddr_viewkey,
+        legacy_subaddr_index);
+
+    legacy_subaddress_map[legacy_subaddr_spendkey] = legacy_subaddr_index;
+
+    // b) make a seraphis user address to receive funds
     address_index_t j;
     j.gen();
-    JamtisDestinationV1 user_address;
+    JamtisDestinationV1 sp_user_address;
 
-    ASSERT_NO_THROW(make_jamtis_destination_v1(shared_keys.K_1_base,
-        shared_keys.xK_ua,
-        shared_keys.xK_fr,
-        shared_keys.s_ga,
+    ASSERT_NO_THROW(make_jamtis_destination_v1(shared_sp_keys.K_1_base,
+        shared_sp_keys.xK_ua,
+        shared_sp_keys.xK_fr,
+        shared_sp_keys.s_ga,
         j,
-        user_address));
+        sp_user_address));
 
-    // b) send coinbase enotes to the address, padded so there are enough for membership proofs
-    std::vector<rct::xmr_amount> in_amounts_padded{in_amounts};
+    // c) send legacy coinbase enotes to the address, padded so there are enough for legacy ring signatures
+    /*
+    std::vector<rct::xmr_amount> legacy_in_amounts_padded{legacy_in_amounts};
 
-    if (in_amounts_padded.size() < compute_bin_width(bin_radius))
-        in_amounts_padded.resize(compute_bin_width(bin_radius), 0);
+    if (legacy_in_amounts_padded.size() < legacy_ring_size)
+        legacy_in_amounts_padded.resize(legacy_ring_size, 0);
 
-    send_coinbase_amounts_to_user(in_amounts_padded, user_address, ledger_context);
+    send_legacy_coinbase_amounts_to_user(legacy_in_amounts_padded,
+        legacy_subaddr_spendkey,
+        legacy_subaddr_viewkey,
+        ledger_context);
+    */
 
-    // c) recover balance
-    refresh_user_enote_store(shared_keys, refresh_config, ledger_context, enote_store);
+    // d) send coinbase enotes to the address, padded so there are enough for seraphis membership proofs
+    std::vector<rct::xmr_amount> sp_in_amounts_padded{sp_in_amounts};
 
-    // d) compute expected received amount
+    if (sp_in_amounts_padded.size() < compute_bin_width(bin_radius))
+        sp_in_amounts_padded.resize(compute_bin_width(bin_radius), 0);
+
+    send_sp_coinbase_amounts_to_user(sp_in_amounts_padded, sp_user_address, ledger_context);
+
+    // e) recover balance
+    refresh_user_enote_store_legacy_multisig(legacy_accounts,
+        legacy_subaddress_map,
+        refresh_config,
+        ledger_context,
+        enote_store);
+    refresh_user_enote_store(shared_sp_keys, refresh_config, ledger_context, enote_store);
+
+    // f) compute expected received amount
     boost::multiprecision::uint128_t total_input_amount{0};
 
-    for (const rct::xmr_amount in_amount : in_amounts_padded)
-        total_input_amount += in_amount;
+    //for (const rct::xmr_amount legacy_in_amount : legacy_in_amounts_padded)
+        //total_input_amount += legacy_in_amount;
 
-    // e) balance check
+    for (const rct::xmr_amount sp_in_amount : sp_in_amounts_padded)
+        total_input_amount += sp_in_amount;
+
+    // g) balance check
     ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == total_input_amount);
 
@@ -482,7 +719,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     {
         selfsend_payment_proposals.emplace_back(
                 JamtisPaymentProposalSelfSendV1{
-                    .m_destination = user_address,
+                    .m_destination = sp_user_address,
                     .m_amount = out_amount,
                     .m_type = JamtisSelfSendType::SELF_SPEND,
                     .m_enote_ephemeral_privkey = crypto::x25519_secret_key_gen(),
@@ -495,15 +732,15 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     std::vector<crypto::public_key> requested_signers_ids;
     requested_signers_ids.reserve(requested_signers.size());
 
-    for (std::size_t signer_index{0}; signer_index < accounts.size(); ++signer_index)
+    for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
-            requested_signers_ids.emplace_back(accounts[signer_index].get_base_pubkey());
+            requested_signers_ids.emplace_back(seraphis_accounts[signer_index].get_base_pubkey());
     }
 
     multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers;
     multisig::multisig_signers_to_filter(requested_signers_ids,
-        accounts[0].get_signers(),
+        seraphis_accounts[0].get_signers(),
         aggregate_filter_of_requested_multisig_signers);
 
     // c) make multisig tx proposal
@@ -512,8 +749,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     SpMultisigTxProposalV1 multisig_tx_proposal;
     std::unordered_map<crypto::key_image, std::uint64_t> input_ledger_mappings;
-    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_tx_proposal_for_transfer_v1(user_address,
-        user_address,
+    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_tx_proposal_for_transfer_v1(sp_user_address,
+        sp_user_address,
         input_selector,
         tx_fee_calculator,
         tx_fee_per_weight,
@@ -523,8 +760,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         TxExtra{},
-        shared_keys.K_1_base,
-        shared_keys.k_vb,
+        shared_sp_keys.K_1_base,
+        shared_sp_keys.k_vb,
         multisig_tx_proposal,
         input_ledger_mappings)));
 
@@ -534,35 +771,35 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 4) get inits from all requested signers
     std::vector<SpMultisigNonceRecord> signer_nonce_records;
     std::vector<SpMultisigInputInitSetV1> input_inits;
-    input_inits.reserve(accounts.size());
-    //signer_nonce_records.reserve(accounts.size());  //nonce records are non-copyable, so .reserve() doesn't work
+    input_inits.reserve(seraphis_accounts.size());
+    //signer_nonce_records.reserve(seraphis_accounts.size());  //nonce records are non-copyable, so .reserve() doesn't work
 
-    for (std::size_t signer_index{0}; signer_index < accounts.size(); ++signer_index)
+    for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
         input_inits.emplace_back();
         signer_nonce_records.emplace_back();
 
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
-            ASSERT_NO_THROW(make_v1_multisig_input_init_set_v1(accounts[signer_index].get_base_pubkey(),
-                accounts[signer_index].get_threshold(),
-                accounts[signer_index].get_signers(),
+            ASSERT_NO_THROW(make_v1_multisig_input_init_set_v1(seraphis_accounts[signer_index].get_base_pubkey(),
+                seraphis_accounts[signer_index].get_threshold(),
+                seraphis_accounts[signer_index].get_signers(),
                 multisig_tx_proposal,
                 version_string,
-                shared_keys.K_1_base,
-                shared_keys.k_vb,
+                shared_sp_keys.K_1_base,
+                shared_sp_keys.k_vb,
                 signer_nonce_records.back(),
                 input_inits.back()));
         }
         else
         {
-            ASSERT_ANY_THROW(make_v1_multisig_input_init_set_v1(accounts[signer_index].get_base_pubkey(),
-                accounts[signer_index].get_threshold(),
-                accounts[signer_index].get_signers(),
+            ASSERT_ANY_THROW(make_v1_multisig_input_init_set_v1(seraphis_accounts[signer_index].get_base_pubkey(),
+                seraphis_accounts[signer_index].get_threshold(),
+                seraphis_accounts[signer_index].get_signers(),
                 multisig_tx_proposal,
                 version_string,
-                shared_keys.K_1_base,
-                shared_keys.k_vb,
+                shared_sp_keys.K_1_base,
+                shared_sp_keys.k_vb,
                 signer_nonce_records.back(),
                 input_inits.back()));
         }
@@ -572,27 +809,27 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 5) get partial signatures from all requested signers
     std::unordered_map<crypto::public_key, std::vector<SpMultisigInputPartialSigSetV1>> input_partial_sigs_per_signer;
 
-    for (std::size_t signer_index{0}; signer_index < accounts.size(); ++signer_index)
+    for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
-            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_input_partial_sig_sets_v1(accounts[signer_index],
+            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_input_partial_sig_sets_v1(seraphis_accounts[signer_index],
                 multisig_tx_proposal,
                 version_string,
                 input_inits[signer_index],
                 input_inits,  //don't need to remove the local init (will be filtered out internally)
                 signer_nonce_records[signer_index],
-                input_partial_sigs_per_signer[accounts[signer_index].get_base_pubkey()])));
+                input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])));
         }
         else
         {
-            ASSERT_ANY_THROW(try_make_v1_multisig_input_partial_sig_sets_v1(accounts[signer_index],
+            ASSERT_ANY_THROW(try_make_v1_multisig_input_partial_sig_sets_v1(seraphis_accounts[signer_index],
                 multisig_tx_proposal,
                 version_string,
                 input_inits[signer_index],
                 input_inits,  //don't need to remove the local init (will be filtered out internally)
                 signer_nonce_records[signer_index],
-                input_partial_sigs_per_signer[accounts[signer_index].get_base_pubkey()]));
+                input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()]));
         }
     }
 
@@ -605,16 +842,16 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     ASSERT_NO_THROW(
             ASSERT_TRUE(try_make_v1_partial_inputs_v1(multisig_tx_proposal,
-                accounts[0].get_signers(),
-                shared_keys.K_1_base,
-                shared_keys.k_vb,
+                seraphis_accounts[0].get_signers(),
+                shared_sp_keys.K_1_base,
+                shared_sp_keys.k_vb,
                 input_partial_sigs_per_signer,
                 partial_inputs))
         );
 
     // b) build partial tx
     SpTxProposalV1 tx_proposal;
-    multisig_tx_proposal.get_v1_tx_proposal_v1(shared_keys.K_1_base, shared_keys.k_vb, tx_proposal);
+    multisig_tx_proposal.get_v1_tx_proposal_v1(shared_sp_keys.K_1_base, shared_sp_keys.k_vb, tx_proposal);
 
     SpPartialTxV1 partial_tx;
     ASSERT_NO_THROW(make_v1_partial_tx_v1(tx_proposal,
@@ -622,8 +859,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         std::move(partial_inputs),
         version_string,
         rct::key{},  //todo: legacy
-        shared_keys.K_1_base,
-        shared_keys.k_vb,
+        shared_sp_keys.K_1_base,
+        shared_sp_keys.k_vb,
         partial_tx));
 
     // c. prepare for membership proofs
@@ -666,7 +903,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 7) scan outputs for post-tx balance check
 
     // a) refresh enote store
-    refresh_user_enote_store(shared_keys, refresh_config, ledger_context, enote_store);
+    refresh_user_enote_store(shared_sp_keys, refresh_config, ledger_context, enote_store);
 
     // b) compute expected spent amount
     boost::multiprecision::uint128_t total_spent_amount{0};

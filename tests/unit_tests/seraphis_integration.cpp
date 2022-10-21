@@ -167,7 +167,7 @@ static void send_legacy_coinbase_amounts_to_user(const std::vector<rct::xmr_amou
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void send_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
+static void send_sp_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> &coinbase_amounts,
     const sp::jamtis::JamtisDestinationV1 &user_address,
     sp::MockLedgerContext &ledger_context_inout)
 {
@@ -434,7 +434,7 @@ TEST(seraphis_integration, txtype_squashed_v1)
     JamtisDestinationV1 fake_destination;
     fake_destination.gen();
 
-    send_coinbase_amounts_to_user(fake_sp_enote_amounts, fake_destination, ledger_context);
+    send_sp_coinbase_amounts_to_user(fake_sp_enote_amounts, fake_destination, ledger_context);
 
 
     /// make two users
@@ -483,7 +483,7 @@ TEST(seraphis_integration, txtype_squashed_v1)
             legacy_subaddr_viewkey_A,
             ledger_context
         );
-    send_coinbase_amounts_to_user({1000000, 1000000, 1000000, 1000000}, destination_A, ledger_context);
+    send_sp_coinbase_amounts_to_user({1000000, 1000000, 1000000, 1000000}, destination_A, ledger_context);
 
 
     /// send funds back and forth between users

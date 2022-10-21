@@ -402,9 +402,7 @@ static void test_multisig_cn_key_image_recovery(const std::uint32_t M, const std
   std::unordered_map<crypto::public_key, crypto::public_key> expected_recovered_key_image_bases;
 
   for (std::size_t i{0}; i < num_Kos; ++i)
-  {
     expected_recovered_key_image_bases[rand_Kos[i]] = rct::rct2pk(rct::ki2rct(expected_KI_bases[i]));
-  }
 
   // each account makes partial KI messages for each Ko
   std::unordered_map<crypto::public_key,

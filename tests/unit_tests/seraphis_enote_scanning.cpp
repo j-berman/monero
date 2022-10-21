@@ -205,7 +205,7 @@ static void convert_outlay_to_payment_proposal(const rct::xmr_amount outlay_amou
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void add_coinbase_enotes_for_user(const rct::key &mock_input_context,
+static void add_sp_coinbase_enotes_for_user(const rct::key &mock_input_context,
     const std::vector<rct::xmr_amount> &coinbase_amounts,
     const sp::jamtis::JamtisDestinationV1 &user_address,
     std::vector<sp::SpEnoteV1> &coinbase_enotes_inout,
@@ -237,7 +237,7 @@ static void add_coinbase_enotes_for_user(const rct::key &mock_input_context,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void send_coinbase_amounts_to_users(const std::vector<std::vector<rct::xmr_amount>> &coinbase_amounts_per_user,
+static void send_sp_coinbase_amounts_to_users(const std::vector<std::vector<rct::xmr_amount>> &coinbase_amounts_per_user,
     const std::vector<sp::jamtis::JamtisDestinationV1> &user_addresses,
     sp::MockLedgerContext &ledger_context_inout)
 {
@@ -253,7 +253,7 @@ static void send_coinbase_amounts_to_users(const std::vector<std::vector<rct::xm
 
     for (std::size_t user_index{0}; user_index < user_addresses.size(); ++user_index)
     {
-        add_coinbase_enotes_for_user(mock_input_context,
+        add_sp_coinbase_enotes_for_user(mock_input_context,
             coinbase_amounts_per_user[user_index],
             user_addresses[user_index],
             coinbase_enotes,
@@ -677,7 +677,7 @@ TEST(seraphis_enote_scanning, simple_ledger_1)
     // 1. one coinbase to user
     MockLedgerContext ledger_context{0, 0};
     SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
-    send_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -718,7 +718,7 @@ TEST(seraphis_enote_scanning, simple_ledger_2)
     // 2. two coinbase to user (one coinbase tx)
     MockLedgerContext ledger_context{0, 0};
     SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
-    send_coinbase_amounts_to_users({{1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -760,7 +760,7 @@ TEST(seraphis_enote_scanning, simple_ledger_3)
     MockLedgerContext ledger_context{0, 0};
     SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
-    send_coinbase_amounts_to_users({{1}, {2}}, {destination_A, destination_B}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1}, {2}}, {destination_A, destination_B}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     refresh_user_enote_store(user_keys_B, refresh_config, ledger_context, enote_store_B);
 
@@ -806,7 +806,7 @@ TEST(seraphis_enote_scanning, simple_ledger_4)
     // 4. two coinbase to user, search between each send (two coinbase txs i.e. two blocks)
     MockLedgerContext ledger_context{0, 0};
     SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
-    send_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -814,7 +814,7 @@ TEST(seraphis_enote_scanning, simple_ledger_4)
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 1);
 
-    send_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -861,9 +861,9 @@ TEST(seraphis_enote_scanning, simple_ledger_5)
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 0);
 
-    send_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
-    send_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
-    send_coinbase_amounts_to_users({{4}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{4}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -879,7 +879,7 @@ TEST(seraphis_enote_scanning, simple_ledger_5)
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 1);
 
-    send_coinbase_amounts_to_users({{8}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{8}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -928,9 +928,9 @@ TEST(seraphis_enote_scanning, simple_ledger_6)
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 0);
 
-    send_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
-    send_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
-    send_coinbase_amounts_to_users({{4}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{4}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -946,7 +946,7 @@ TEST(seraphis_enote_scanning, simple_ledger_6)
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == 0);
 
-    send_coinbase_amounts_to_users({{8}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{8}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     ASSERT_TRUE(enote_store_A.get_balance({SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
@@ -1005,7 +1005,7 @@ TEST(seraphis_enote_scanning, simple_ledger_locked)
     ASSERT_TRUE(enote_store_PV_A.get_received_sum({SpEnoteOriginStatus::ONCHAIN},
         {EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);
 
-    send_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     refresh_user_enote_store_PV(user_keys_A, refresh_config, ledger_context, enote_store_PV_A);
 
@@ -1018,7 +1018,7 @@ TEST(seraphis_enote_scanning, simple_ledger_locked)
     ASSERT_TRUE(enote_store_PV_A.get_received_sum({SpEnoteOriginStatus::ONCHAIN},
         {EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 0);  //amount 1 locked
 
-    send_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{2}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     refresh_user_enote_store_PV(user_keys_A, refresh_config, ledger_context, enote_store_PV_A);
 
@@ -1031,7 +1031,7 @@ TEST(seraphis_enote_scanning, simple_ledger_locked)
     ASSERT_TRUE(enote_store_PV_A.get_received_sum({SpEnoteOriginStatus::ONCHAIN},
         {EnoteStoreBalanceUpdateExclusions::ORIGIN_LEDGER_LOCKED}) == 1);  //amount 2 locked
 
-    send_coinbase_amounts_to_users({}, {}, ledger_context);
+    send_sp_coinbase_amounts_to_users({}, {}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     refresh_user_enote_store_PV(user_keys_A, refresh_config, ledger_context, enote_store_PV_A);
 
@@ -1093,7 +1093,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_1)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     transfer_funds_single_mock_v1_unconfirmed_sp_only(user_keys_A,
@@ -1195,7 +1195,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_2)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{0, 0, 0, 8}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{0, 0, 0, 8}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     transfer_funds_single_mock_v1_unconfirmed_sp_only(user_keys_A,
@@ -1290,7 +1290,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_3)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{0, 0, 0, 8}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{0, 0, 0, 8}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     transfer_funds_single_mock_v1_unconfirmed_sp_only(user_keys_A,
@@ -1320,7 +1320,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_3)
     ASSERT_TRUE(enote_store_B.get_balance({SpEnoteOriginStatus::ONCHAIN, SpEnoteOriginStatus::UNCONFIRMED},
         {SpEnoteSpentStatus::SPENT_ONCHAIN, SpEnoteSpentStatus::SPENT_UNCONFIRMED}) == 3);
 
-    send_coinbase_amounts_to_users({{8}}, {destination_B}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{8}}, {destination_B}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
     refresh_user_enote_store(user_keys_B, refresh_config, ledger_context, enote_store_B);
 
@@ -1385,7 +1385,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_4)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{10, 10, 10, 10}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10, 10, 10, 10}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     transfer_funds_single_mock_v1_unconfirmed_sp_only(user_keys_A,
@@ -1568,7 +1568,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_5)
     SpEnoteStoreMockV1 enote_store_B{2, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{10, 10, 10, 10}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10, 10, 10, 10}}, {destination_A}, ledger_context);
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
 
     transfer_funds_single_mock_v1_unconfirmed_sp_only(user_keys_A,
@@ -1763,7 +1763,7 @@ TEST(seraphis_enote_scanning, basic_ledger_tx_passing_6)
     MockLedgerContext ledger_context{0, 0};
     SpEnoteStoreMockV1 enote_store_A{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
-    send_coinbase_amounts_to_users({{16, 0, 0, 0}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{16, 0, 0, 0}}, {destination_A}, ledger_context);
 
     for (std::size_t iteration{0}; iteration < 12; ++iteration)
     {
@@ -1841,7 +1841,7 @@ public:
         {
             m_ledger_contex.pop_blocks(2);
             for (const rct::xmr_amount new_coinbase_amount : m_amounts_per_new_coinbase)
-                send_coinbase_amounts_to_users({{new_coinbase_amount}}, {m_user_address}, m_ledger_contex);
+                send_sp_coinbase_amounts_to_users({{new_coinbase_amount}}, {m_user_address}, m_ledger_contex);
         }
     }
 private:
@@ -1872,7 +1872,7 @@ public:
         {
             m_ledger_contex.pop_blocks(2);
             for (const rct::xmr_amount new_coinbase_amount : m_amounts_per_new_coinbase)
-                send_coinbase_amounts_to_users({{new_coinbase_amount}}, {m_user_address}, m_ledger_contex);
+                send_sp_coinbase_amounts_to_users({{new_coinbase_amount}}, {m_user_address}, m_ledger_contex);
         }
     }
 
@@ -1905,7 +1905,7 @@ public:
         if (m_num_calls % 3 == 0)
         {
             m_ledger_contex.pop_blocks(1);
-            send_coinbase_amounts_to_users({{m_amount_new_coinbase}}, {m_user_address}, m_ledger_contex);
+            send_sp_coinbase_amounts_to_users({{m_amount_new_coinbase}}, {m_user_address}, m_ledger_contex);
         }
     }
 private:
@@ -2006,7 +2006,7 @@ TEST(seraphis_enote_scanning, reorgs_while_scanning_1)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
 
     // a. refresh once so alignment will begin on block 0 in the test
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
@@ -2119,7 +2119,7 @@ TEST(seraphis_enote_scanning, reorgs_while_scanning_2)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
 
     // a. refresh A so coinbase funds are available
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
@@ -2248,7 +2248,7 @@ TEST(seraphis_enote_scanning, reorgs_while_scanning_3)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
 
     // a. refresh once so user A can make a tx
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
@@ -2379,7 +2379,7 @@ TEST(seraphis_enote_scanning, reorgs_while_scanning_4)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
 
     // a. refresh once so user A can make a tx
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
@@ -2477,7 +2477,7 @@ TEST(seraphis_enote_scanning, reorgs_while_scanning_5)
     SpEnoteStoreMockV1 enote_store_B{0, 0, 0};
     const sp::InputSelectorMockV1 input_selector_A{enote_store_A};
     const sp::InputSelectorMockV1 input_selector_B{enote_store_B};
-    send_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{1, 1, 1, 1}}, {destination_A}, ledger_context);
 
     // a. refresh once so user A can make a tx
     refresh_user_enote_store(user_keys_A, refresh_config, ledger_context, enote_store_A);
@@ -5632,7 +5632,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -5672,7 +5672,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -5797,7 +5797,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 0: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -5924,7 +5924,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -5962,7 +5962,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6056,7 +6056,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
     //no recovery: pop then add a block to see what happens
 
     //block 0: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6088,7 +6088,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //legacy scan
     refresh_user_enote_store_legacy_full(legacy_keys.Ks,
@@ -6194,7 +6194,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6232,7 +6232,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6326,7 +6326,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
     //no recovery: pop then add a block to see what happens
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6364,7 +6364,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_1)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6722,7 +6722,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     //seraphis scan should throw if this line in mock ledger context is changed to '> 0'
@@ -6764,7 +6764,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6804,7 +6804,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 4: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6902,7 +6902,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
     //no recovery: pop then add a block to see what happens
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -6996,7 +6996,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7036,7 +7036,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 4: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7167,7 +7167,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7205,7 +7205,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7243,7 +7243,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7281,7 +7281,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 4: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7408,7 +7408,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 3: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7446,7 +7446,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_2)
         enote_store_view);
 
     //block 4: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}}, {sp_destination}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7636,7 +7636,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7672,7 +7672,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7762,7 +7762,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7798,7 +7798,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7840,7 +7840,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
     //don't scan
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7876,7 +7876,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7949,7 +7949,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 1: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -7985,7 +7985,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_3)
         enote_store_view);
 
     //block 2: seraphis amount 10
-    send_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{10}, {0, 0, 0}}, {sp_destination, sp_destination_random}, ledger_context);
 
     //test recovery
     legacy_sp_transition_test_recovery_assertions(legacy_keys,
@@ -8879,7 +8879,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_5)
     //don't scan
 
     //block 1: seraphis block
-    send_coinbase_amounts_to_users({{0}}, {sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{0}}, {sp_destination_random}, ledger_context);
 
     //don't scan
 
@@ -9054,7 +9054,7 @@ TEST(seraphis_enote_scanning, legacy_sp_transition_5)
     //don't scan
 
     //block 1: seraphis block
-    send_coinbase_amounts_to_users({{0}}, {sp_destination_random}, ledger_context);
+    send_sp_coinbase_amounts_to_users({{0}}, {sp_destination_random}, ledger_context);
 
     //don't scan
 
