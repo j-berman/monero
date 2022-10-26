@@ -186,8 +186,6 @@ struct ser_SpBinnedReferenceSetV1_PARTIAL final
     END_SERIALIZE()
 };
 
-
-
 /// serializable LegacyEnoteImageV2
 struct ser_LegacyEnoteImageV2 final
 {

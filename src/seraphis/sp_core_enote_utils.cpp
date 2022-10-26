@@ -161,7 +161,7 @@ void make_seraphis_spendkey(const crypto::secret_key &k_a, const crypto::secret_
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_squash_prefix(const rct::key &onetime_address,
     const rct::key &amount_commitment,
-    crypto::secret_key &squash_prefix_out)
+    rct::key &squash_prefix_out)
 {
     // H_n(Ko, C)
     SpKDFTranscript transcript{config::HASH_KEY_SERAPHIS_SQUASHED_ENOTE, 2*sizeof(rct::key)};
@@ -169,7 +169,7 @@ void make_seraphis_squash_prefix(const rct::key &onetime_address,
     transcript.append("C", amount_commitment);
 
     // hash to the result
-    sp_hash_to_scalar(transcript, to_bytes(squash_prefix_out));
+    sp_hash_to_scalar(transcript, squash_prefix_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_squashed_address_key(const rct::key &onetime_address,
@@ -177,10 +177,10 @@ void make_seraphis_squashed_address_key(const rct::key &onetime_address,
     rct::key &squashed_address_out)
 {
     // Ko^t = H_n(Ko,C) Ko
-    crypto::secret_key squash_prefix;
+    rct::key squash_prefix;
     make_seraphis_squash_prefix(onetime_address, amount_commitment, squash_prefix);
 
-    rct::scalarmultKey(squashed_address_out, onetime_address, rct::sk2rct(squash_prefix));
+    rct::scalarmultKey(squashed_address_out, onetime_address, squash_prefix);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_squashed_enote_Q(const rct::key &onetime_address,

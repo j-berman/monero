@@ -361,24 +361,24 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     // 3. prepare for proof (squashed enote model): x, y, z
 
     // a. squash prefix: H_n(Ko,C)
-    crypto::secret_key squash_prefix;
+    rct::key squash_prefix;
     make_seraphis_squash_prefix(input_enote_core.m_onetime_address,
         input_enote_core.m_amount_commitment,
         squash_prefix);  // H_n(Ko,C)
 
     // b. x: t_k + H_n(Ko,C) (k_{mask, recipient} + k_{mask, sender})
     crypto::secret_key x;
-    sc_mul(to_bytes(x), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_g));
+    sc_mul(to_bytes(x), squash_prefix.bytes, to_bytes(input_proposal.m_enote_view_privkey_g));
     sc_add(to_bytes(x), to_bytes(input_proposal.m_address_mask), to_bytes(x));
 
     // c. y: H_n(Ko,C) (k_{a, recipient} + k_{a, sender})
     crypto::secret_key y;
-    sc_mul(to_bytes(y), to_bytes(squash_prefix), to_bytes(input_proposal.m_enote_view_privkey_x));
+    sc_mul(to_bytes(y), squash_prefix.bytes, to_bytes(input_proposal.m_enote_view_privkey_x));
 
     // d. z: H_n(Ko,C) (k_{b, recipient} + k_{b, sender})
     crypto::secret_key z;
     sc_add(to_bytes(z), to_bytes(input_proposal.m_enote_view_privkey_u), to_bytes(sp_spend_privkey));
-    sc_mul(to_bytes(z), to_bytes(squash_prefix), to_bytes(z));
+    sc_mul(to_bytes(z), squash_prefix.bytes, to_bytes(z));
 
     // 4. make seraphis composition proof
     image_proof_out.m_composition_proof = sp_composition_prove(message, input_enote_image_core.m_masked_address, x, y, z);

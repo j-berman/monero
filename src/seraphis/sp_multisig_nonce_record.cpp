@@ -50,7 +50,7 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigPubNonces::operator<(const SpMultisigPubNonces &other) const
+bool MultisigPubNonces::operator<(const MultisigPubNonces &other) const
 {
     const int nonce_1_comparison{
             memcmp(signature_nonce_1_pub.bytes, &other.signature_nonce_1_pub.bytes, sizeof(rct::key))
@@ -71,18 +71,18 @@ bool SpMultisigPubNonces::operator<(const SpMultisigPubNonces &other) const
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigPubNonces::operator==(const SpMultisigPubNonces &other) const
+bool MultisigPubNonces::operator==(const MultisigPubNonces &other) const
 {
     return equals_from_less{}(*this, other);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void append_to_transcript(const SpMultisigPubNonces &container, SpTranscriptBuilder &transcript_inout)
+void append_to_transcript(const MultisigPubNonces &container, SpTranscriptBuilder &transcript_inout)
 {
     transcript_inout.append("nonce1", container.signature_nonce_1_pub);
     transcript_inout.append("nonce2", container.signature_nonce_2_pub);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigNonceRecord::has_record(const rct::key &message,
+bool MultisigNonceRecord::has_record(const rct::key &message,
     const rct::key &proof_key,
     const multisig::signer_set_filter &filter) const
 {
@@ -91,10 +91,9 @@ bool SpMultisigNonceRecord::has_record(const rct::key &message,
         m_record.at(message).at(proof_key).find(filter) != m_record.at(message).at(proof_key).end();
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigNonceRecord::try_add_nonces(const rct::key &message,
+bool MultisigNonceRecord::try_add_nonces(const rct::key &message,
     const rct::key &proof_key,
-    const multisig::signer_set_filter &filter,
-    const SpMultisigPrep &prep)
+    const multisig::signer_set_filter &filter)
 {
     if (has_record(message, proof_key, filter))
         return false;
@@ -103,12 +102,12 @@ bool SpMultisigNonceRecord::try_add_nonces(const rct::key &message,
         return false;
 
     // add record
-    m_record[message][proof_key][filter] = prep;
+    m_record[message][proof_key][filter] = MultisigNonces{rct::rct2sk(rct::skGen()), rct::rct2sk(rct::skGen())};
 
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigNonceRecord::try_get_recorded_nonce_privkeys(const rct::key &message,
+bool MultisigNonceRecord::try_get_recorded_nonce_privkeys(const rct::key &message,
     const rct::key &proof_key,
     const multisig::signer_set_filter &filter,
     crypto::secret_key &nonce_privkey_1_out,
@@ -124,21 +123,30 @@ bool SpMultisigNonceRecord::try_get_recorded_nonce_privkeys(const rct::key &mess
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigNonceRecord::try_get_recorded_nonce_pubkeys(const rct::key &message,
+bool MultisigNonceRecord::try_get_nonce_pubkeys_for_base(const rct::key &message,
     const rct::key &proof_key,
     const multisig::signer_set_filter &filter,
-    SpMultisigPubNonces &nonce_pubkeys_out) const
+    const rct::key &pubkey_base,
+    MultisigPubNonces &nonce_pubkeys_out) const
 {
+    CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(pubkey_base) && !(pubkey_base == rct::identity()),
+        "multisig nonce record get nonce pubkeys: pubkey base is invalid.");
+
     if (!has_record(message, proof_key, filter))
         return false;
 
-    // pubkeys
-    nonce_pubkeys_out = m_record.at(message).at(proof_key).at(filter).signature_nonces_pub;
+    const MultisigNonces &nonces{m_record.at(message).at(proof_key).at(filter)};
+
+    // pubkeys (store with (1/8))
+    nonce_pubkeys_out.signature_nonce_1_pub =
+        rct::scalarmultKey(rct::scalarmultKey(pubkey_base, rct::sk2rct(nonces.signature_nonce_1_priv)), rct::INV_EIGHT);
+    nonce_pubkeys_out.signature_nonce_2_pub =
+        rct::scalarmultKey(rct::scalarmultKey(pubkey_base, rct::sk2rct(nonces.signature_nonce_2_priv)), rct::INV_EIGHT);
 
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigNonceRecord::try_remove_record(const rct::key &message,
+bool MultisigNonceRecord::try_remove_record(const rct::key &message,
     const rct::key &proof_key,
     const multisig::signer_set_filter &filter)
 {
@@ -153,27 +161,6 @@ bool SpMultisigNonceRecord::try_remove_record(const rct::key &message,
         m_record.erase(message);
 
     return true;
-}
-//-------------------------------------------------------------------------------------------------------------------
-SpMultisigPrep sp_multisig_init(const rct::key &base_point)
-{
-    SpMultisigPrep prep;
-
-    // alpha_{1,e} * base_point
-    // store with (1/8)
-    generate_proof_nonce(base_point, prep.signature_nonce_1_priv, prep.signature_nonces_pub.signature_nonce_1_pub);
-    rct::scalarmultKey(prep.signature_nonces_pub.signature_nonce_1_pub,
-        prep.signature_nonces_pub.signature_nonce_1_pub,
-        rct::INV_EIGHT);
-
-    // alpha_{2,e} * base_point
-    // store with (1/8)
-    generate_proof_nonce(base_point, prep.signature_nonce_2_priv, prep.signature_nonces_pub.signature_nonce_2_pub);
-    rct::scalarmultKey(prep.signature_nonces_pub.signature_nonce_2_pub,
-        prep.signature_nonces_pub.signature_nonce_2_pub,
-        rct::INV_EIGHT);
-
-    return prep;
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

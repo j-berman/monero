@@ -79,6 +79,12 @@ struct SpInputProposalV1 final
     */
     void get_enote_image_v1(SpEnoteImageV1 &image_out) const { m_core.get_enote_image_core(image_out.m_core); }
 
+    /**
+    * brief: get_squash_prefix - get this input's enote's squash prefix
+    * outparam: squash_prefix_out - H_n(Ko, C)
+    */
+    void get_squash_prefix(rct::key &squash_prefix_out) const { m_core.get_squash_prefix(squash_prefix_out); }
+
     /// get the amount of this proposal
     rct::xmr_amount get_amount() const { return m_core.m_amount; }
 
@@ -208,7 +214,7 @@ struct SpPartialInputV1 final
     crypto::secret_key m_address_mask;
     crypto::secret_key m_commitment_mask;
 
-    /// proposal prefix (represents the inputs/outputs/fee/memo; signed by this partial input's image proof)
+    /// tx proposal prefix (represents the inputs/outputs/fee/memo; signed by this partial input's image proof)
     rct::key m_proposal_prefix;
 
     /// the input enote's core; used for making a membership proof

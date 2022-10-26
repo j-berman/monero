@@ -46,6 +46,7 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
+#include "cryptonote_basic/subaddress_index.h"
 #include "jamtis_destination.h"
 #include "jamtis_payment_proposal.h"
 #include "multisig/multisig_account.h"
@@ -68,21 +69,31 @@
 #include <unordered_map>
 
 //forward declarations
-namespace sp { class SpMultisigNonceRecord; }
+namespace sp { class MultisigNonceRecord; }
 
 
 namespace sp
 {
 
 /**
-* brief: check_v1_multisig_public_input_proposal_semantics_v1 - check semantics of a multisig public input proposal
+* brief: check_v1_legacy_multisig_input_proposal_semantics_v1 - check semantics of a multisig legacy input
+*      proposal
+*   - throws if a check fails
+*   - check: amout mask is a non-zero canonical scalar
+* param: multisig_input_proposal -
+*/
+void check_v1_legacy_multisig_input_proposal_semantics_v1(
+    const LegacyMultisigInputProposalV1 &multisig_input_proposal);
+/**
+* brief: check_v1_sp_multisig_input_proposal_semantics_v1 - check semantics of a multisig seraphis input
+*      proposal
 *   - throws if a check fails
 *   - check: enote masks are non-zero canonical scalars
-* param: input_proposal -
+* param: multisig_input_proposal -
 */
-void check_v1_multisig_public_input_proposal_semantics_v1(const SpMultisigPublicInputProposalV1 &public_input_proposal);
+void check_v1_sp_multisig_input_proposal_semantics_v1(const SpMultisigInputProposalV1 &multisig_input_proposal);
 /**
-* brief: make_v1_multisig_public_input_proposal_v1 - make a public input proposal for multisig (can be sent to other people)
+* brief: make_v1_legacy_multisig_input_proposal_v1 - make a serpahis multisig input proposal (can be sent to other people)
 * param: enote -
 * param: enote_ephemeral_pubkey -
 * param: input_context -
@@ -90,16 +101,35 @@ void check_v1_multisig_public_input_proposal_semantics_v1(const SpMultisigPublic
 * param: commitment_mask -
 * outparam: proposal_out -
 */
-void make_v1_multisig_public_input_proposal_v1(const SpEnoteV1 &enote,
+void make_v1_legacy_multisig_input_proposal_v1(const LegacyEnoteVariant &enote,
+    const crypto::key_image &key_image,
+    const rct::key &enote_ephemeral_pubkey,
+    const std::uint64_t tx_output_index,
+    const std::uint64_t unlock_time,
+    const crypto::secret_key &commitment_mask,
+    LegacyMultisigInputProposalV1 &proposal_out);
+void make_v1_legacy_multisig_input_proposal_v1(const LegacyEnoteRecord &enote_record,
+    const crypto::secret_key &commitment_mask,
+    LegacyMultisigInputProposalV1 &proposal_out);
+/**
+* brief: make_v1_sp_multisig_input_proposal_v1 - make a serpahis multisig input proposal (can be sent to other people)
+* param: enote -
+* param: enote_ephemeral_pubkey -
+* param: input_context -
+* param: address_mask -
+* param: commitment_mask -
+* outparam: proposal_out -
+*/
+void make_v1_sp_multisig_input_proposal_v1(const SpEnoteV1 &enote,
     const crypto::x25519_pubkey &enote_ephemeral_pubkey,
     const rct::key &input_context,
     const crypto::secret_key &address_mask,
     const crypto::secret_key &commitment_mask,
-    SpMultisigPublicInputProposalV1 &proposal_out);
-void make_v1_multisig_public_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
+    SpMultisigInputProposalV1 &proposal_out);
+void make_v1_sp_multisig_input_proposal_v1(const SpEnoteRecordV1 &enote_record,
     const crypto::secret_key &address_mask,
     const crypto::secret_key &commitment_mask,
-    SpMultisigPublicInputProposalV1 &proposal_out);
+    SpMultisigInputProposalV1 &proposal_out);
 /**
 * brief: check_v1_multisig_tx_proposal_semantics_v1 - check semantics of a multisig tx proposal
 *   - throws if a check fails
@@ -109,6 +139,9 @@ void make_v1_multisig_public_input_proposal_v1(const SpEnoteRecordV1 &enote_reco
 * param: expected_version_string -
 * param: threshold -
 * param: num_signers -
+* param: legacy_spend_pubkey -
+* param: legacy_subaddress_map -
+* param: legacy_view_privkey -
 * param: jamtis_spend_pubkey -
 * param: k_view_balance -
 */
@@ -116,6 +149,9 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
     const std::string &expected_version_string,
     const std::uint32_t threshold,
     const std::uint32_t num_signers,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance);
 /**
@@ -125,7 +161,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 * param: additional_memo_elements -
 * param: tx_fee -
 * param: version_string -
-* param: full_input_proposals -
+* param: sp_multisig_input_proposals -
 * param: aggregate_signer_set_filter -
 * param: jamtis_spend_pubkey
 * param: k_view_balance -
@@ -136,14 +172,14 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::vector<ExtraFieldElement> additional_memo_elements,
     const DiscretizedFee &tx_fee,
     std::string version_string,
-    std::vector<SpMultisigPublicInputProposalV1> public_input_proposals,
+    std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals,
     const multisig::signer_set_filter aggregate_signer_set_filter,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out);
 /**
 * brief: try_make_v1_multisig_tx_proposal_for_transfer_v1 - try to select inputs then make a v1 multisig tx proposal for
-*   specified outlays
+*      specified outlays
 * param: change_address -
 * param: dummy_address -
 * param: local_user_input_selector -
@@ -158,7 +194,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
 * param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * outparam: multisig_tx_proposal_out -
-* outparam: input_ledger_mappings_out -
+* outparam: sp_input_ledger_mappings_out -
 */
 bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
     const jamtis::JamtisDestinationV1 &dummy_address,
@@ -174,97 +210,113 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &multisig_tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings_out);
+    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out);
 /**
-* brief: check_v1_multisig_input_init_set_semantics_v1 - check semantics of a multisig input initializer set
+* brief: check_v1_multisig_init_set_semantics_v1 - check semantics of a multisig initializer set
 *   - throws if a check fails
-*   - not checked: input count satisfied desired tx semantic rules version (can be lower if only partially funding a tx)
-*   - inputs have unique key images (can use check_v1_multisig_tx_proposal_semantics_v1() to ensure this)
-* param: input_init_set -
+* param: init_set -
 * param: threshold -
 * param: multisig_signers -
+* param: num_expected_nonce_sets_per_proofkey -
 */
-void check_v1_multisig_input_init_set_semantics_v1(const SpMultisigInputInitSetV1 &input_init_set,
+void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_set,
     const std::uint32_t threshold,
-    const std::vector<crypto::public_key> &multisig_signers);
+    const std::vector<crypto::public_key> &multisig_signers,
+    const std::size_t num_expected_nonce_sets_per_proofkey);
 /**
-* brief: make_v1_multisig_input_init_set_v1 - make a multisig input initializer set
+* brief: make_v1_multisig_init_sets_for_inputs_v1 - make init sets for seraphis and legacy multisig tx input proofs
 * param: signer_id -
 * param: threshold -
 * param: multisig_signers -
-* param: proposal_prefix -
-* param: masked_addresses -
-* param: aggregate_signer_set_filter -
+* param: multisig_tx_proposal -
+* param: expected_version_string -
+* param: legacy_spend_pubkey -
+* param: legacy_subaddress_map -
+* param: legacy_view_privkey -
+* param: jamtis_spend_pubkey -
+* param: k_view_balance -
 * inoutparam: nonce_record_inout -
-* outparam: input_init_set_out -
+* outparam: legacy_input_init_set_out -
+* outparam: sp_input_init_set_out -
 */
-void make_v1_multisig_input_init_set_v1(const crypto::public_key &signer_id,
-    const std::uint32_t threshold,
-    const std::vector<crypto::public_key> &multisig_signers,
-    const rct::key &proposal_prefix,
-    const rct::keyV &masked_addresses,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
-    SpMultisigNonceRecord &nonce_record_inout,
-    SpMultisigInputInitSetV1 &input_init_set_out);
-void make_v1_multisig_input_init_set_v1(const crypto::public_key &signer_id,
+void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_id,
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
     const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::string &expected_version_string,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    SpMultisigNonceRecord &nonce_record_inout,
-    SpMultisigInputInitSetV1 &input_init_set_out);
+    MultisigNonceRecord &nonce_record_inout,
+    MultisigProofInitSetV1 &legacy_input_init_set_out,
+    MultisigProofInitSetV1 &sp_input_init_set_out);
 /**
-* brief: check_v1_multisig_input_partial_sig_semantics_v1 - check semantics of a multisig input partial signature
+* brief: check_v1_multisig_partial_sig_semantics_v1 - check semantics of a multisig input partial signature
 *   - throws if a check fails
-* param: input_partial_sig_set -
+* param: partial_sig_set -
 * param: multisig_signers -
 */
-void check_v1_multisig_input_partial_sig_semantics_v1(const SpMultisigInputPartialSigSetV1 &input_partial_sig_set,
+void check_v1_multisig_partial_sig_semantics_v1(const MultisigPartialSigSetV1 &partial_sig_set,
     const std::vector<crypto::public_key> &multisig_signers);
 /**
-* brief: try_make_v1_multisig_input_partial_sig_sets_v1 - try to make multisig partial signatures for tx inputs
+* brief: try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1 - try to make multisig partial signatures for seraphis
+*      tx inputs
 *   - weak preconditions: ignores invalid initializers from non-local signers
 *   - will throw if local signer is not in the aggregate signer filter (or has an invalid initializer)
 *   - will only succeed if a partial sig set can be made for each of the inputs found in the multisig tx proposal
 * param: signer_account -
 * param: multisig_tx_proposal -
+* param: legacy_spend_pubkey -
+* param: legacy_subaddress_map -
+* param: legacy_view_privkey -
 * param: expected_version_string -
 * param: local_input_init_set -
 * param: other_input_init_sets -
 * inoutparam: nonce_record_inout -
-* outparam: input_partial_sig_sets_out -
+* outparam: sp_input_partial_sig_sets_out -
 * return: true if at least one set of partial signatures was created (one set will contain a partial sig for each input)
 */
-bool try_make_v1_multisig_input_partial_sig_sets_v1(const multisig::multisig_account &signer_account,
+bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::multisig_account &signer_account,
     const SpMultisigTxProposalV1 &multisig_tx_proposal,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const std::string &expected_version_string,
-    const SpMultisigInputInitSetV1 &local_input_init_set,
-    std::vector<SpMultisigInputInitSetV1> other_input_init_sets,
-    SpMultisigNonceRecord &nonce_record_inout,
-    std::vector<SpMultisigInputPartialSigSetV1> &input_partial_sig_sets_out);
+    MultisigProofInitSetV1 local_input_init_set,
+    std::vector<MultisigProofInitSetV1> other_input_init_sets,
+    MultisigNonceRecord &nonce_record_inout,
+    std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out);
 /**
-* brief: try_make_v1_partial_inputs_v1 - try to make partial inputs from a collection of multisig partial signatures
+* brief: try_make_v1_sp_partial_inputs_v1 - try to make seraphis partial inputs from a collection of multisig partial
+*      signatures
 *   - weak preconditions: ignores invalid partial signature sets
 *   - will only succeed if a partial input can be made for each of the inputs found in the multisig tx proposal
 * param: multisig_tx_proposal -
 * param: multisig_signers -
+* param: legacy_spend_pubkey -
+* param: legacy_subaddress_map -
+* param: legacy_view_privkey -
 * param: jamtis_spend_pubkey -
 * param: k_view_balance -
-* param: input_partial_sigs_per_signer -
-* outparam: partial_inputs_out -
-* return: true if partial_inputs_out contains a partial input corresponding to each input in the multisig tx proposal
+* param: legacy_input_partial_sigs_per_signer -
+* param: sp_input_partial_sigs_per_signer -
+* outparam: legacy_inputs_out -
+* outparam: sp_partial_inputs_out -
+* return: true if legacy_inputs_out and partial_inputs_out contain inputs/partial inputs corresponding to each input
+*         proposal in the multisig tx proposal
 */
-bool try_make_v1_partial_input_v1(const SpInputProposal &input_proposal,
-    const rct::key &expected_proposal_prefix,
-    const std::vector<SpCompositionProofMultisigPartial> &input_proof_partial_sigs,
-    SpPartialInputV1 &partial_input_out);
-bool try_make_v1_partial_inputs_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
+bool try_make_partial_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::vector<crypto::public_key> &multisig_signers,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    std::unordered_map<crypto::public_key, std::vector<SpMultisigInputPartialSigSetV1>> input_partial_sigs_per_signer,
-    std::vector<SpPartialInputV1> &partial_inputs_out);
+    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
+    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
+    std::vector<LegacyInputV1> &legacy_inputs_out,
+    std::vector<SpPartialInputV1> &sp_partial_inputs_out);
 
 } //namespace sp

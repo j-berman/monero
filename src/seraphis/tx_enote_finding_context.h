@@ -66,8 +66,6 @@ public:
     virtual bool try_get_unconfirmed_chunk(EnoteScanningChunkNonLedgerV1 &chunk_out) const = 0;
 };
 
-//EnoteFindingContextLedgerMock: take mock ledger context, find-received key as input
-
 ////
 // EnoteFindingContextOffchain
 // - wraps an offchain context of some kind, produces chunks of potentially owned enotes (from find-received scanning)
@@ -83,7 +81,5 @@ public:
     /// try to get a fresh offchain chunk
     virtual bool try_get_offchain_chunk(EnoteScanningChunkNonLedgerV1 &chunk_out) const = 0;
 };
-
-//EnoteFindingContextOffchainMock: take mock offchain context, find-received key as input
 
 } //namespace sp

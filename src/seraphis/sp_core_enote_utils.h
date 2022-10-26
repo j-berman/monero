@@ -135,7 +135,7 @@ void make_seraphis_spendkey(const crypto::secret_key &k_a, const crypto::secret_
 */
 void make_seraphis_squash_prefix(const rct::key &onetime_address,
     const rct::key &amount_commitment,
-    crypto::secret_key &squash_prefix_out);
+    rct::key &squash_prefix_out);
 /**
 * brief: make_seraphis_squashed_address_key - make a 'squashed' address in the squashed enote model
 *   Ko^t = H_n(Ko,C) Ko

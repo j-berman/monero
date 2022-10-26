@@ -79,16 +79,18 @@ void append_to_transcript(const SpEnoteImage &container, SpTranscriptBuilder &tr
     transcript_inout.append("KI", container.m_key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void SpInputProposal::get_squash_prefix(rct::key &squash_prefix_out) const
+{
+    // H_n(Ko,C)
+    make_seraphis_squash_prefix(m_enote_core.m_onetime_address, m_enote_core.m_amount_commitment, squash_prefix_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void SpInputProposal::get_enote_image_core(SpEnoteImage &image_out) const
 {
-    // {Ko, C}
-    SpEnote enote_temp;
-    this->get_enote_core(enote_temp);
-
     // K" = t_k G + H_n(Ko,C) Ko
     // C" = t_c G + C
-    make_seraphis_enote_image_masked_keys(enote_temp.m_onetime_address,
-        enote_temp.m_amount_commitment,
+    make_seraphis_enote_image_masked_keys(m_enote_core.m_onetime_address,
+        m_enote_core.m_amount_commitment,
         m_address_mask,
         m_commitment_mask,
         image_out.m_masked_address,

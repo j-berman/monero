@@ -80,6 +80,7 @@ set(seraphis_sources
   tx_legacy_component_types.cpp
   tx_legacy_enote_record_utils.cpp
   tx_misc_utils.cpp
+  tx_multisig_partial_sig_tools.cpp
   tx_ref_set_index_mapper_flat.cpp
   tx_validators.cpp
   txtype_squashed_v1.cpp)

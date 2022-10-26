@@ -33,6 +33,7 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "cryptonote_basic/subaddress_index.h"
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
@@ -40,12 +41,17 @@
 #include "sp_crypto_utils.h"
 #include "tx_builder_types.h"
 #include "tx_builders_inputs.h"
+#include "tx_builders_legacy_inputs.h"
 #include "tx_builders_mixed.h"
 #include "tx_extra.h"
+#include "tx_legacy_builder_types.h"
+#include "tx_legacy_component_types.h"
+#include "tx_legacy_enote_record_utils.h"
 
 //third party headers
 
 //standard headers
+#include <unordered_map>
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -54,13 +60,34 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigPublicInputProposalV1::get_squash_prefix(crypto::secret_key &squash_prefix_out) const
+void LegacyMultisigInputProposalV1::get_input_proposal_v1(const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
+    LegacyInputProposalV1 &input_proposal_out) const
 {
-    // H_n(Ko,C)
-    make_seraphis_squash_prefix(m_enote.m_core.m_onetime_address, m_enote.m_core.m_amount_commitment, squash_prefix_out);
+    // extract legacy intermediate enote record from proposal
+    LegacyIntermediateEnoteRecord legacy_intermediate_record;
+
+    CHECK_AND_ASSERT_THROW_MES(try_get_legacy_intermediate_enote_record(m_enote,
+            m_enote_ephemeral_pubkey,
+            m_tx_output_index,
+            m_tx_output_index,
+            legacy_spend_pubkey,
+            legacy_subaddress_map,
+            legacy_view_privkey,
+            legacy_intermediate_record),
+        "legacy multisig public input proposal to legacy input proposal: could not recover intermediate enote record for "
+        "input proposal's enote.");
+
+    // upgrade to full legacy enote record
+    LegacyEnoteRecord legacy_enote_record;
+    get_legacy_enote_record(legacy_intermediate_record, m_key_image, legacy_enote_record);
+
+    // make the legacy input proposal
+    make_v1_legacy_input_proposal_v1(legacy_enote_record, m_commitment_mask, input_proposal_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigPublicInputProposalV1::get_input_proposal_v1(const rct::key &jamtis_spend_pubkey,
+void SpMultisigInputProposalV1::get_input_proposal_v1(const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpInputProposalV1 &input_proposal_out) const
 {
@@ -72,20 +99,36 @@ void SpMultisigPublicInputProposalV1::get_input_proposal_v1(const rct::key &jamt
             m_address_mask,
             m_commitment_mask,
             input_proposal_out),
-        "multisig public input proposal to plain input proposal: conversion failed (wallet may not own this input.");
+        "multisig seraphis public input proposal to seraphis input proposal: conversion failed (wallet may not own "
+        "this input.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &jamtis_spend_pubkey,
+void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpTxProposalV1 &tx_proposal_out) const
 {
-    // extract input proposals
-    std::vector<SpInputProposalV1> plain_input_proposals;
+    // extract legacy input proposals
+    std::vector<LegacyInputProposalV1> legacy_input_proposals;
 
-    for (const SpMultisigPublicInputProposalV1 &public_input_proposal : m_input_proposals)
+    for (const LegacyMultisigInputProposalV1 &multisig_input_proposal : m_legacy_multisig_input_proposals)
     {
-        plain_input_proposals.emplace_back();
-        public_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, plain_input_proposals.back());
+        legacy_input_proposals.emplace_back();
+        multisig_input_proposal.get_input_proposal_v1(legacy_spend_pubkey,
+            legacy_subaddress_map,
+            legacy_view_privkey,
+            legacy_input_proposals.back());
+    }
+
+    // extract seraphis input proposals
+    std::vector<SpInputProposalV1> sp_input_proposals;
+
+    for (const SpMultisigInputProposalV1 &multisig_input_proposal : m_sp_multisig_input_proposals)
+    {
+        sp_input_proposals.emplace_back();
+        multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, sp_input_proposals.back());
     }
 
     // extract memo field elements
@@ -97,35 +140,43 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &jamtis_spend_
     make_v1_tx_proposal_v1(m_normal_payment_proposals,
         m_selfsend_payment_proposals,
         m_tx_fee,
-        {},  //todo: legacy
-        std::move(plain_input_proposals),
+        std::move(legacy_input_proposals),
+        std::move(sp_input_proposals),
         std::move(additional_memo_elements),
         tx_proposal_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void SpMultisigTxProposalV1::get_proposal_prefix_v1(const rct::key &jamtis_spend_pubkey,
+void SpMultisigTxProposalV1::get_proposal_prefix_v1(const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
+    const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     rct::key &proposal_prefix_out) const
 {
     // extract proposal
     SpTxProposalV1 tx_proposal;
-    this->get_v1_tx_proposal_v1(jamtis_spend_pubkey, k_view_balance, tx_proposal);
+    this->get_v1_tx_proposal_v1(legacy_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
+        jamtis_spend_pubkey,
+        k_view_balance,
+        tx_proposal);
 
     // get prefix from proposal
     tx_proposal.get_proposal_prefix(m_version_string, k_view_balance, proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpMultisigInputInitSetV1::try_get_nonces(const rct::key &masked_address,
+bool MultisigProofInitSetV1::try_get_nonces(const rct::key &proof_key,
     const std::size_t nonces_index,
-    SpMultisigPubNonces &nonces_out) const
+    std::vector<MultisigPubNonces> &nonces_out) const
 {
-    if (m_input_inits.find(masked_address) == m_input_inits.end())
+    if (m_inits.find(proof_key) == m_inits.end())
         return false;
 
-    if (m_input_inits.at(masked_address).size() <= nonces_index)
+    if (nonces_index >= m_inits.at(proof_key).size())
         return false;
 
-    nonces_out = m_input_inits.at(masked_address)[nonces_index];
+    nonces_out = m_inits.at(proof_key)[nonces_index];
 
     return true;
 }

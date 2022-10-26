@@ -36,7 +36,9 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
+#include "cryptonote_basic/subaddress_index.h"
 #include "jamtis_payment_proposal.h"
+#include "legacy_enote_types.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctTypes.h"
 #include "sp_core_types.h"
@@ -44,11 +46,14 @@
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
 #include "tx_extra.h"
+#include "tx_legacy_builder_types.h"
+#include "tx_multisig_partial_sig_tools.h"
 
 //third party headers
 
 //standard headers
 #include <unordered_map>
+#include <vector>
 
 //forward declarations
 
@@ -57,10 +62,43 @@ namespace sp
 {
 
 ////
-// SpMultisigPublicInputProposalV1
-// - propose a tx input to be signed with multisig (for sending to other multisig participants)
+// LegacyMultisigInputProposalV1
+// - propose a legacy tx input to be signed with multisig (for sending to other multisig participants)
 ///
-struct SpMultisigPublicInputProposalV1 final
+struct LegacyMultisigInputProposalV1 final
+{
+    /// the enote to spend
+    LegacyEnoteVariant m_enote;
+    /// the enote's key image
+    crypto::key_image m_key_image;
+    /// the enote's ephemeral pubkey
+    rct::key m_enote_ephemeral_pubkey;
+    /// t: the enote's output index in the tx that created it
+    std::uint64_t m_tx_output_index;
+    /// u: the enote's unlock time
+    std::uint64_t m_unlock_time;
+
+    /// z
+    crypto::secret_key m_commitment_mask;
+
+    /**
+    * brief: get_input_proposal_v1 - convert this input to a legacy input proposal (throws on failure to convert)
+    * param: legacy_spend_pubkey -
+    * param: legacy_subaddress_map -
+    * param: legacy_view_privkey -
+    * outparam: input_proposal_out -
+    */
+    void get_input_proposal_v1(const rct::key &legacy_spend_pubkey,
+        const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+        const crypto::secret_key &legacy_view_privkey,
+        LegacyInputProposalV1 &input_proposal_out) const;
+};
+
+////
+// SpMultisigInputProposalV1
+// - propose a seraphis tx input to be signed with multisig (for sending to other multisig participants)
+///
+struct SpMultisigInputProposalV1 final
 {
     /// enote to spend
     SpEnoteV1 m_enote;
@@ -75,13 +113,7 @@ struct SpMultisigPublicInputProposalV1 final
     crypto::secret_key m_commitment_mask;
 
     /**
-    * brief: get_squash_prefix - get this input's enote's squash prefix
-    * outparam: squash_prefix_out - H_n(Ko, C)
-    */
-    void get_squash_prefix(crypto::secret_key &squash_prefix_out) const;
-
-    /**
-    * brief: get_input_proposal_v1 - convert this input to a plain input proposal (throws on failure to convert)
+    * brief: get_input_proposal_v1 - convert this input to a seraphis input proposal (throws on failure to convert)
     * param: jamtis_spend_pubkey -
     * param: k_view_balance -
     * outparam: input_proposal_out -
@@ -94,7 +126,6 @@ struct SpMultisigPublicInputProposalV1 final
 ////
 // SpMultisigTxProposalV1
 // - propose to fund a set of outputs with multisig inputs
-// - total input amount can be less than total output amount (additional inputs should be provided from elsewhere)
 ///
 struct SpMultisigTxProposalV1 final
 {
@@ -106,10 +137,14 @@ struct SpMultisigTxProposalV1 final
     TxExtra m_partial_memo;
     /// proposed transaction fee
     DiscretizedFee m_tx_fee;
-    /// tx inputs to sign with multisig
-    std::vector<SpMultisigPublicInputProposalV1> m_input_proposals;
-    /// composition proof proposals for each input proposal
-    std::vector<SpCompositionProofMultisigProposal> m_input_proof_proposals;
+    /// legacy tx inputs to sign with multisig
+    std::vector<LegacyMultisigInputProposalV1> m_legacy_multisig_input_proposals;
+    /// seraphis tx inputs to sign with multisig
+    std::vector<SpMultisigInputProposalV1> m_sp_multisig_input_proposals;
+    /// legacy ring signature proposals (CLSAGs) for each legacy input proposal
+//    std::vector<CLSAGMultisigProposal> m_legacy_input_clsag_proposals;
+    /// composition proof proposals for each seraphis input proposal
+    std::vector<SpCompositionProofMultisigProposal> m_sp_input_proof_proposals;
     /// all multisig signers who should participate in signing this proposal
     /// - the set may be larger than 'threshold', in which case every permutation of 'threshold' signers will attempt to sign
     multisig::signer_set_filter m_aggregate_signer_set_filter;
@@ -118,59 +153,69 @@ struct SpMultisigTxProposalV1 final
     std::string m_version_string;
 
     /// convert to plain tx proposal
-    void get_v1_tx_proposal_v1(const rct::key &jamtis_spend_pubkey,
+    void get_v1_tx_proposal_v1(const rct::key &legacy_spend_pubkey,
+        const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+        const crypto::secret_key &legacy_view_privkey,
+        const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         SpTxProposalV1 &tx_proposal_out) const;
 
     /// get the tx proposal prefix that will be signed by input composition proofs
-    void get_proposal_prefix_v1(const rct::key &jamtis_spend_pubkey,
+    void get_proposal_prefix_v1(const rct::key &legacy_spend_pubkey,
+        const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+        const crypto::secret_key &legacy_view_privkey,
+        const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         rct::key &proposal_prefix_out) const;
 };
 
 ////
-// SpMultisigInputInitV1
-// - initialize seraphis composition proofs for a set of enote images
-// - each enote image has proof nonces for every set of multisig signers that includes the signer
+// MultisigProofInitSetV1
+// - initialize a set of proofs to be signed by a multisig group
+// - each proof has a set of proof nonces for every set of multisig signers that includes the signer in the signer's
+//   multisig group
 //   - the vectors of proof nonces map 1:1 with the signer sets that include the local signer that can be extracted
 //     from the aggregate filter
 ///
-struct SpMultisigInputInitSetV1 final
+struct MultisigProofInitSetV1 final
 {
     /// id of signer who made this input initializer set
     crypto::public_key m_signer_id;
-    /// proposal prefix (represents the set of destinations and memos; will be signed by the image proofs)
-    rct::key m_proposal_prefix;
+    /// message to be signed by the image proofs
+    rct::key m_proof_message;
     /// all multisig signers who should participate in attempting to make these composition proofs
     multisig::signer_set_filter m_aggregate_signer_set_filter;
 
-    // map [masked address : {alpha_{ki,1,e}*U, alpha_{ki,2,e}*U}]
-    // - key: masked addresses for enote images to sign
-    // - value: signature nonce pubkeys for each signer set that includes the specified signer id (i.e. each tx attempt)
+    // map [proof key to sign : { {alpha_{ki,1,e}*J_1, alpha_{ki,2,e}*J_1}, {alpha_{ki,1,e}*J_2, alpha_{ki,2,e}*J_2}, ... }]
+    // - key: main proof key to sign on
+    // - value: a set of signature nonce pubkeys for each signer set that includes the specified signer id (i.e. each tx
+    //   attempt)
+    //   - the set of nonce pubkeys corresponds to a set of nonce base keys across which the multisig signature will be made
+    //     (for example: CLSAG signs across both G and Hp(Ko), where Ko is the proof key recorded here)
     //   - WARNING: ordering is dependent on the signer set filter permutation generator
-    std::unordered_map<rct::key, std::vector<SpMultisigPubNonces>> m_input_inits;
+    std::unordered_map<rct::key, std::vector<std::vector<MultisigPubNonces>>> m_inits;
 
-    /// get nonces at a [masked address : nonce index] location (return false if the location doesn't exist)
-    bool try_get_nonces(const rct::key &masked_address,
+    /// get set of nonces at a [proof key : nonce index] location (return false if the location doesn't exist)
+    bool try_get_nonces(const rct::key &proof_key,
         const std::size_t nonces_index,
-        SpMultisigPubNonces &nonces_out) const;
+        std::vector<MultisigPubNonces> &nonces_out) const;
 };
 
 ////
-// SpMultisigInputPartialSigSetV1
-// - set of partially signed inputs; combine partial signatures to complete the image proof for a partial input
+// MultisigPartialSigSetV1
+// - set of partially signed multisigs; combine partial signatures to complete a proof
 ///
-struct SpMultisigInputPartialSigSetV1 final
+struct MultisigPartialSigSetV1 final
 {
     /// id of signer who made these partial signatures
     crypto::public_key m_signer_id;
-    /// proposal prefix (represents the set of destinations and memos; signed by these composition proofs)
-    rct::key m_proposal_prefix;
+    /// proof message signed by these partial signatures
+    rct::key m_proof_message;
     /// set of multisig signers these partial signatures correspond to
     multisig::signer_set_filter m_signer_set_filter;
 
-    // partial composition proof signatures for the masked addresses in a set of enote images
-    std::vector<SpCompositionProofMultisigPartial> m_partial_signatures;
+    // partial signatures
+    std::vector<MultisigPartialSigVariant> m_partial_signatures;
 };
 
 } //namespace sp

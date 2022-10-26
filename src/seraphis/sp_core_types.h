@@ -147,6 +147,12 @@ struct SpInputProposal final
     void get_enote_core(SpEnote &enote_out) const { enote_out = m_enote_core; }
 
     /**
+    * brief: get_squash_prefix - get this input's enote's squash prefix
+    * outparam: squash_prefix_out - H_n(Ko, C)
+    */
+    void get_squash_prefix(rct::key &squash_prefix_out) const;
+
+    /**
     * brief: get_enote_image_core - get this input's enote image in the squashed enote model
     * outparam: image_out -
     */

@@ -60,15 +60,6 @@ namespace jamtis
 using encrypted_address_tag_secret_t = encrypted_address_tag_t;
 static_assert(sizeof(encrypted_address_tag_secret_t) == sizeof(address_tag_t), "");
 
-/// helper for encrypting/decrypting with the Blowfish block cipher
-struct Blowfish_LR_wrapper
-{
-    unsigned char *bytes_ref;
-
-    std::uint32_t* L_addr() { return reinterpret_cast<std::uint32_t*>(bytes_ref); }
-    std::uint32_t* R_addr() { return reinterpret_cast<std::uint32_t*>(bytes_ref + 4); }
-};
-
 /// block size
 constexpr std::size_t TWOFISH_BLOCK_SIZE{16};
 

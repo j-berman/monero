@@ -159,12 +159,12 @@ static void compute_K_t1_for_proof(const crypto::secret_key &y,
 // MuSig2--style bi-nonce signing merge factor
 // rho_e = H_n(m, alpha_1_1, alpha_2_1, ..., alpha_1_N, alpha_2_N)
 //-------------------------------------------------------------------------------------------------------------------
-static rct::key multisig_binonce_merge_factor(const rct::key &message, const std::vector<SpMultisigPubNonces> &nonces)
+static rct::key multisig_binonce_merge_factor(const rct::key &message, const std::vector<MultisigPubNonces> &nonces)
 {
     // build hash
     SpKDFTranscript transcript{
             config::HASH_KEY_MULTISIG_BINONCE_MERGE_FACTOR,
-            sizeof(rct::key) + nonces.size() * SpMultisigPubNonces::get_size_bytes()
+            sizeof(rct::key) + nonces.size() * MultisigPubNonces::get_size_bytes()
         };
     transcript.append("message", message);
     transcript.append("nonces", nonces);
@@ -363,7 +363,7 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
     const crypto::secret_key &x,
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
-    const std::vector<SpMultisigPubNonces> &signer_pub_nonces,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces,
     const crypto::secret_key &local_nonce_1_priv,
     const crypto::secret_key &local_nonce_2_priv)
 {
@@ -394,10 +394,10 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(local_nonce_2_priv)), "Bad private key (local_nonce_2_priv zero)!");
 
     // prepare participant nonces
-    std::vector<SpMultisigPubNonces> signer_nonces_pub_mul8;
+    std::vector<MultisigPubNonces> signer_nonces_pub_mul8;
     signer_nonces_pub_mul8.reserve(num_signers);
 
-    for (const SpMultisigPubNonces &signer_pub_nonce_pair : signer_pub_nonces)
+    for (const MultisigPubNonces &signer_pub_nonce_pair : signer_pub_nonces)
     {
         signer_nonces_pub_mul8.emplace_back();
         signer_nonces_pub_mul8.back().signature_nonce_1_pub = rct::scalarmult8(signer_pub_nonce_pair.signature_nonce_1_pub);
@@ -414,7 +414,7 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
 
     // check that the local signer's signature opening is in the input set of opening nonces
     const rct::key U_gen{rct::pk2rct(crypto::get_U())};
-    SpMultisigPubNonces local_nonce_pubs;
+    MultisigPubNonces local_nonce_pubs;
     rct::scalarmultKey(local_nonce_pubs.signature_nonce_1_pub, U_gen, rct::sk2rct(local_nonce_1_priv));
     rct::scalarmultKey(local_nonce_pubs.signature_nonce_2_pub, U_gen, rct::sk2rct(local_nonce_2_priv));
 
@@ -461,7 +461,7 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
     // rho = H_n(m, {alpha_ki_1_e * U}, {alpha_ki_2_e * U})   (binonce merge factor)
     rct::key alpha_ki_2_pub{rct::identity()};
 
-    for (const SpMultisigPubNonces &nonce_pair : signer_nonces_pub_mul8)
+    for (const MultisigPubNonces &nonce_pair : signer_nonces_pub_mul8)
     {
         rct::addKeys(alpha_ki_pub, alpha_ki_pub, nonce_pair.signature_nonce_1_pub);
         rct::addKeys(alpha_ki_2_pub, alpha_ki_2_pub, nonce_pair.signature_nonce_2_pub);
@@ -506,9 +506,9 @@ bool try_make_sp_composition_multisig_partial_sig(
     const crypto::secret_key &x,
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
-    const std::vector<SpMultisigPubNonces> &signer_pub_nonces,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces,
     const multisig::signer_set_filter filter,
-    SpMultisigNonceRecord &nonce_record_inout,
+    MultisigNonceRecord &nonce_record_inout,
     SpCompositionProofMultisigPartial &partial_sig_out)
 {
     // get the nonce privkeys to sign with

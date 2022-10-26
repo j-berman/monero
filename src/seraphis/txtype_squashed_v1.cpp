@@ -231,12 +231,12 @@ void SpTxSquashedV1::get_hash(rct::key &tx_hash_out) const
         tx_proposal_prefix);
 
     // 2. input images (note: key images are represented in the tx hash twice (image proofs message and input images))
-    // H_32({C", KI}((legacy)), {K", C", KI})
+    // H_32({C", KI}((legacy)), {K", C", KI}((seraphis)))
     rct::key input_images_prefix;
     make_input_images_prefix_v1(m_legacy_input_images, m_sp_input_images, input_images_prefix);
 
     // 3. proofs
-    // H_32(balance proof, image proofs, membership proofs)
+    // H_32(balance proof, legacy ring signatures, image proofs, seraphis membership proofs)
     rct::key tx_proofs_prefix;
     make_tx_proofs_prefix_v1(m_balance_proof,
         m_legacy_ring_signatures,
@@ -608,8 +608,6 @@ bool validate_tx_amount_balance<SpTxSquashedV1>(const SpTxSquashedV1 &tx)
 template <>
 bool validate_tx_input_proofs<SpTxSquashedV1>(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context)
 {
-    // seraphis membership proofs: deferred for batching
-
     // prepare image proofs message
     std::string version_string;
     version_string.reserve(3);
@@ -634,6 +632,8 @@ bool validate_tx_input_proofs<SpTxSquashedV1>(const SpTxSquashedV1 &tx, const Tx
     // ownership proof (and proof that key images are well-formed)
     if (!validate_sp_composition_proofs_v1(tx.m_sp_image_proofs, tx.m_sp_input_images, tx_proposal_prefix))
         return false;
+
+    // deferred for batching: seraphis membership proofs
 
     return true;
 }

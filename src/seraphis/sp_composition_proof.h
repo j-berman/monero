@@ -246,7 +246,7 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
     const crypto::secret_key &x,
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
-    const std::vector<SpMultisigPubNonces> &signer_pub_nonces,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces,
     const crypto::secret_key &local_nonce_1_priv,
     const crypto::secret_key &local_nonce_2_priv);
 /**
@@ -267,9 +267,9 @@ bool try_make_sp_composition_multisig_partial_sig(
     const crypto::secret_key &x,
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
-    const std::vector<SpMultisigPubNonces> &signer_pub_nonces,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces,
     const multisig::signer_set_filter filter,
-    SpMultisigNonceRecord &nonce_record_inout,
+    MultisigNonceRecord &nonce_record_inout,
     SpCompositionProofMultisigPartial &partial_sig_out);
 /**
 * brief: sp_composition_prove_multisig_final - create a Seraphis composition proof from multisig partial signatures

@@ -57,12 +57,12 @@ namespace sp
 // - IMPORTANT: these are stored *(1/8) so another person can efficiently mul8 and be confident the result is canonical
 //
 // WARNINGS:
-// - must only use a 'prep' to make ONE 'partial signature', after that the opening nonce privkeys should be deleted
+// - must only use nonces to make ONE 'partial signature', after that the opening nonce privkeys should be deleted
 //   immediately
 // - the nonce privkeys are for local storage, only the pubkeys should be transmitted to other multisig participants
 // - the user is expected to maintain consistency between the J used to define nonce pubkeys and the J used when signing
 ///
-struct SpMultisigPubNonces final
+struct MultisigPubNonces final
 {
     // signature nonce pubkey: (1/8) * alpha_{1,e}*J
     rct::key signature_nonce_1_pub;
@@ -70,24 +70,21 @@ struct SpMultisigPubNonces final
     rct::key signature_nonce_2_pub;
 
     /// overload operator< for sorting: compare nonce_1 then nonce_2
-    bool operator<(const SpMultisigPubNonces &other) const;
-    bool operator==(const SpMultisigPubNonces &other) const;
+    bool operator<(const MultisigPubNonces &other) const;
+    bool operator==(const MultisigPubNonces &other) const;
 
     /// get size in bytes
     static std::size_t get_size_bytes() { return 2*sizeof(rct::key); }
 };
-inline const boost::string_ref get_container_name(const SpMultisigPubNonces&) { return "SpMultisigPubNonces"; }
-void append_to_transcript(const SpMultisigPubNonces &container, SpTranscriptBuilder &transcript_inout);
+inline const boost::string_ref get_container_name(const MultisigPubNonces&) { return "MultisigPubNonces"; }
+void append_to_transcript(const MultisigPubNonces &container, SpTranscriptBuilder &transcript_inout);
 
-struct SpMultisigPrep final
+struct MultisigNonces final
 {
     // signature nonce privkey: alpha_{1,e}
     crypto::secret_key signature_nonce_1_priv;
     // signature nonce privkey: alpha_{2,e}
     crypto::secret_key signature_nonce_2_priv;
-    // signature nonce pubkey: (1/8) * alpha_{1,e}*J
-    // signature nonce pubkey: (1/8) * alpha_{2,e}*J
-    SpMultisigPubNonces signature_nonces_pub;
 };
 
 ////
@@ -96,30 +93,30 @@ struct SpMultisigPrep final
 //   - multiple messages to sign
 //   - multiple signer groups per message
 ///
-class SpMultisigNonceRecord final
+class MultisigNonceRecord final
 {
 public:
 //constructors
     /// default constructor
-    SpMultisigNonceRecord() = default;
+    MultisigNonceRecord() = default;
     /// copy constructor: disabled
-    SpMultisigNonceRecord(const SpMultisigNonceRecord&) = delete;
+    MultisigNonceRecord(const MultisigNonceRecord&) = delete;
     /// move constructor: defaulted
-    SpMultisigNonceRecord(SpMultisigNonceRecord&&) = default;
+    MultisigNonceRecord(MultisigNonceRecord&&) = default;
 //overloaded operators
     /// copy assignment: disabled
-    SpMultisigNonceRecord& operator=(const SpMultisigNonceRecord&) = delete;
+    MultisigNonceRecord& operator=(const MultisigNonceRecord&) = delete;
     /// move assignment: defaulted
-    SpMultisigNonceRecord& operator=(SpMultisigNonceRecord&&) = default;
+    MultisigNonceRecord& operator=(MultisigNonceRecord&&) = default;
 
 //member functions
     /// true if there is a nonce record for a given signing scenario
     bool has_record(const rct::key &message, const rct::key &proof_key, const multisig::signer_set_filter &filter) const;
     /// true if successfully added nonces for a given signing scenario
+    /// note: nonces are generated internally and only exposed by try_get_recorded_nonce_privkeys()
     bool try_add_nonces(const rct::key &message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter &filter,
-        const SpMultisigPrep &prep);
+        const multisig::signer_set_filter &filter);
     /// true if found nonce privkeys for a given signing scenario
     bool try_get_recorded_nonce_privkeys(const rct::key &message,
         const rct::key &proof_key,
@@ -127,10 +124,11 @@ public:
         crypto::secret_key &nonce_privkey_1_out,
         crypto::secret_key &nonce_privkey_2_out) const;
     /// true if found nonce pubkeys for a given signing scenario
-    bool try_get_recorded_nonce_pubkeys(const rct::key &message,
+    bool try_get_nonce_pubkeys_for_base(const rct::key &message,
         const rct::key &proof_key,
         const multisig::signer_set_filter &filter,
-        SpMultisigPubNonces &nonce_pubkeys_out) const;
+        const rct::key &pubkey_base,
+        MultisigPubNonces &nonce_pubkeys_out) const;
     /// true if removed a record for a given signing scenario
     bool try_remove_record(const rct::key &message, const rct::key &proof_key, const multisig::signer_set_filter &filter);
 
@@ -138,18 +136,15 @@ public:
 private:
     // [message : [proof key : [filter, nonces]]]
     std::unordered_map<
-        rct::key,                                //message to sign
+        rct::key,                              //message to sign
         std::unordered_map<
-            rct::key,                            //proof key to be signed
+            rct::key,                          //proof key to be signed
             std::unordered_map<
-                multisig::signer_set_filter,     //filter representing a signer group
-                SpMultisigPrep                   //nonces
+                multisig::signer_set_filter,   //filter representing a signer group
+                MultisigNonces                 //nonces
             >
         >
     > m_record;
 };
-
-//todo
-SpMultisigPrep sp_multisig_init(const rct::key &base_point);
 
 } //namespace sp

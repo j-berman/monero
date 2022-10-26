@@ -78,9 +78,9 @@
 #include "gtest/gtest.h"
 
 #include <memory>
-#include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 
 //-------------------------------------------------------------------------------------------------------------------
@@ -211,7 +211,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
             filter_permutations);
 
         // each signer prepares for each signer group it is a member of
-        std::vector<sp::SpMultisigNonceRecord> signer_nonce_records(num_signers);
+        std::vector<sp::MultisigNonceRecord> signer_nonce_records(num_signers);
 
         for (std::size_t signer_index{0}; signer_index < num_signers; ++signer_index)
         {
@@ -222,17 +222,15 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                         filter_permutations[filter_index]))
                     continue;
 
-                sp::SpMultisigPrep prep_temp{sp::sp_multisig_init(rct::pk2rct(crypto::get_U()))};
                 EXPECT_TRUE(signer_nonce_records[signer_index].try_add_nonces(proposal.message,
                     proposal.K,
-                    filter_permutations[filter_index],
-                    prep_temp));
+                    filter_permutations[filter_index]));
             }
         }
 
         // complete and validate each signature attempt
         std::vector<sp::SpCompositionProofMultisigPartial> partial_sigs;
-        std::vector<sp::SpMultisigPubNonces> signer_nonces_pubs;  //stored with *(1/8)
+        std::vector<sp::MultisigPubNonces> signer_nonces_pubs;  //stored with *(1/8)
         crypto::secret_key z_temp;
         sp::SpCompositionProof proof;
 
@@ -253,9 +251,10 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
 
                 signer_nonces_pubs.emplace_back();
 
-                EXPECT_TRUE(signer_nonce_records[signer_index].try_get_recorded_nonce_pubkeys(proposal.message,
+                EXPECT_TRUE(signer_nonce_records[signer_index].try_get_nonce_pubkeys_for_base(proposal.message,
                     proposal.K,
                     filter,
+                    rct::pk2rct(crypto::get_U()),
                     signer_nonces_pubs.back()));
             }
 
@@ -655,7 +654,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         sp_user_address));
 
     // c) send legacy coinbase enotes to the address, padded so there are enough for legacy ring signatures
-    /*
+    /* todo:
     std::vector<rct::xmr_amount> legacy_in_amounts_padded{legacy_in_amounts};
 
     if (legacy_in_amounts_padded.size() < legacy_ring_size)
@@ -686,6 +685,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // f) compute expected received amount
     boost::multiprecision::uint128_t total_input_amount{0};
 
+    //todo:
     //for (const rct::xmr_amount legacy_in_amount : legacy_in_amounts_padded)
         //total_input_amount += legacy_in_amount;
 
@@ -743,12 +743,16 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         seraphis_accounts[0].get_signers(),
         aggregate_filter_of_requested_multisig_signers);
 
+    //todo: select inputs
+
+    //todo: prepare for legacy input proofs
+
     // c) make multisig tx proposal
     const sp::InputSelectorMockV1 input_selector{enote_store};
     const sp::FeeCalculatorMockTrivial tx_fee_calculator;  //trivial fee calculator so we can use specified input fee
 
     SpMultisigTxProposalV1 multisig_tx_proposal;
-    std::unordered_map<crypto::key_image, std::uint64_t> input_ledger_mappings;
+    std::unordered_map<crypto::key_image, std::uint64_t> sp_input_ledger_mappings;
     ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_tx_proposal_for_transfer_v1(sp_user_address,
         sp_user_address,
         input_selector,
@@ -763,73 +767,93 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         shared_sp_keys.K_1_base,
         shared_sp_keys.k_vb,
         multisig_tx_proposal,
-        input_ledger_mappings)));
+        sp_input_ledger_mappings)));
 
     ASSERT_TRUE(multisig_tx_proposal.m_tx_fee == fee);
 
+    //todo: get legacy input proof inits from all requested signers
 
-    /// 4) get inits from all requested signers
-    std::vector<SpMultisigNonceRecord> signer_nonce_records;
-    std::vector<SpMultisigInputInitSetV1> input_inits;
-    input_inits.reserve(seraphis_accounts.size());
+    /// 4) get seraphis input proof inits from all requested signers
+    std::vector<MultisigNonceRecord> signer_nonce_records;
+    std::vector<MultisigProofInitSetV1> legacy_input_inits;
+    std::vector<MultisigProofInitSetV1> sp_input_inits;
+    sp_input_inits.reserve(seraphis_accounts.size());
     //signer_nonce_records.reserve(seraphis_accounts.size());  //nonce records are non-copyable, so .reserve() doesn't work
 
     for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
-        input_inits.emplace_back();
+        legacy_input_inits.emplace_back();
+        sp_input_inits.emplace_back();
         signer_nonce_records.emplace_back();
 
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
-            ASSERT_NO_THROW(make_v1_multisig_input_init_set_v1(seraphis_accounts[signer_index].get_base_pubkey(),
+            ASSERT_NO_THROW(make_v1_multisig_init_sets_for_inputs_v1(seraphis_accounts[signer_index].get_base_pubkey(),
                 seraphis_accounts[signer_index].get_threshold(),
                 seraphis_accounts[signer_index].get_signers(),
                 multisig_tx_proposal,
                 version_string,
+                rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+                legacy_subaddress_map,
+                legacy_accounts[0].get_common_privkey(),
                 shared_sp_keys.K_1_base,
                 shared_sp_keys.k_vb,
                 signer_nonce_records.back(),
-                input_inits.back()));
+                legacy_input_inits.back(),
+                sp_input_inits.back()));
         }
         else
         {
-            ASSERT_ANY_THROW(make_v1_multisig_input_init_set_v1(seraphis_accounts[signer_index].get_base_pubkey(),
+            ASSERT_ANY_THROW(make_v1_multisig_init_sets_for_inputs_v1(seraphis_accounts[signer_index].get_base_pubkey(),
                 seraphis_accounts[signer_index].get_threshold(),
                 seraphis_accounts[signer_index].get_signers(),
                 multisig_tx_proposal,
                 version_string,
+                rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+                legacy_subaddress_map,
+                legacy_accounts[0].get_common_privkey(),
                 shared_sp_keys.K_1_base,
                 shared_sp_keys.k_vb,
                 signer_nonce_records.back(),
-                input_inits.back()));
+                legacy_input_inits.back(),
+                sp_input_inits.back()));
         }
     }
 
 
-    /// 5) get partial signatures from all requested signers
-    std::unordered_map<crypto::public_key, std::vector<SpMultisigInputPartialSigSetV1>> input_partial_sigs_per_signer;
+    ///todo: get legacy partial signatures from all requested signers
+    std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> legacy_input_partial_sigs_per_signer;
+
+    /// 5) get seraphis partial signatures from all requested signers
+    std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> sp_input_partial_sigs_per_signer;
 
     for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
-            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_input_partial_sig_sets_v1(seraphis_accounts[signer_index],
+            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(seraphis_accounts[signer_index],
                 multisig_tx_proposal,
+                rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+                legacy_subaddress_map,
+                legacy_accounts[0].get_common_privkey(),
                 version_string,
-                input_inits[signer_index],
-                input_inits,  //don't need to remove the local init (will be filtered out internally)
+                sp_input_inits[signer_index],
+                sp_input_inits,  //don't need to remove the local init (will be filtered out internally)
                 signer_nonce_records[signer_index],
-                input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])));
+                sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])));
         }
         else
         {
-            ASSERT_ANY_THROW(try_make_v1_multisig_input_partial_sig_sets_v1(seraphis_accounts[signer_index],
+            ASSERT_ANY_THROW(try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(seraphis_accounts[signer_index],
                 multisig_tx_proposal,
+                rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+                legacy_subaddress_map,
+                legacy_accounts[0].get_common_privkey(),
                 version_string,
-                input_inits[signer_index],
-                input_inits,  //don't need to remove the local init (will be filtered out internally)
+                sp_input_inits[signer_index],
+                sp_input_inits,  //don't need to remove the local init (will be filtered out internally)
                 signer_nonce_records[signer_index],
-                input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()]));
+                sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()]));
         }
     }
 
@@ -837,28 +861,39 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 6) any signer (or even a non-signer) can assemble partial signatures and complete txs
     /// note: even signers who didn't participate in making partial sigs can complete txs here
 
-    // a) get partial inputs
-    std::vector<SpPartialInputV1> partial_inputs;
+    // a) get legacy inputs and seraphis partial inputs
+    std::vector<LegacyInputV1> legacy_inputs;
+    std::vector<SpPartialInputV1> sp_partial_inputs;
 
     ASSERT_NO_THROW(
-            ASSERT_TRUE(try_make_v1_partial_inputs_v1(multisig_tx_proposal,
+            ASSERT_TRUE(try_make_partial_inputs_for_multisig_v1(multisig_tx_proposal,
                 seraphis_accounts[0].get_signers(),
+                rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+                legacy_subaddress_map,
+                legacy_accounts[0].get_common_privkey(),
                 shared_sp_keys.K_1_base,
                 shared_sp_keys.k_vb,
-                input_partial_sigs_per_signer,
-                partial_inputs))
+                legacy_input_partial_sigs_per_signer,
+                sp_input_partial_sigs_per_signer,
+                legacy_inputs,
+                sp_partial_inputs))
         );
 
     // b) build partial tx
     SpTxProposalV1 tx_proposal;
-    multisig_tx_proposal.get_v1_tx_proposal_v1(shared_sp_keys.K_1_base, shared_sp_keys.k_vb, tx_proposal);
+    multisig_tx_proposal.get_v1_tx_proposal_v1(rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+        legacy_subaddress_map,
+        legacy_accounts[0].get_common_privkey(),
+        shared_sp_keys.K_1_base,
+        shared_sp_keys.k_vb,
+        tx_proposal);
 
     SpPartialTxV1 partial_tx;
     ASSERT_NO_THROW(make_v1_partial_tx_v1(tx_proposal,
-        {},  //todo: legacy
-        std::move(partial_inputs),
+        std::move(legacy_inputs),
+        std::move(sp_partial_inputs),
         version_string,
-        rct::key{},  //todo: legacy
+        rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
         shared_sp_keys.K_1_base,
         shared_sp_keys.k_vb,
         partial_tx));
@@ -866,7 +901,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // c. prepare for membership proofs
     // note: use ring size 2^2 = 4 for speed
     std::vector<SpMembershipProofPrepV1> membership_proof_preps;
-    ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(input_ledger_mappings,
+    ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(sp_input_ledger_mappings,
         tx_proposal.m_sp_input_proposals,
         ref_set_decomp_n,
         ref_set_decomp_m,
@@ -903,6 +938,11 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 7) scan outputs for post-tx balance check
 
     // a) refresh enote store
+    refresh_user_enote_store_legacy_multisig(legacy_accounts,
+        legacy_subaddress_map,
+        refresh_config,
+        ledger_context,
+        enote_store);
     refresh_user_enote_store(shared_sp_keys, refresh_config, ledger_context, enote_store);
 
     // b) compute expected spent amount
@@ -914,8 +954,6 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // c) balance check
     ASSERT_TRUE(enote_store.get_balance({SpEnoteOriginStatus::ONCHAIN},
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == total_input_amount - total_spent_amount - specified_fee);
-
-    //todo: legacy balance recovery
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
