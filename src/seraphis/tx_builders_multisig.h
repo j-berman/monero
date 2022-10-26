@@ -51,6 +51,7 @@
 #include "jamtis_payment_proposal.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig_signing_helper_types.h"
 #include "ringct/rctTypes.h"
 #include "sp_core_types.h"
 #include "tx_builder_types.h"
@@ -212,18 +213,6 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     SpMultisigTxProposalV1 &multisig_tx_proposal_out,
     std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out);
 /**
-* brief: check_v1_multisig_init_set_semantics_v1 - check semantics of a multisig initializer set
-*   - throws if a check fails
-* param: init_set -
-* param: threshold -
-* param: multisig_signers -
-* param: num_expected_nonce_sets_per_proofkey -
-*/
-void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_set,
-    const std::uint32_t threshold,
-    const std::vector<crypto::public_key> &multisig_signers,
-    const std::size_t num_expected_nonce_sets_per_proofkey);
-/**
 * brief: make_v1_multisig_init_sets_for_inputs_v1 - make init sets for seraphis and legacy multisig tx input proofs
 * param: signer_id -
 * param: threshold -
@@ -252,14 +241,6 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     MultisigNonceRecord &nonce_record_inout,
     MultisigProofInitSetV1 &legacy_input_init_set_out,
     MultisigProofInitSetV1 &sp_input_init_set_out);
-/**
-* brief: check_v1_multisig_partial_sig_semantics_v1 - check semantics of a multisig input partial signature
-*   - throws if a check fails
-* param: partial_sig_set -
-* param: multisig_signers -
-*/
-void check_v1_multisig_partial_sig_semantics_v1(const MultisigPartialSigSetV1 &partial_sig_set,
-    const std::vector<crypto::public_key> &multisig_signers);
 /**
 * brief: try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1 - try to make multisig partial signatures for seraphis
 *      tx inputs

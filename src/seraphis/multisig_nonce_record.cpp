@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "sp_multisig_nonce_record.h"
+#include "multisig_nonce_record.h"
 
 //local headers
 #include "crypto/crypto.h"

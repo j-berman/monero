@@ -47,7 +47,6 @@
 #include "tx_component_types.h"
 #include "tx_extra.h"
 #include "tx_legacy_builder_types.h"
-#include "tx_multisig_partial_sig_tools.h"
 
 //third party headers
 
@@ -167,55 +166,6 @@ struct SpMultisigTxProposalV1 final
         const rct::key &jamtis_spend_pubkey,
         const crypto::secret_key &k_view_balance,
         rct::key &proposal_prefix_out) const;
-};
-
-////
-// MultisigProofInitSetV1
-// - initialize a set of proofs to be signed by a multisig group
-// - each proof has a set of proof nonces for every set of multisig signers that includes the signer in the signer's
-//   multisig group
-//   - the vectors of proof nonces map 1:1 with the signer sets that include the local signer that can be extracted
-//     from the aggregate filter
-///
-struct MultisigProofInitSetV1 final
-{
-    /// id of signer who made this input initializer set
-    crypto::public_key m_signer_id;
-    /// message to be signed by the image proofs
-    rct::key m_proof_message;
-    /// all multisig signers who should participate in attempting to make these composition proofs
-    multisig::signer_set_filter m_aggregate_signer_set_filter;
-
-    // map [proof key to sign : { {alpha_{ki,1,e}*J_1, alpha_{ki,2,e}*J_1}, {alpha_{ki,1,e}*J_2, alpha_{ki,2,e}*J_2}, ... }]
-    // - key: main proof key to sign on
-    // - value: a set of signature nonce pubkeys for each signer set that includes the specified signer id (i.e. each tx
-    //   attempt)
-    //   - the set of nonce pubkeys corresponds to a set of nonce base keys across which the multisig signature will be made
-    //     (for example: CLSAG signs across both G and Hp(Ko), where Ko is the proof key recorded here)
-    //   - WARNING: ordering is dependent on the signer set filter permutation generator
-    std::unordered_map<rct::key, std::vector<std::vector<MultisigPubNonces>>> m_inits;
-
-    /// get set of nonces at a [proof key : nonce index] location (return false if the location doesn't exist)
-    bool try_get_nonces(const rct::key &proof_key,
-        const std::size_t nonces_index,
-        std::vector<MultisigPubNonces> &nonces_out) const;
-};
-
-////
-// MultisigPartialSigSetV1
-// - set of partially signed multisigs; combine partial signatures to complete a proof
-///
-struct MultisigPartialSigSetV1 final
-{
-    /// id of signer who made these partial signatures
-    crypto::public_key m_signer_id;
-    /// proof message signed by these partial signatures
-    rct::key m_proof_message;
-    /// set of multisig signers these partial signatures correspond to
-    multisig::signer_set_filter m_signer_set_filter;
-
-    // partial signatures
-    std::vector<MultisigPartialSigVariant> m_partial_signatures;
 };
 
 } //namespace sp

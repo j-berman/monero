@@ -166,19 +166,4 @@ void SpMultisigTxProposalV1::get_proposal_prefix_v1(const rct::key &legacy_spend
     tx_proposal.get_proposal_prefix(m_version_string, k_view_balance, proposal_prefix_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool MultisigProofInitSetV1::try_get_nonces(const rct::key &proof_key,
-    const std::size_t nonces_index,
-    std::vector<MultisigPubNonces> &nonces_out) const
-{
-    if (m_inits.find(proof_key) == m_inits.end())
-        return false;
-
-    if (nonces_index >= m_inits.at(proof_key).size())
-        return false;
-
-    nonces_out = m_inits.at(proof_key)[nonces_index];
-
-    return true;
-}
-//-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

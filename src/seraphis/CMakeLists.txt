@@ -42,12 +42,15 @@ set(seraphis_sources
   legacy_enote_utils.cpp
   mock_ledger_context.cpp
   mock_offchain_context.cpp
+  multisig_nonce_record.cpp
+  multisig_partial_sig_makers.cpp
+  multisig_signing_helper_types.cpp
+  multisig_signing_helper_utils.cpp
   serialization_demo_utils.cpp
   sp_composition_proof.cpp
   sp_core_enote_utils.cpp
   sp_core_types.cpp
   sp_crypto_utils.cpp
-  sp_multisig_nonce_record.cpp
   sp_generator_factory.cpp
   sp_hash_functions.cpp
   sp_multiexp.cpp
@@ -80,7 +83,6 @@ set(seraphis_sources
   tx_legacy_component_types.cpp
   tx_legacy_enote_record_utils.cpp
   tx_misc_utils.cpp
-  tx_multisig_partial_sig_tools.cpp
   tx_ref_set_index_mapper_flat.cpp
   tx_validators.cpp
   txtype_squashed_v1.cpp)

@@ -36,12 +36,11 @@
 //local headers
 #include "crypto/crypto.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig_signing_helper_types.h"
 #include "ringct/rctTypes.h"
 #include "sp_composition_proof.h"
 
 //third party headers
-#include <boost/variant/get.hpp>
-#include <boost/variant/variant.hpp>
 
 //standard headers
 
@@ -50,38 +49,6 @@ namespace sp { class MultisigNonceRecord; }
 
 namespace sp
 {
-
-struct MultisigPartialSigVariant final
-{
-    /// variant of all multisig partial signature types
-    boost::variant<SpCompositionProofMultisigPartial> m_partial_sig;
-
-    /// constructors
-    MultisigPartialSigVariant() = default;
-    template <typename T>
-    MultisigPartialSigVariant(const T &partial_sig) : m_partial_sig{partial_sig} {}
-
-    /// get the partial sig's signed message
-    const rct::key& message() const;
-
-    /// get the partial sig's main proof key
-    const rct::key& proof_key() const;
-
-    /// interact with the variant
-    template <typename T>
-    bool is_type() const { return boost::get<T>(&m_partial_sig) != nullptr; }
-
-    template <typename T>
-    const T& get_partial_sig() const
-    {
-        static const T empty{};
-        return is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
-    }
-
-    /// check if two variants have the same type
-    static bool same_type(const MultisigPartialSigVariant &v1, const MultisigPartialSigVariant &v2)
-    { return v1.m_partial_sig.which() == v2.m_partial_sig.which(); }
-};
 
 ////
 // MultisigPartialSigMaker

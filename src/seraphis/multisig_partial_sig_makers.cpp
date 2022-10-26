@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_multisig_partial_sig_tools.h"
+#include "multisig_partial_sig_makers.h"
 
 //local headers
 #include "crypto/crypto.h"
@@ -39,10 +39,11 @@ extern "C"
 }
 #include "misc_log_ex.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig_nonce_record.h"
+#include "multisig_signing_helper_types.h"
 #include "ringct/rctTypes.h"
 #include "sp_composition_proof.h"
 #include "sp_crypto_utils.h"
-#include "sp_multisig_nonce_record.h"
 
 //third party headers
 
@@ -101,34 +102,6 @@ static SpCompositionProofMultisigPartial attempt_make_sp_composition_multisig_pa
     return partial_sig;
 }
 //-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-const rct::key& MultisigPartialSigVariant::message() const
-{
-    if (is_type<SpCompositionProofMultisigPartial>())
-        return get_partial_sig<SpCompositionProofMultisigPartial>().message;
-    //todo: legacy
-    //else if (is_type<SpContextualBasicEnoteRecordV1>())
-    //    return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
-    else
-    {
-        static const rct::key temp{};
-        return temp;
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-const rct::key& MultisigPartialSigVariant::proof_key() const
-{
-    if (is_type<SpCompositionProofMultisigPartial>())
-        return get_partial_sig<SpCompositionProofMultisigPartial>().K;
-    //todo: legacy
-    //else if (is_type<SpContextualBasicEnoteRecordV1>())
-    //    return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
-    else
-    {
-        static const rct::key temp{};
-        return temp;
-    }
-}
 //-------------------------------------------------------------------------------------------------------------------
 MultisigPartialSigMakerSpCompositionProof::MultisigPartialSigMakerSpCompositionProof(const std::uint32_t threshold,
     const std::vector<SpCompositionProofMultisigProposal> &proof_proposals,

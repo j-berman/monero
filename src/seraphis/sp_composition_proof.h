@@ -91,8 +91,8 @@
 
 //local headers
 #include "crypto/crypto.h"
+#include "multisig_nonce_record.h"
 #include "ringct/rctTypes.h"
-#include "sp_multisig_nonce_record.h"
 
 //third party headers
 #include <boost/utility/string_ref.hpp>
