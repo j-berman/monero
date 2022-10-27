@@ -58,7 +58,6 @@ namespace sp
 class SpRefSetIndexMapper
 {
 public:
-//constructors: default
 //destructor
     virtual ~SpRefSetIndexMapper() = default;
 

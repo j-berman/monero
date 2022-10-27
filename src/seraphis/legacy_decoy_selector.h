@@ -54,7 +54,6 @@ namespace sp
 class LegacyDecoySelector
 {
 public:
-//constructors: default
 //destructor
     virtual ~LegacyDecoySelector() = default;
 

@@ -53,6 +53,9 @@ namespace sp
 class EnoteScanningContextLedger
 {
 public:
+//destructor
+    virtual ~EnoteScanningContextLedger() = default;
+
 //overloaded operators
     /// disable copy/move (this is a virtual base class)
     EnoteScanningContextLedger& operator=(EnoteScanningContextLedger&&) = delete;

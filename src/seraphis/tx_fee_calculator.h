@@ -50,7 +50,6 @@ namespace sp
 class FeeCalculator
 {
 public:
-//constructors: default
 //destructor
     virtual ~FeeCalculator() = default;
 

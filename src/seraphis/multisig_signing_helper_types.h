@@ -64,7 +64,7 @@ namespace sp
 ///
 struct MultisigProofInitSetV1 final
 {
-    /// id of signer who made this input initializer set
+    /// id of signer who made this proof initializer set
     crypto::public_key m_signer_id;
     /// message to be signed by the image proofs
     rct::key m_proof_message;

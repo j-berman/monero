@@ -61,6 +61,9 @@ namespace sp
 class MultisigPartialSigMaker
 {
 public:
+//destructor
+    virtual ~MultisigPartialSigMaker() = default;
+
 //overloaded operators
     /// disable copy/move (this is a virtual base class)
     MultisigPartialSigMaker& operator=(MultisigPartialSigMaker&&) = delete;

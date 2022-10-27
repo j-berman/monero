@@ -56,7 +56,6 @@ namespace sp
 class OutputSetContextForInputSelection
 {
 public:
-//constructors: default
 //destructor
     virtual ~OutputSetContextForInputSelection() = default;
 

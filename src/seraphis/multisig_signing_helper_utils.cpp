@@ -438,7 +438,7 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
 {
     /// make partial signatures for every available group of signers of size threshold that includes the local signer
     CHECK_AND_ASSERT_THROW_MES(signer_account.multisig_is_ready(),
-        "make multisig input partial sigs: signer account is not complete, so it can't make partial signatures.");
+        "make multisig partial sigs: signer account is not complete, so it can't make partial signatures.");
 
     const std::size_t num_available_signers{available_signers_as_filters.size()};
 

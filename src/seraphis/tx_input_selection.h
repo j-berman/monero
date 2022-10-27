@@ -67,7 +67,6 @@ using input_set_tracker_t =
 class InputSelectorV1
 {
 public:
-//constructors: default
 //destructor
     virtual ~InputSelectorV1() = default;
 

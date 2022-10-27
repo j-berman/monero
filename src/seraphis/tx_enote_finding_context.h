@@ -53,6 +53,9 @@ namespace sp
 class EnoteFindingContextLedger
 {
 public:
+//destructor
+    virtual ~EnoteFindingContextLedger() = default;
+
 //overloaded operators
     /// disable copy/move (this is a virtual base class)
     EnoteFindingContextLedger& operator=(EnoteFindingContextLedger&&) = delete;
@@ -73,6 +76,9 @@ public:
 class EnoteFindingContextOffchain
 {
 public:
+//destructor
+    virtual ~EnoteFindingContextOffchain() = default;
+
 //overloaded operators
     /// disable copy/move (this is a virtual base class)
     EnoteFindingContextOffchain& operator=(EnoteFindingContextOffchain&&) = delete;

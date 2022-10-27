@@ -58,6 +58,9 @@ namespace sp
 class EnoteStoreUpdaterLedger
 {
 public:
+//destructor
+    virtual ~EnoteStoreUpdaterLedger() = default;
+
 //overloaded operators
     /// disable copy/move (this is an abstract base class)
     EnoteStoreUpdaterLedger& operator=(EnoteStoreUpdaterLedger&&) = delete;
@@ -89,6 +92,9 @@ public:
 class EnoteStoreUpdaterNonLedger
 {
 public:
+//destructor
+    virtual ~EnoteStoreUpdaterNonLedger() = default;
+
 //overloaded operators
     /// disable copy/move (this is an abstract base class)
     EnoteStoreUpdaterNonLedger& operator=(EnoteStoreUpdaterNonLedger&&) = delete;

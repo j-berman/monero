@@ -122,7 +122,7 @@ void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
     MultisigNonceRecord &nonce_record_inout,
     MultisigProofInitSetV1 &init_set_out);
 /**
-* brief: check_v1_multisig_partial_sig_set_semantics_v1 - check semantics of a multisig input partial signature set
+* brief: check_v1_multisig_partial_sig_set_semantics_v1 - check semantics of a multisig partial signature set
 *   - throws if a check fails
 * param: partial_sig_set -
 * param: multisig_signers -
