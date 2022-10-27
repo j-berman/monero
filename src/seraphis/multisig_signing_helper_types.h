@@ -41,7 +41,6 @@
 #include "sp_composition_proof.h"
 
 //third party headers
-#include <boost/mp11/algorithm.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/variant/variant.hpp>
 
@@ -77,7 +76,7 @@ struct MultisigProofInitSetV1 final
     // - value: a set of signature nonce pubkeys for each signer set that includes the specified signer id (i.e. each tx
     //   attempt)
     //   - the set of nonce pubkeys corresponds to a set of nonce base keys across which the multisig signature will be made
-    //     (for example: CLSAG signs across both G and Hp(Ko), where Ko is the proof key recorded here)
+    //     (for example: CLSAG signs across both G and Hp(Ko), where Ko = ko*G is the proof key recorded here)
     //   - WARNING: ordering is dependent on the signer set filter permutation generator
     std::unordered_map<rct::key, std::vector<std::vector<MultisigPubNonces>>> m_inits;
 
@@ -120,9 +119,13 @@ struct MultisigPartialSigVariant final
         return is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
     }
 
-    /// get the type index of a requested type (returns size of variant type list for unknown T)
+    /// get the type index of a requested type (compile error for invalid types)
     template <typename T>
-    static std::size_t get_type_index() { return boost::mp11::mp_find<VType, T>::value; }
+    static int get_type_index()
+    {
+        static const int type_index{VType{T{}}.which()};
+        return type_index;
+    }
 
     /// check if two variants have the same type
     static bool same_type(const MultisigPartialSigVariant &v1, const MultisigPartialSigVariant &v2)
