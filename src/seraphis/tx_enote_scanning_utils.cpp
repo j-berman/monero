@@ -267,10 +267,10 @@ static std::unordered_set<rct::key> process_chunk_full_sp_selfsend_pass(
             try
             {
                 if (!try_get_enote_record_v1_selfsend(
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record.m_enote,
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
+                        contextual_basic_record.contextual_record<SpContextualBasicEnoteRecordV1>().m_record.m_enote,
+                        contextual_basic_record.contextual_record<SpContextualBasicEnoteRecordV1>().m_record
                             .m_enote_ephemeral_pubkey,
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record
+                        contextual_basic_record.contextual_record<SpContextualBasicEnoteRecordV1>().m_record
                             .m_input_context,
                         jamtis_spend_pubkey,
                         k_view_balance,
@@ -505,7 +505,7 @@ void process_chunk_intermediate_legacy(const rct::key &legacy_base_spend_pubkey,
             try
             {
                 if (!try_get_legacy_intermediate_enote_record(
-                        contextual_basic_record.get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
+                        contextual_basic_record.contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
                         legacy_base_spend_pubkey,
                         legacy_view_privkey,
                         new_enote_record))
@@ -540,7 +540,7 @@ void process_chunk_intermediate_sp(const rct::key &jamtis_spend_pubkey,
             try
             {
                 if (!try_get_intermediate_enote_record_v1(
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
+                        contextual_basic_record.contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
                         jamtis_spend_pubkey,
                         xk_unlock_amounts,
                         xk_find_received,
@@ -607,7 +607,7 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
             try
             {
                 if (!try_get_legacy_enote_record(
-                        contextual_basic_record.get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
+                        contextual_basic_record.contextual_record<LegacyContextualBasicEnoteRecordV1>().m_record,
                         legacy_base_spend_pubkey,
                         legacy_spend_privkey,
                         legacy_view_privkey,
@@ -686,7 +686,7 @@ void process_chunk_full_sp(const rct::key &jamtis_spend_pubkey,
             try
             {
                 if (!try_get_enote_record_v1_plain(
-                        contextual_basic_record.get_contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
+                        contextual_basic_record.contextual_record<SpContextualBasicEnoteRecordV1>().m_record,
                         jamtis_spend_pubkey,
                         k_view_balance,
                         xk_unlock_amounts,

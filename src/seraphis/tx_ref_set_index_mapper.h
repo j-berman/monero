@@ -66,8 +66,8 @@ public:
     SpRefSetIndexMapper& operator=(SpRefSetIndexMapper&&) = delete;
 
 //getters
-    virtual std::uint64_t get_distribution_min_index() const = 0;
-    virtual std::uint64_t get_distribution_max_index() const = 0;
+    virtual std::uint64_t distribution_min_index() const = 0;
+    virtual std::uint64_t distribution_max_index() const = 0;
 
 //member functions
     /// [min, max] --(func)-> [0, 2^64 - 1]

@@ -58,7 +58,7 @@ FeeCalculatorSpTxSquashedV1::FeeCalculatorSpTxSquashedV1(const std::size_t legac
         m_tx_extra{tx_extra}
 {}
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_weight, const std::size_t weight)
+rct::xmr_amount FeeCalculatorSpTxSquashedV1::compute_fee(const std::size_t fee_per_weight, const std::size_t weight)
 {
     const DiscretizedFee fee_discretized{fee_per_weight * weight};
 
@@ -69,18 +69,18 @@ rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_w
     return fee_value;
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_weight, const SpTxSquashedV1 &tx)
+rct::xmr_amount FeeCalculatorSpTxSquashedV1::compute_fee(const std::size_t fee_per_weight, const SpTxSquashedV1 &tx)
 {
-    return get_fee(fee_per_weight, tx.get_weight());
+    return FeeCalculatorSpTxSquashedV1::compute_fee(fee_per_weight, tx.weight());
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_weight,
+rct::xmr_amount FeeCalculatorSpTxSquashedV1::compute_fee(const std::size_t fee_per_weight,
     const std::size_t num_legacy_inputs,
     const std::size_t num_sp_inputs,
     const std::size_t num_outputs) const
 {
     const std::size_t weight{
-            SpTxSquashedV1::get_weight(num_legacy_inputs,
+            SpTxSquashedV1::weight(num_legacy_inputs,
                 num_sp_inputs,
                 num_outputs,
                 m_legacy_ring_size,
@@ -90,7 +90,7 @@ rct::xmr_amount FeeCalculatorSpTxSquashedV1::get_fee(const std::size_t fee_per_w
                 m_tx_extra)
         };
 
-    return get_fee(fee_per_weight, weight);
+    return this->compute_fee(fee_per_weight, weight);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

@@ -52,16 +52,16 @@ void append_to_transcript(const SpBinnedReferenceSetConfigV1 &container, SpTrans
     transcript_inout.append("num_bin_members", container.m_num_bin_members);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBinnedReferenceSetV1::get_size_bytes(const std::size_t num_bins, const bool include_seed /*= false*/)
+std::size_t SpBinnedReferenceSetV1::size_bytes(const std::size_t num_bins, const bool include_seed /*= false*/)
 {
     return num_bins * 8 +
         sizeof(ref_set_bin_dimension_v1_t) +
         (include_seed ? sizeof(m_bin_generator_seed) : 0);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBinnedReferenceSetV1::get_size_bytes(const bool include_seed /*= false*/) const
+std::size_t SpBinnedReferenceSetV1::size_bytes(const bool include_seed /*= false*/) const
 {
-    return SpBinnedReferenceSetV1::get_size_bytes(m_bin_loci.size(), include_seed);
+    return SpBinnedReferenceSetV1::size_bytes(m_bin_loci.size(), include_seed);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void append_to_transcript(const SpBinnedReferenceSetV1 &container, SpTranscriptBuilder &transcript_inout)

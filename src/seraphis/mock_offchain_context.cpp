@@ -61,7 +61,7 @@ bool MockOffchainContext::key_image_exists_v1(const crypto::key_image &key_image
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    return key_image_exists_v1_impl(key_image);
+    return this->key_image_exists_v1_impl(key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_get_offchain_chunk_sp(const crypto::x25519_secret_key &xk_find_received,
@@ -69,42 +69,42 @@ bool MockOffchainContext::try_get_offchain_chunk_sp(const crypto::x25519_secret_
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    return try_get_offchain_chunk_sp_impl(xk_find_received, chunk_out);
+    return this->try_get_offchain_chunk_sp_impl(xk_find_received, chunk_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_add_partial_tx_v1(const SpPartialTxV1 &partial_tx)
 {
     boost::unique_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    return try_add_partial_tx_v1_impl(partial_tx);
+    return this->try_add_partial_tx_v1_impl(partial_tx);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_add_tx_v1(const SpTxSquashedV1 &tx)
 {
     boost::unique_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    return try_add_tx_v1_impl(tx);
+    return this->try_add_tx_v1_impl(tx);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::remove_tx_from_cache(const rct::key &input_context)
 {
     boost::unique_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    remove_tx_from_cache_impl(input_context);
+    this->remove_tx_from_cache_impl(input_context);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::remove_tx_with_key_image_from_cache(const crypto::key_image &key_image)
 {
     boost::unique_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    remove_tx_with_key_image_from_cache_impl(key_image);
+    this->remove_tx_with_key_image_from_cache_impl(key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::clear_cache()
 {
     boost::unique_lock<boost::shared_mutex> lock{m_context_mutex};
 
-    clear_cache_impl();
+    this->clear_cache_impl();
 }
 //-------------------------------------------------------------------------------------------------------------------
 // internal implementation details
@@ -168,7 +168,7 @@ bool MockOffchainContext::try_add_v1_impl(const std::vector<LegacyEnoteImageV2> 
 
     for (const LegacyEnoteImageV2 &legacy_enote_image : legacy_input_images)
     {
-        if (key_image_exists_v1_impl(legacy_enote_image.m_key_image))
+        if (this->key_image_exists_v1_impl(legacy_enote_image.m_key_image))
             return false;
 
         legacy_key_images_collected.emplace_back(legacy_enote_image.m_key_image);
@@ -176,7 +176,7 @@ bool MockOffchainContext::try_add_v1_impl(const std::vector<LegacyEnoteImageV2> 
 
     for (const SpEnoteImageV1 &sp_enote_image : sp_input_images)
     {
-        if (key_image_exists_v1_impl(sp_enote_image.m_core.m_key_image))
+        if (this->key_image_exists_v1_impl(sp_enote_image.m_core.m_key_image))
             return false;
 
         sp_key_images_collected.emplace_back(sp_enote_image.m_core.m_key_image);
@@ -211,7 +211,7 @@ bool MockOffchainContext::try_add_v1_impl(const std::vector<LegacyEnoteImageV2> 
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_add_partial_tx_v1_impl(const SpPartialTxV1 &partial_tx)
 {
-    return try_add_v1_impl(partial_tx.m_legacy_input_images,
+    return this->try_add_v1_impl(partial_tx.m_legacy_input_images,
         partial_tx.m_sp_input_images,
         partial_tx.m_tx_supplement,
         partial_tx.m_outputs);
@@ -219,7 +219,7 @@ bool MockOffchainContext::try_add_partial_tx_v1_impl(const SpPartialTxV1 &partia
 //-------------------------------------------------------------------------------------------------------------------
 bool MockOffchainContext::try_add_tx_v1_impl(const SpTxSquashedV1 &tx)
 {
-    return try_add_v1_impl(tx.m_legacy_input_images, tx.m_sp_input_images, tx.m_tx_supplement, tx.m_outputs);
+    return this->try_add_v1_impl(tx.m_legacy_input_images, tx.m_sp_input_images, tx.m_tx_supplement, tx.m_outputs);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::remove_tx_from_cache_impl(const rct::key &input_context)
@@ -269,7 +269,7 @@ void MockOffchainContext::remove_tx_with_key_image_from_cache_impl(const crypto:
         );
 
     if (tx_key_images_search_it != m_tx_key_images.end())
-        remove_tx_from_cache_impl(tx_key_images_search_it->first);
+        this->remove_tx_from_cache_impl(tx_key_images_search_it->first);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void MockOffchainContext::clear_cache_impl()

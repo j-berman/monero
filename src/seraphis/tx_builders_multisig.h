@@ -83,8 +83,7 @@ namespace sp
 *   - check: amout mask is a non-zero canonical scalar
 * param: multisig_input_proposal -
 */
-void check_v1_legacy_multisig_input_proposal_semantics_v1(
-    const LegacyMultisigInputProposalV1 &multisig_input_proposal);
+void check_v1_legacy_multisig_input_proposal_semantics_v1(const LegacyMultisigInputProposalV1 &multisig_input_proposal);
 /**
 * brief: check_v1_sp_multisig_input_proposal_semantics_v1 - check semantics of a multisig seraphis input
 *      proposal

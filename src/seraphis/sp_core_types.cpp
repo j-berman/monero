@@ -97,7 +97,7 @@ void SpInputProposal::get_enote_image_core(SpEnoteImage &image_out) const
         image_out.m_masked_commitment);
 
     // KI = k_b/k_a U
-    this->get_key_image(image_out.m_key_image);
+    image_out.m_key_image = this->key_image();
 }
 //-------------------------------------------------------------------------------------------------------------------
 void SpInputProposal::gen(const crypto::secret_key &sp_spend_privkey, const rct::xmr_amount amount)

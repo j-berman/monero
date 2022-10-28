@@ -149,7 +149,7 @@ struct LegacyContextualBasicEnoteRecordV1 final
     SpEnoteOriginContextV1 m_origin_context;
 
     /// onetime address equivalence
-    static bool same_destination(const LegacyContextualBasicEnoteRecordV1 &record1,
+    static bool have_same_destination(const LegacyContextualBasicEnoteRecordV1 &record1,
         const LegacyContextualBasicEnoteRecordV1 &record2);
 };
 
@@ -168,11 +168,11 @@ struct LegacyContextualIntermediateEnoteRecordV1 final
     void get_onetime_address(rct::key &onetime_address_out) const;
 
     /// onetime address equivalence
-    static bool same_destination(const LegacyContextualIntermediateEnoteRecordV1 &record1,
+    static bool have_same_destination(const LegacyContextualIntermediateEnoteRecordV1 &record1,
         const LegacyContextualIntermediateEnoteRecordV1 &record2);
 
     /// get this enote's amount
-    rct::xmr_amount get_amount() const { return m_record.m_amount; }
+    rct::xmr_amount amount() const { return m_record.m_amount; }
 };
 
 ////
@@ -189,14 +189,14 @@ struct LegacyContextualEnoteRecordV1 final
     SpEnoteSpentContextV1 m_spent_context;
 
     /// onetime address equivalence
-    static bool same_destination(const LegacyContextualEnoteRecordV1 &record1,
+    static bool have_same_destination(const LegacyContextualEnoteRecordV1 &record1,
         const LegacyContextualEnoteRecordV1 &record2);
 
     /// get this enote's key image
-    void get_key_image(crypto::key_image &key_image_out) const;
+    const crypto::key_image& key_image() const { return m_record.m_key_image; }
 
     /// get this enote's amount
-    rct::xmr_amount get_amount() const { return m_record.m_amount; }
+    rct::xmr_amount amount() const { return m_record.m_amount; }
 
     /// check origin status
     bool has_origin_status(const SpEnoteOriginStatus test_status) const;
@@ -221,7 +221,7 @@ struct SpContextualBasicEnoteRecordV1 final
     SpEnoteOriginContextV1 m_origin_context;
 
     /// onetime address equivalence
-    static bool same_destination(const SpContextualBasicEnoteRecordV1 &record1,
+    static bool have_same_destination(const SpContextualBasicEnoteRecordV1 &record1,
         const SpContextualBasicEnoteRecordV1 &record2);
 };
 
@@ -240,11 +240,11 @@ struct SpContextualIntermediateEnoteRecordV1 final
     void get_onetime_address(rct::key &onetime_address_out) const;
 
     /// onetime address equivalence
-    static bool same_destination(const SpContextualIntermediateEnoteRecordV1 &record1,
+    static bool have_same_destination(const SpContextualIntermediateEnoteRecordV1 &record1,
         const SpContextualIntermediateEnoteRecordV1 &record2);
 
     /// get this enote's amount
-    rct::xmr_amount get_amount() const { return m_record.m_amount; }
+    rct::xmr_amount amount() const { return m_record.m_amount; }
 };
 
 ////
@@ -261,13 +261,13 @@ struct SpContextualEnoteRecordV1 final
     SpEnoteSpentContextV1 m_spent_context;
 
     /// onetime address equivalence
-    static bool same_destination(const SpContextualEnoteRecordV1 &record1, const SpContextualEnoteRecordV1 &record2);
+    static bool have_same_destination(const SpContextualEnoteRecordV1 &record1, const SpContextualEnoteRecordV1 &record2);
 
     /// get this enote's key image
-    void get_key_image(crypto::key_image &key_image_out) const;
+    const crypto::key_image& key_image() const { return m_record.m_key_image; }
 
     /// get this enote's amount
-    rct::xmr_amount get_amount() const { return m_record.m_amount; }
+    rct::xmr_amount amount() const { return m_record.m_amount; }
 
     /// check origin status
     bool has_origin_status(const SpEnoteOriginStatus test_status) const;
@@ -295,13 +295,13 @@ struct ContextualBasicRecordVariant final
 
     /// interact with the variant
     template <typename T>
-    bool is_type() const { return boost::get<T>(&m_basic_record) != nullptr; }
+    bool is_type() const { return boost::strict_get<T>(&m_basic_record) != nullptr; }
 
     template <typename T>
-    const T& get_contextual_record() const
+    const T& contextual_record() const
     {
         static const T empty{};
-        return is_type<T>() ? boost::get<T>(m_basic_record) : empty;
+        return this->is_type<T>() ? boost::get<T>(m_basic_record) : empty;
     }
 };
 
@@ -316,7 +316,7 @@ struct ContextualRecordVariant final
     ContextualRecordVariant(const T &record) : m_record{record} {}
 
     /// get the record's amount
-    rct::xmr_amount get_amount() const;
+    rct::xmr_amount amount() const;
     /// get the record's origin context
     const SpEnoteOriginContextV1& origin_context() const;
     /// get the record's spent context
@@ -324,13 +324,13 @@ struct ContextualRecordVariant final
 
     /// interact with the variant
     template <typename T>
-    bool is_type() const { return boost::get<T>(&m_record) != nullptr; }
+    bool is_type() const { return boost::strict_get<T>(&m_record) != nullptr; }
 
     template <typename T>
-    const T& get_contextual_record() const
+    const T& contextual_record() const
     {
         static const T empty{};
-        return is_type<T>() ? boost::get<T>(m_record) : empty;
+        return this->is_type<T>() ? boost::get<T>(m_record) : empty;
     }
 };
 

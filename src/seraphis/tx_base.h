@@ -60,11 +60,11 @@ namespace sp
 
 /// short description of the tx type (e.g. 'Sp-Squashed-V1')
 template <typename SpTxType>
-std::string get_descriptor();
+std::string tx_descriptor();
 
 /// tx structure version (e.g. from struct TxStructureVersionSp)
 template <typename SpTxType>
-unsigned char get_structure_version();
+unsigned char tx_structure_version();
 
 /// transaction validators
 template <typename SpTxType>
@@ -120,7 +120,7 @@ inline void make_versioning_string_seraphis_base(const unsigned char tx_structur
 template <typename SpTxType>
 void make_versioning_string(const unsigned char tx_semantic_rules_version, std::string &version_string_out)
 {
-    make_versioning_string_seraphis_base(get_structure_version<SpTxType>(), tx_semantic_rules_version, version_string_out);
+    make_versioning_string_seraphis_base(tx_structure_version<SpTxType>(), tx_semantic_rules_version, version_string_out);
 }
 
 

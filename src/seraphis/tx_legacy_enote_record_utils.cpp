@@ -75,7 +75,7 @@ static bool try_check_legacy_view_tag(const LegacyEnoteVariant &enote,
     crypto::view_tag nominal_view_tag;
     crypto::derive_view_tag(sender_receiver_DH_derivation, tx_output_index, nominal_view_tag);
 
-    return nominal_view_tag == enote.get_enote<LegacyEnoteV4>().m_view_tag;
+    return nominal_view_tag == enote.enote<LegacyEnoteV4>().m_view_tag;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -152,7 +152,7 @@ static bool try_get_amount_commitment_information_v2(const rct::key &amount_comm
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_get_amount_commitment_information_v3(const rct::key &amount_commitment,
-const rct::xmr_amount &encoded_amount,
+    const rct::xmr_amount &encoded_amount,
     const std::uint64_t tx_output_index,
     const crypto::key_derivation &sender_receiver_DH_derivation,
     rct::xmr_amount &amount_out,
@@ -184,15 +184,15 @@ static bool try_get_amount_commitment_information(const LegacyEnoteVariant &enot
 {
     if (enote.is_type<LegacyEnoteV1>())
     {
-        return try_get_amount_commitment_information_v1(enote.get_enote<LegacyEnoteV1>().m_amount,
+        return try_get_amount_commitment_information_v1(enote.enote<LegacyEnoteV1>().m_amount,
             amount_out,
             amount_blinding_factor_out);
     }
     else if (enote.is_type<LegacyEnoteV2>())
     {
-        return try_get_amount_commitment_information_v2(enote.get_enote<LegacyEnoteV2>().m_amount_commitment,
-            enote.get_enote<LegacyEnoteV2>().m_encoded_amount_blinding_factor,
-            enote.get_enote<LegacyEnoteV2>().m_encoded_amount,
+        return try_get_amount_commitment_information_v2(enote.enote<LegacyEnoteV2>().m_amount_commitment,
+            enote.enote<LegacyEnoteV2>().m_encoded_amount_blinding_factor,
+            enote.enote<LegacyEnoteV2>().m_encoded_amount,
             tx_output_index,
             sender_receiver_DH_derivation,
             amount_out,
@@ -200,8 +200,8 @@ static bool try_get_amount_commitment_information(const LegacyEnoteVariant &enot
     }
     else if (enote.is_type<LegacyEnoteV3>())
     {
-        return try_get_amount_commitment_information_v3(enote.get_enote<LegacyEnoteV3>().m_amount_commitment,
-            enote.get_enote<LegacyEnoteV3>().m_encoded_amount,
+        return try_get_amount_commitment_information_v3(enote.enote<LegacyEnoteV3>().m_amount_commitment,
+            enote.enote<LegacyEnoteV3>().m_encoded_amount,
             tx_output_index,
             sender_receiver_DH_derivation,
             amount_out,
@@ -209,8 +209,8 @@ static bool try_get_amount_commitment_information(const LegacyEnoteVariant &enot
     }
     else if (enote.is_type<LegacyEnoteV4>())
     {
-        return try_get_amount_commitment_information_v3(enote.get_enote<LegacyEnoteV4>().m_amount_commitment,
-            enote.get_enote<LegacyEnoteV4>().m_encoded_amount,
+        return try_get_amount_commitment_information_v3(enote.enote<LegacyEnoteV4>().m_amount_commitment,
+            enote.enote<LegacyEnoteV4>().m_encoded_amount,
             tx_output_index,
             sender_receiver_DH_derivation,
             amount_out,

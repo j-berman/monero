@@ -109,7 +109,7 @@ void check_v1_enote_scan_chunk_nonledger_semantics_v1(const EnoteScanningChunkNo
     const SpEnoteOriginStatus expected_origin_status,
     const SpEnoteSpentStatus expected_spent_status);
 
-//todo: use a EnoteScanChunkProcessingContext to hide details of chunk processing and enote store updating?
+//todo
 void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
     EnoteScanningContextLedger &scanning_context_inout,
     EnoteStoreUpdaterLedger &enote_store_updater_inout);

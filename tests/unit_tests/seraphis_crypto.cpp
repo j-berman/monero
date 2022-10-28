@@ -129,10 +129,10 @@ TEST(seraphis_crypto, composition_proof)
     try
     {
         make_fake_sp_masked_address(x, y, z, K);
-        proof = sp::sp_composition_prove(message, K, x, y, z);
+        sp::make_sp_composition_proof(message, K, x, y, z, proof);
 
         sp::make_seraphis_key_image(y, z, KI);
-        EXPECT_TRUE(sp::sp_composition_verify(proof, message, K, KI));
+        EXPECT_TRUE(sp::verify_sp_composition_proof(proof, message, K, KI));
     }
     catch (...)
     {
@@ -149,10 +149,10 @@ TEST(seraphis_crypto, composition_proof)
         rct::subKeys(K, K, xG);   // kludge: remove x part manually
         x = rct::rct2sk(rct::zero());
 
-        proof = sp::sp_composition_prove(message, K, x, y, z);
+        sp::make_sp_composition_proof(message, K, x, y, z, proof);
 
         sp::make_seraphis_key_image(y, z, KI);
-        EXPECT_TRUE(sp::sp_composition_verify(proof, message, K, KI));
+        EXPECT_TRUE(sp::verify_sp_composition_proof(proof, message, K, KI));
     }
     catch (...)
     {

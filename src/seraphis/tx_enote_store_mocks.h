@@ -167,23 +167,23 @@ public:
         const ScanUpdateMode scan_update_mode,
         rct::key &block_id_out) const;
     /// get the legacy intermediate records (e.g. to collect their onetime addresses for key image recovery)
-    const std::unordered_map<rct::key, LegacyContextualIntermediateEnoteRecordV1>& get_legacy_intermediate_records() const
+    const std::unordered_map<rct::key, LegacyContextualIntermediateEnoteRecordV1>& legacy_intermediate_records() const
     { return m_mapped_legacy_intermediate_contextual_enote_records; }
 
     /// get height of first block the enote store cares about
-    std::uint64_t get_refresh_height() const { return m_refresh_height; }
+    std::uint64_t refresh_height() const { return m_refresh_height; }
     /// get height of heighest recorded block (refresh height - 1 if no recorded blocks)
-    std::uint64_t get_top_block_height() const { return m_refresh_height + m_block_ids.size() - 1; }
+    std::uint64_t top_block_height() const { return m_refresh_height + m_block_ids.size() - 1; }
     /// get height of heighest block that was legacy fullscanned (view-scan + comprehensive key image checks)
     /// WARNING: if this is used in combination with the height of the last legacy-enabled block to determine whether
     //           legacy scanning is needed, then if a previous legacy scan reached that block height then legacy scanning
     //           won't be executed to heal any reorgs that change the last legacy-enabled block (fix this by
     //           forcing a legacy fullscan)
-    std::uint64_t get_top_legacy_fullscanned_block_height() const { return m_legacy_fullscan_height; }
+    std::uint64_t top_legacy_fullscanned_block_height() const { return m_legacy_fullscan_height; }
     /// get height of heighest block that was legacy partialscanned (view-scan only)
-    std::uint64_t get_top_legacy_partialscanned_block_height() const { return m_legacy_partialscan_height; }
+    std::uint64_t top_legacy_partialscanned_block_height() const { return m_legacy_partialscan_height; }
     /// get height of heighest block that was seraphis view-balance scanned
-    std::uint64_t get_top_sp_scanned_block_height() const { return m_sp_scanned_height; }
+    std::uint64_t top_sp_scanned_block_height() const { return m_sp_scanned_height; }
     /// get current balance using specified origin/spent statuses and exclusions
     boost::multiprecision::uint128_t get_balance(
         const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
@@ -301,9 +301,9 @@ public:
     bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const;
 
     /// get height of first block the enote store cares about
-    std::uint64_t get_refresh_height() const { return m_refresh_height; }
+    std::uint64_t refresh_height() const { return m_refresh_height; }
     /// get height of heighest recorded block (refresh height - 1 if no recorded blocks) (heighest block PayVal-scanned)
-    std::uint64_t get_top_block_height() const { return m_refresh_height + m_block_ids.size() - 1; }
+    std::uint64_t top_block_height() const { return m_refresh_height + m_block_ids.size() - 1; }
     /// get current total amount received using specified origin statuses
     boost::multiprecision::uint128_t get_received_sum(const std::unordered_set<SpEnoteOriginStatus> &origin_statuses,
         const std::unordered_set<EnoteStoreBalanceUpdateExclusions> &exclusions = {}) const;

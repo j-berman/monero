@@ -113,7 +113,7 @@ static void input_selection_test_full(const std::vector<rct::xmr_amount> &stored
         };
 
     // collect total output amount
-    const boost::multiprecision::uint128_t total_output_amount{output_set_context.get_total_amount()};
+    const boost::multiprecision::uint128_t total_output_amount{output_set_context.total_amount()};
 
     // try to get an input set
     rct::xmr_amount final_fee;
@@ -152,20 +152,20 @@ static void input_selection_test_full(const std::vector<rct::xmr_amount> &stored
     boost::multiprecision::uint128_t total_input_amount{0};
     for (const sp::LegacyContextualEnoteRecordV1 &legacy_input_selected : legacy_contextual_inputs)
     {
-        CHECK_AND_ASSERT_THROW_MES(legacy_input_selected.get_amount() == input_legacy_amounts_expected[input_index],
+        CHECK_AND_ASSERT_THROW_MES(legacy_input_selected.amount() == input_legacy_amounts_expected[input_index],
             "selected legacy inputs expected amount mismatch");
         ++input_index;
 
-        total_input_amount += legacy_input_selected.get_amount();
+        total_input_amount += legacy_input_selected.amount();
     }
     input_index = 0;
     for (const sp::SpContextualEnoteRecordV1 &sp_input_selected : sp_contextual_inputs)
     {
-        CHECK_AND_ASSERT_THROW_MES(sp_input_selected.get_amount() == input_sp_amounts_expected[input_index],
+        CHECK_AND_ASSERT_THROW_MES(sp_input_selected.amount() == input_sp_amounts_expected[input_index],
             "selected sp inputs expected amount mismatch");
         ++input_index;
 
-        total_input_amount += sp_input_selected.get_amount();
+        total_input_amount += sp_input_selected.amount();
     }
 
     // 4. total input amount is sufficient to cover outputs + fee
@@ -174,7 +174,7 @@ static void input_selection_test_full(const std::vector<rct::xmr_amount> &stored
     const std::size_t num_inputs{legacy_contextual_inputs.size() + sp_contextual_inputs.size()};
     const std::size_t num_outputs_nochange{output_amounts.size()};
     const rct::xmr_amount fee_nochange{
-            tx_fee_calculator.get_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_nochange)
+            tx_fee_calculator.compute_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_nochange)
         };
 
     CHECK_AND_ASSERT_THROW_MES(total_input_amount >= total_output_amount + fee_nochange,
@@ -190,7 +190,7 @@ static void input_selection_test_full(const std::vector<rct::xmr_amount> &stored
     // b. test non-zero-change case
     const std::size_t num_outputs_withchange{output_amounts.size() + num_additional_outputs_with_change};
     const rct::xmr_amount fee_withchange{
-            tx_fee_calculator.get_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_withchange)
+            tx_fee_calculator.compute_fee(fee_per_tx_weight, 0, num_inputs, num_outputs_withchange)
         };
 
     CHECK_AND_ASSERT_THROW_MES(total_input_amount > total_output_amount + fee_withchange,

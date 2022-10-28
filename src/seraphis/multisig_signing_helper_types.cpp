@@ -64,28 +64,28 @@ bool MultisigProofInitSetV1::try_get_nonces(const rct::key &proof_key,
 //-------------------------------------------------------------------------------------------------------------------
 const rct::key& MultisigPartialSigVariant::message() const
 {
-    if (is_type<SpCompositionProofMultisigPartial>())
-        return get_partial_sig<SpCompositionProofMultisigPartial>().message;
+    if (this->is_type<SpCompositionProofMultisigPartial>())
+        return this->partial_sig<SpCompositionProofMultisigPartial>().message;
     //todo: legacy
-    //else if (is_type<SpContextualBasicEnoteRecordV1>())
+    //else if (this->is_type<SpContextualBasicEnoteRecordV1>())
     //    return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
     else
     {
-        static const rct::key temp{};
+        static constexpr rct::key temp{};
         return temp;
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
 const rct::key& MultisigPartialSigVariant::proof_key() const
 {
-    if (is_type<SpCompositionProofMultisigPartial>())
-        return get_partial_sig<SpCompositionProofMultisigPartial>().K;
+    if (this->is_type<SpCompositionProofMultisigPartial>())
+        return this->partial_sig<SpCompositionProofMultisigPartial>().K;
     //todo: legacy
-    //else if (is_type<SpContextualBasicEnoteRecordV1>())
+    //else if (this->is_type<SpContextualBasicEnoteRecordV1>())
     //    return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
     else
     {
-        static const rct::key temp{};
+        static constexpr rct::key temp{};
         return temp;
     }
 }

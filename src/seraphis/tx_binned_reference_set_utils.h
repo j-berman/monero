@@ -58,12 +58,12 @@ namespace sp
 */
 std::uint64_t compute_bin_width(const std::uint64_t bin_radius);
 /**
-* brief: check_bin_config_v1 - check that a reference set bin configuration is valid
+* brief: validate_bin_config_v1 - check that a reference set bin configuration is valid
 * param: reference_set_size -
 * param: bin_config -
 * return: true if the config is valid
 */
-bool check_bin_config_v1(const std::uint64_t reference_set_size, const SpBinnedReferenceSetConfigV1 &bin_config);
+bool validate_bin_config_v1(const std::uint64_t reference_set_size, const SpBinnedReferenceSetConfigV1 &bin_config);
 /**
 * brief: make_binned_reference_set_v1 - make a binned reference set (a reference set represented using bins, where one
 *    reference element is pre-defined but should be hidden within the generated reference set)

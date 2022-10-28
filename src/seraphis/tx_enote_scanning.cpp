@@ -419,7 +419,7 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
     EnoteStoreUpdaterLedger &enote_store_updater_inout)
 {
     // we want to scan the first block after the last block that we scanned
-    std::uint64_t desired_first_block{enote_store_updater_inout.get_desired_first_block()};
+    std::uint64_t desired_first_block{enote_store_updater_inout.desired_first_block()};
 
     // scan attempts
     ScanStatus scan_status{ScanStatus::NEED_FULLSCAN};
@@ -469,16 +469,16 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
         // 4. initial block to scan = max(desired first block - reorg depth, enote store's min scan height)
         std::uint64_t initial_refresh_height;
 
-        if (desired_first_block >= reorg_avoidance_depth + enote_store_updater_inout.get_refresh_height())
+        if (desired_first_block >= reorg_avoidance_depth + enote_store_updater_inout.refresh_height())
             initial_refresh_height = desired_first_block - reorg_avoidance_depth;
         else
-            initial_refresh_height = enote_store_updater_inout.get_refresh_height();
+            initial_refresh_height = enote_store_updater_inout.refresh_height();
 
         // 5. set initial contiguity marker (highest block known to be contiguous with the prefix of the first block to scan)
         ChainContiguityMarker contiguity_marker;
         contiguity_marker.m_block_height = initial_refresh_height - 1;
 
-        if (contiguity_marker.m_block_height != enote_store_updater_inout.get_refresh_height() - 1)
+        if (contiguity_marker.m_block_height != enote_store_updater_inout.refresh_height() - 1)
         {
             // getting a block id should always succeed if we are starting past the prefix block of the enote store
             contiguity_marker.m_block_id = rct::zero();

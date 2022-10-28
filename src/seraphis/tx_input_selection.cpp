@@ -139,13 +139,13 @@ static rct::xmr_amount fee_of_last_record_of_type(const input_set_tracker_t &inp
     const bool type_is_legacy{type == InputSelectionType::LEGACY};
 
     const rct::xmr_amount initial_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_initial,
                 num_sp_inputs_initial,
                 num_outputs)
         };
     const rct::xmr_amount fee_after_input_removed{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_initial - (type_is_legacy ? 1 : 0),
                 num_sp_inputs_initial - (!type_is_legacy ? 1 : 0),
                 num_outputs)
@@ -169,13 +169,13 @@ static rct::xmr_amount fee_of_next_record_of_type(const input_set_tracker_t &inp
     const bool type_is_legacy{type == InputSelectionType::LEGACY};
 
     const rct::xmr_amount initial_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_initial,
                 num_sp_inputs_initial,
                 num_outputs)
         };
     const rct::xmr_amount fee_after_input_added{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_initial + (type_is_legacy ? 1 : 0),
                 num_sp_inputs_initial + (!type_is_legacy ? 1 : 0),
                 num_outputs)
@@ -208,7 +208,7 @@ static rct::xmr_amount fee_of_replacing_record(const input_set_tracker_t &input_
         };
 
     const rct::xmr_amount fee_after_input_removed{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_removed,
                 num_sp_inputs_removed,
                 num_outputs)
@@ -217,7 +217,7 @@ static rct::xmr_amount fee_of_replacing_record(const input_set_tracker_t &input_
     // calculate fee after adding a new input (after removing one)
     const bool new_type_is_legacy{type_to_add == InputSelectionType::LEGACY};
     const rct::xmr_amount fee_after_input_added{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_removed + (new_type_is_legacy ? 1 : 0),
                 num_sp_inputs_removed + (!new_type_is_legacy ? 1 : 0),
                 num_outputs)
@@ -305,7 +305,7 @@ static bool try_add_inputs_range_of_type_v1(const InputSelectionType type,
     std::size_t num_legacy_inputs{count_records(added_inputs_inout, InputSelectionType::LEGACY)};
     std::size_t num_sp_inputs{count_records(added_inputs_inout, InputSelectionType::SERAPHIS)};
     const rct::xmr_amount current_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs,
                 num_sp_inputs,
                 num_outputs)
@@ -332,7 +332,7 @@ static bool try_add_inputs_range_of_type_v1(const InputSelectionType type,
             ++num_sp_inputs;
 
         const rct::xmr_amount range_fee{
-                tx_fee_calculator.get_fee(fee_per_tx_weight,
+                tx_fee_calculator.compute_fee(fee_per_tx_weight,
                     num_legacy_inputs,
                     num_sp_inputs,
                     num_outputs)
@@ -544,7 +544,7 @@ static bool try_update_excluded_inputs_selection_v1(const boost::multiprecision:
     const std::size_t num_legacy_inputs{count_records(added_inputs, InputSelectionType::LEGACY)};
     const std::size_t num_sp_inputs{count_records(added_inputs, InputSelectionType::SERAPHIS)};
     const rct::xmr_amount current_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs,
                 num_sp_inputs,
                 num_outputs)
@@ -560,7 +560,7 @@ static bool try_update_excluded_inputs_selection_v1(const boost::multiprecision:
 
     // add the new input to the excluded pile - we will try to move it into the added pile in later passthroughs
     excluded_inputs_inout[input_selection_type(requested_input)].insert(
-            input_set_tracker_t::mapped_type::value_type{requested_input.get_amount(), std::move(requested_input)}
+            input_set_tracker_t::mapped_type::value_type{requested_input.amount(), std::move(requested_input)}
         );
 
     return true;
@@ -641,7 +641,7 @@ static bool try_select_inputs_v1(const boost::multiprecision::uint128_t output_a
 
         // a. compute current fee
         const rct::xmr_amount current_fee{
-                tx_fee_calculator.get_fee(fee_per_tx_weight,
+                tx_fee_calculator.compute_fee(fee_per_tx_weight,
                     count_records(added_inputs, InputSelectionType::LEGACY),
                     count_records(added_inputs, InputSelectionType::SERAPHIS),
                     num_outputs)
@@ -711,8 +711,8 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
     input_set_out.clear();
 
     // 1. select inputs to cover requested output amount (assume 0 change)
-    const boost::multiprecision::uint128_t output_amount{output_set_context.get_total_amount()};
-    const std::size_t num_outputs_nochange{output_set_context.get_num_outputs_nochange()};
+    const boost::multiprecision::uint128_t output_amount{output_set_context.total_amount()};
+    const std::size_t num_outputs_nochange{output_set_context.num_outputs_nochange()};
 
     if (!try_select_inputs_v1(output_amount,
             max_inputs_allowed,
@@ -727,7 +727,7 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
     const std::size_t num_legacy_inputs_first_try{count_records(input_set_out, InputSelectionType::LEGACY)};
     const std::size_t num_sp_inputs_first_try{count_records(input_set_out, InputSelectionType::SERAPHIS)};
     const rct::xmr_amount zero_change_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_first_try,
                 num_sp_inputs_first_try,
                 num_outputs_nochange)
@@ -742,9 +742,9 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
 
     // 4. if non-zero change with computed fee, assume change must be non-zero (typical case)
     // a. update fee assuming non-zero change
-    const std::size_t num_outputs_withchange{output_set_context.get_num_outputs_withchange()};
+    const std::size_t num_outputs_withchange{output_set_context.num_outputs_withchange()};
     rct::xmr_amount nonzero_change_fee{
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_first_try,
                 num_sp_inputs_first_try,
                 num_outputs_withchange)
@@ -768,7 +768,7 @@ bool try_get_input_set_v1(const OutputSetContextForInputSelection &output_set_co
         const std::size_t num_legacy_inputs_second_try{count_records(input_set_out, InputSelectionType::LEGACY)};
         const std::size_t num_sp_inputs_second_try{count_records(input_set_out, InputSelectionType::SERAPHIS)};
         nonzero_change_fee =
-            tx_fee_calculator.get_fee(fee_per_tx_weight,
+            tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 num_legacy_inputs_second_try,
                 num_sp_inputs_second_try,
                 num_outputs_withchange);

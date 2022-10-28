@@ -55,14 +55,11 @@ namespace sp
 {
 
 /// use operator< to get operator==
-/// WARNING: use with caution, since equality is not always implied by operator<, depending on implementation
+/// WARNING: equality is not always implied by operator<, depending on implementation
 struct equals_from_less final
 {
     template <typename T>
-    bool operator()(const T &a, const T &b)
-    {
-        return !(a < b) && !(b < a);
-    }
+    bool operator()(const T &a, const T &b) { return !(a < b) && !(b < a); }
 };
 
 //todo: specialize when T::value_type has an operator==

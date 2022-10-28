@@ -109,14 +109,14 @@ bool EnoteStoreUpdaterLedgerMockLegacy::try_get_block_id(const std::uint64_t blo
         block_id_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMockLegacy::get_refresh_height() const
+std::uint64_t EnoteStoreUpdaterLedgerMockLegacy::refresh_height() const
 {
-    return m_enote_store.get_refresh_height();
+    return m_enote_store.refresh_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMockLegacy::get_desired_first_block() const
+std::uint64_t EnoteStoreUpdaterLedgerMockLegacy::desired_first_block() const
 {
-    return m_enote_store.get_top_legacy_fullscanned_block_height() + 1;
+    return m_enote_store.top_legacy_fullscanned_block_height() + 1;
 }
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterLedgerMock::EnoteStoreUpdaterLedgerMock(const rct::key &jamtis_spend_pubkey,
@@ -185,14 +185,14 @@ bool EnoteStoreUpdaterLedgerMock::try_get_block_id(const std::uint64_t block_hei
         block_id_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMock::get_refresh_height() const
+std::uint64_t EnoteStoreUpdaterLedgerMock::refresh_height() const
 {
-    return m_enote_store.get_refresh_height();
+    return m_enote_store.refresh_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMock::get_desired_first_block() const
+std::uint64_t EnoteStoreUpdaterLedgerMock::desired_first_block() const
 {
-    return m_enote_store.get_top_sp_scanned_block_height() + 1;
+    return m_enote_store.top_sp_scanned_block_height() + 1;
 }
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterNonLedgerMock::EnoteStoreUpdaterNonLedgerMock(const rct::key &jamtis_spend_pubkey,
@@ -296,17 +296,17 @@ bool EnoteStoreUpdaterLedgerMockLegacyIntermediate::try_get_block_id(const std::
         block_id_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::get_refresh_height() const
+std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::refresh_height() const
 {
-    return m_enote_store.get_refresh_height();
+    return m_enote_store.refresh_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::get_desired_first_block() const
+std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::desired_first_block() const
 {
     if (m_legacy_key_image_recovery_mode)
-        return m_enote_store.get_top_legacy_fullscanned_block_height() + 1;
+        return m_enote_store.top_legacy_fullscanned_block_height() + 1;
     else
-        return m_enote_store.get_top_legacy_partialscanned_block_height() + 1;
+        return m_enote_store.top_legacy_partialscanned_block_height() + 1;
 }
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterLedgerMockIntermediate::EnoteStoreUpdaterLedgerMockIntermediate(const rct::key &jamtis_spend_pubkey,
@@ -361,14 +361,14 @@ bool EnoteStoreUpdaterLedgerMockIntermediate::try_get_block_id(const std::uint64
     return m_enote_store.try_get_block_id(block_height, block_id_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMockIntermediate::get_refresh_height() const
+std::uint64_t EnoteStoreUpdaterLedgerMockIntermediate::refresh_height() const
 {
-    return m_enote_store.get_refresh_height();
+    return m_enote_store.refresh_height();
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::uint64_t EnoteStoreUpdaterLedgerMockIntermediate::get_desired_first_block() const
+std::uint64_t EnoteStoreUpdaterLedgerMockIntermediate::desired_first_block() const
 {
-    return m_enote_store.get_top_block_height() + 1;
+    return m_enote_store.top_block_height() + 1;
 }
 //-------------------------------------------------------------------------------------------------------------------
 EnoteStoreUpdaterNonLedgerMockIntermediate::EnoteStoreUpdaterNonLedgerMockIntermediate(

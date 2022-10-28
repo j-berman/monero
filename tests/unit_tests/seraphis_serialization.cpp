@@ -72,7 +72,7 @@ TEST(seraphis_serialization_demo, seraphis_squashed_empty)
     EXPECT_NO_THROW(recovered_tx.get_hash(recovered_tx_hash));
 
     EXPECT_TRUE(original_tx_hash == recovered_tx_hash);
-    EXPECT_NO_THROW(EXPECT_TRUE(tx.get_size_bytes() == recovered_tx.get_size_bytes()));
+    EXPECT_NO_THROW(EXPECT_TRUE(tx.size_bytes() == recovered_tx.size_bytes()));
 }
 //-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis_serialization_demo, seraphis_squashed_standard)
@@ -134,7 +134,7 @@ TEST(seraphis_serialization_demo, seraphis_squashed_standard)
     EXPECT_NO_THROW(recovered_tx.get_hash(recovered_tx_hash));
 
     EXPECT_TRUE(original_tx_hash == recovered_tx_hash);
-    EXPECT_NO_THROW(EXPECT_TRUE(tx.get_size_bytes() == recovered_tx.get_size_bytes()));
+    EXPECT_NO_THROW(EXPECT_TRUE(tx.size_bytes() == recovered_tx.size_bytes()));
     EXPECT_TRUE(validate_tx(tx, tx_validation_context));
     EXPECT_TRUE(validate_tx(recovered_tx, tx_validation_context));
 }

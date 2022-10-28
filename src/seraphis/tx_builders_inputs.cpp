@@ -149,8 +149,8 @@ void make_tx_membership_proof_message_v1(const SpBinnedReferenceSetV1 &binned_re
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_MEMBERSHIP_PROOF_MESSAGE_V1,
             project_name.size() +
-                binned_reference_set.get_size_bytes(true) +
-                SpBinnedReferenceSetConfigV1::get_size_bytes()
+                binned_reference_set.size_bytes(true) +
+                SpBinnedReferenceSetConfigV1::size_bytes()
         };
     transcript.append("project_name", project_name);  //i.e. referenced enotes are members of what project's ledger?
     transcript.append("binned_reference_set", binned_reference_set);
@@ -176,7 +176,7 @@ void prepare_input_commitment_factors_for_balance_proof_v1(const std::vector<SpI
             to_bytes(input_proposals[input_index].m_core.m_amount_blinding_factor));  // x
 
         // input amount: a
-        input_amounts_out.emplace_back(input_proposals[input_index].get_amount());
+        input_amounts_out.emplace_back(input_proposals[input_index].amount());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -209,8 +209,8 @@ void make_input_images_prefix_v1(const std::vector<LegacyEnoteImageV2> &legacy_e
     // input images prefix = H_32({C", KI}((legacy)), {K", C", KI})
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_INPUT_IMAGES_PREFIX_V1,
-            legacy_enote_images.size() * LegacyEnoteImageV2::get_size_bytes() +
-            sp_enote_images.size() * SpEnoteImageV1::get_size_bytes()
+            legacy_enote_images.size() * LegacyEnoteImageV2::size_bytes() +
+            sp_enote_images.size() * SpEnoteImageV1::size_bytes()
         };
     transcript.append("legacy_enote_images", legacy_enote_images);
     transcript.append("sp_enote_images", sp_enote_images);
@@ -330,10 +330,7 @@ void make_standard_input_context_v1(const std::vector<LegacyInputProposalV1> &le
         legacy_key_images_collected.emplace_back(legacy_input_proposal.m_key_image);
 
     for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
-    {
-        sp_key_images_collected.emplace_back();
-        sp_input_proposal.m_core.get_key_image(sp_key_images_collected.back());
-    }
+        sp_key_images_collected.emplace_back(sp_input_proposal.m_core.key_image());
 
     // sort the key images
     std::sort(legacy_key_images_collected.begin(), legacy_key_images_collected.end());
@@ -351,8 +348,7 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     // make image proof
 
     // 1. the input enote
-    SpEnote input_enote_core;
-    input_proposal.get_enote_core(input_enote_core);
+    const SpEnote &input_enote_core{input_proposal.enote_core()};
 
     // 2. the input enote image
     SpEnoteImage input_enote_image_core;
@@ -381,7 +377,7 @@ void make_v1_image_proof_v1(const SpInputProposal &input_proposal,
     sc_mul(to_bytes(z), squash_prefix.bytes, to_bytes(z));
 
     // 4. make seraphis composition proof
-    image_proof_out.m_composition_proof = sp_composition_prove(message, input_enote_image_core.m_masked_address, x, y, z);
+    make_sp_composition_proof(message, input_enote_image_core.m_masked_address, x, y, z, image_proof_out.m_composition_proof);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_image_proofs_v1(const std::vector<SpInputProposalV1> &input_proposals,
@@ -478,13 +474,14 @@ void make_v1_membership_proof_v1(const std::size_t ref_set_decomp_n,
 
 
     /// make grootle proof
-    membership_proof_out.m_grootle_proof = grootle_prove(referenced_enotes_squashed,
+    make_grootle_proof(referenced_enotes_squashed,
         real_spend_index_in_set,
         image_offset,
         image_mask,
         ref_set_decomp_n,
         ref_set_decomp_m,
-        message);
+        message,
+        membership_proof_out.m_grootle_proof);
 
 
     /// copy miscellaneous components
@@ -579,7 +576,7 @@ void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input)
         "partial input semantics (v1): could not reconstruct masked address.");
 
     // image proof is valid
-    CHECK_AND_ASSERT_THROW_MES(sp_composition_verify(partial_input.m_image_proof.m_composition_proof,
+    CHECK_AND_ASSERT_THROW_MES(verify_sp_composition_proof(partial_input.m_image_proof.m_composition_proof,
             partial_input.m_proposal_prefix,
             reconstructed_masked_address,
             partial_input.m_input_image.m_core.m_key_image),
@@ -604,9 +601,9 @@ void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
     partial_input_out.m_address_mask                 = input_proposal.m_core.m_address_mask;
     partial_input_out.m_commitment_mask              = input_proposal.m_core.m_commitment_mask;
     partial_input_out.m_proposal_prefix              = proposal_prefix;
-    partial_input_out.m_input_amount                 = input_proposal.get_amount();
+    partial_input_out.m_input_amount                 = input_proposal.amount();
     partial_input_out.m_input_amount_blinding_factor = input_proposal.m_core.m_amount_blinding_factor;
-    input_proposal.m_core.get_enote_core(partial_input_out.m_input_enote_core);
+    partial_input_out.m_input_enote_core             = input_proposal.m_core.enote_core();
 
     // 4. construct image proof
     make_v1_image_proof_v1(input_proposal.m_core,
@@ -661,7 +658,7 @@ SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_for_enote_at_pos_v1(co
     /// checks and initialization
     const std::size_t ref_set_size{ref_set_size_from_decomp(ref_set_decomp_n, ref_set_decomp_m)};  // n^m
 
-    CHECK_AND_ASSERT_THROW_MES(check_bin_config_v1(ref_set_size, bin_config),
+    CHECK_AND_ASSERT_THROW_MES(validate_bin_config_v1(ref_set_size, bin_config),
         "gen mock membership proof prep: invalid binned reference set config.");
 
 
@@ -805,9 +802,7 @@ std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
 
     for (const SpInputProposalV1 &input_proposal : input_proposals)
     {
-        input_enotes.emplace_back();
-        input_proposal.m_core.get_enote_core(input_enotes.back());
-
+        input_enotes.emplace_back(input_proposal.m_core.enote_core());
         address_masks.emplace_back(input_proposal.m_core.m_address_mask);
         commitment_masks.emplace_back(input_proposal.m_core.m_commitment_mask);
     }

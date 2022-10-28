@@ -128,9 +128,9 @@ struct SpCompositionProof final
     // main proof key K: not stored with proof
     // message m: not stored with proof
 
-    static std::size_t get_size_bytes() { return 32*5; }
+    static std::size_t size_bytes() { return 32*5; }
 };
-inline const boost::string_ref get_container_name(const SpCompositionProof&) { return "SpCompositionProof"; }
+inline const boost::string_ref container_name(const SpCompositionProof&) { return "SpCompositionProof"; }
 void append_to_transcript(const SpCompositionProof &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -185,28 +185,29 @@ struct SpCompositionProofMultisigPartial final
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
-* brief: sp_composition_prove - create a Seraphis composition proof
+* brief: make_sp_composition_proof - create a Seraphis composition proof
 * param: message - message to insert in Fiat-Shamir transform hash
 * param: K - main proof key = x G + y X + z U
 * param: x - secret key
 * param: y - secret key
 * param: z - secret key
-* return: Seraphis composition proof
+* outparam: proof_out - Seraphis composition proof
 */
-SpCompositionProof sp_composition_prove(const rct::key &message,
+void make_sp_composition_proof(const rct::key &message,
     const rct::key &K,
     const crypto::secret_key &x,
     const crypto::secret_key &y,
-    const crypto::secret_key &z);
+    const crypto::secret_key &z,
+    SpCompositionProof &proof_out);
 /**
-* brief: sp_composition_verify - verify a Seraphis composition proof
+* brief: verify_sp_composition_proof - verify a Seraphis composition proof
 * param: proof - proof to verify
 * param: message - message to insert in Fiat-Shamir transform hash
 * param: K - main proof key = x G + y X + z U
 * param: KI - proof key image = (z/y) U
 * return: true/false on verification result
 */
-bool sp_composition_verify(const SpCompositionProof &proof,
+bool verify_sp_composition_proof(const SpCompositionProof &proof,
     const rct::key &message,
     const rct::key &K,
     const crypto::key_image &KI);
@@ -216,17 +217,18 @@ bool sp_composition_verify(const SpCompositionProof &proof,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
-* brief: sp_composition_multisig_proposal - propose to make a multisig Seraphis composition proof
+* brief: make_sp_composition_multisig_proposal - propose to make a multisig Seraphis composition proof
 * param: message - message to insert in the proof's Fiat-Shamir transform hash
 * param: K - main proof key
 * param: KI - key image
-* return: Seraphis composition proof multisig proposal
+* outparam: proposal_out - Seraphis composition proof multisig proposal
 */
-SpCompositionProofMultisigProposal sp_composition_multisig_proposal(const rct::key &message,
+void make_sp_composition_multisig_proposal(const rct::key &message,
     const rct::key &K,
-    const crypto::key_image &KI);
+    const crypto::key_image &KI,
+    SpCompositionProofMultisigProposal &proposal_out);
 /**
-* brief: sp_composition_multisig_partial_sig - make local multisig signer's partial signature for a Seraphis composition
+* brief: make_sp_composition_multisig_partial_sig - make local multisig signer's partial signature for a Seraphis composition
 *        proof
 *   - caller must validate 'proposal'
 *       - is the key image well-made?
@@ -240,15 +242,16 @@ SpCompositionProofMultisigProposal sp_composition_multisig_proposal(const rct::k
 *                            (including local signer)
 * param: local_nonce_1_priv - alpha_{ki,1,e} for local signer
 * param: local_nonce_2_priv - alpha_{ki,2,e} for local signer
-* return: partially signed Seraphis composition proof
+* outparam: partial_sig_out - partially signed Seraphis composition proof
 */
-SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCompositionProofMultisigProposal &proposal,
+void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigProposal &proposal,
     const crypto::secret_key &x,
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
     const std::vector<MultisigPubNonces> &signer_pub_nonces,
     const crypto::secret_key &local_nonce_1_priv,
-    const crypto::secret_key &local_nonce_2_priv);
+    const crypto::secret_key &local_nonce_2_priv,
+    SpCompositionProofMultisigPartial &partial_sig_out);
 /**
 * brief: try_make_sp_composition_multisig_partial_sig - make a partial signature using a nonce record (nonce safety guarantee)
 *        proof
@@ -272,10 +275,11 @@ bool try_make_sp_composition_multisig_partial_sig(
     MultisigNonceRecord &nonce_record_inout,
     SpCompositionProofMultisigPartial &partial_sig_out);
 /**
-* brief: sp_composition_prove_multisig_final - create a Seraphis composition proof from multisig partial signatures
+* brief: finalize_sp_composition_multisig_proof - create a Seraphis composition proof from multisig partial signatures
 * param: partial_sigs - partial signatures from enough multisig participants to complete a full proof
-* return: Seraphis composition proof
+* outparam: proof_out - Seraphis composition proof
 */
-SpCompositionProof sp_composition_prove_multisig_final(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs);
+void finalize_sp_composition_multisig_proof(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
+    SpCompositionProof &proof_out);
 
 } //namespace sp

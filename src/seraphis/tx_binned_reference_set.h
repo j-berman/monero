@@ -71,9 +71,9 @@ struct SpBinnedReferenceSetConfigV1 final
     }
     bool operator!=(const SpBinnedReferenceSetConfigV1 &other_config) const { return !(*this == other_config); }
 
-    static std::size_t get_size_bytes() { return sizeof(m_bin_radius) + sizeof(m_num_bin_members); }
+    static std::size_t size_bytes() { return sizeof(m_bin_radius) + sizeof(m_num_bin_members); }
 };
-inline const boost::string_ref get_container_name(const SpBinnedReferenceSetConfigV1&) { return "SpBinnedReferenceSetConfigV1"; }
+inline const boost::string_ref container_name(const SpBinnedReferenceSetConfigV1&) { return "SpBinnedReferenceSetConfigV1"; }
 void append_to_transcript(const SpBinnedReferenceSetConfigV1 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -100,10 +100,10 @@ struct SpBinnedReferenceSetV1 final
     std::uint64_t reference_set_size() const { return m_bin_config.m_num_bin_members * m_bin_loci.size(); }
 
     /// size of the binned reference set (does not include the config)
-    static std::size_t get_size_bytes(const std::size_t num_bins, const bool include_seed = false);
-    std::size_t get_size_bytes(const bool include_seed = false) const;
+    static std::size_t size_bytes(const std::size_t num_bins, const bool include_seed = false);
+    std::size_t size_bytes(const bool include_seed = false) const;
 };
-inline const boost::string_ref get_container_name(const SpBinnedReferenceSetV1&) { return "SpBinnedReferenceSetV1"; }
+inline const boost::string_ref container_name(const SpBinnedReferenceSetV1&) { return "SpBinnedReferenceSetV1"; }
 void append_to_transcript(const SpBinnedReferenceSetV1 &container, SpTranscriptBuilder &transcript_inout);
 
 } //namespace sp

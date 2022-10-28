@@ -52,17 +52,17 @@ void append_to_transcript(const LegacyEnoteImageV2 &container, SpTranscriptBuild
     transcript_inout.append("KI", container.m_key_image);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t LegacyRingSignatureV3::get_size_bytes(const std::size_t num_ring_members)
+std::size_t LegacyRingSignatureV3::size_bytes(const std::size_t num_ring_members)
 {
     return clsag_size_bytes(num_ring_members) + num_ring_members * 8;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t LegacyRingSignatureV3::get_size_bytes() const
+std::size_t LegacyRingSignatureV3::size_bytes() const
 {
     CHECK_AND_ASSERT_THROW_MES(m_clsag_proof.s.size() == m_reference_set.size(),
         "legacy ring signature v3 size: clsag proof doesn't match reference set size.");
 
-    return LegacyRingSignatureV3::get_size_bytes(m_reference_set.size());
+    return LegacyRingSignatureV3::size_bytes(m_reference_set.size());
 }
 //-------------------------------------------------------------------------------------------------------------------
 void append_to_transcript(const LegacyRingSignatureV3 &container, SpTranscriptBuilder &transcript_inout)

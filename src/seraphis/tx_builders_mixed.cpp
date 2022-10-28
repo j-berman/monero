@@ -201,8 +201,8 @@ void make_tx_proposal_prefix_v1(const std::string &version_string,
             project_name.size() +
                 version_string.size() +
                 (legacy_input_key_images.size() + sp_input_key_images.size())*sizeof(crypto::key_image) +
-                output_enotes.size()*SpEnoteV1::get_size_bytes() +
-                tx_supplement.get_size_bytes()
+                output_enotes.size()*SpEnoteV1::size_bytes() +
+                tx_supplement.size_bytes()
         };
     transcript.append("project_name", project_name);
     transcript.append("version_string", version_string);
@@ -370,13 +370,13 @@ void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
     // H_32(balance proof, legacy ring signatures, seraphis image proofs, seraphis membership proofs)
     SpFSTranscript transcript{
             config::HASH_KEY_SERAPHIS_TRANSACTION_PROOFS_PREFIX_V1,
-            balance_proof.get_size_bytes() +
+            balance_proof.size_bytes() +
                 (legacy_ring_signatures.size()
-                    ? legacy_ring_signatures.size() * legacy_ring_signatures[0].get_size_bytes()
+                    ? legacy_ring_signatures.size() * legacy_ring_signatures[0].size_bytes()
                     : 0) +
-                sp_image_proofs.size() * SpImageProofV1::get_size_bytes() +
+                sp_image_proofs.size() * SpImageProofV1::size_bytes() +
                 (sp_membership_proofs.size()
-                    ? sp_membership_proofs.size() * sp_membership_proofs[0].get_size_bytes()
+                    ? sp_membership_proofs.size() * sp_membership_proofs[0].size_bytes()
                     : 0)
         };
     transcript.append("balance_proof", balance_proof);
@@ -512,10 +512,10 @@ void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
     in_amounts.reserve(tx_proposal.m_legacy_input_proposals.size() + tx_proposal.m_sp_input_proposals.size());
 
     for (const LegacyInputProposalV1 &legacy_input_proposal : tx_proposal.m_legacy_input_proposals)
-        in_amounts.emplace_back(legacy_input_proposal.get_amount());
+        in_amounts.emplace_back(legacy_input_proposal.amount());
 
     for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
-        in_amounts.emplace_back(sp_input_proposal.get_amount());
+        in_amounts.emplace_back(sp_input_proposal.amount());
 
     // 3. check: sum(input amnts) == sum(output amnts) + fee
     CHECK_AND_ASSERT_THROW_MES(balance_check_in_out_amnts(in_amounts, output_amounts, raw_transaction_fee),
@@ -618,7 +618,7 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
         normal_payment_proposals,
         selfsend_payment_proposals);
 
-    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.get_fee(fee_per_tx_weight,
+    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 legacy_contextual_inputs.size(), sp_contextual_inputs.size(),
                 normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
             reported_final_fee,
@@ -703,17 +703,17 @@ bool balance_check_in_out_amnts_v1(const std::vector<LegacyInputProposalV1> &leg
     in_amounts.reserve(legacy_input_proposals.size() + sp_input_proposals.size());
 
     for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
-        in_amounts.emplace_back(legacy_input_proposal.get_amount());
+        in_amounts.emplace_back(legacy_input_proposal.amount());
 
     for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
-        in_amounts.emplace_back(sp_input_proposal.get_amount());
+        in_amounts.emplace_back(sp_input_proposal.amount());
 
     // output amounts
     std::vector<rct::xmr_amount> out_amounts;
     out_amounts.reserve(output_proposals.size());
 
     for (const SpOutputProposalV1 &output_proposal : output_proposals)
-        out_amounts.emplace_back(output_proposal.get_amount());
+        out_amounts.emplace_back(output_proposal.amount());
 
     // fee
     rct::xmr_amount raw_transaction_fee;

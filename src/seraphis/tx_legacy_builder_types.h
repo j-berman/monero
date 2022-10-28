@@ -80,7 +80,7 @@ struct LegacyInputProposalV1 final
     void get_enote_image_v2(LegacyEnoteImageV2 &image_out) const;
 
     /// get the amount of this proposal
-    rct::xmr_amount get_amount() const { return m_amount; }
+    rct::xmr_amount amount() const { return m_amount; }
 
     /// generate a v1 input (does not support info recovery)
     void gen(const crypto::secret_key &legacy_spend_privkey, const rct::xmr_amount amount);
@@ -141,10 +141,7 @@ struct LegacyInputV1 final
     rct::key m_proposal_prefix;
 
     /// less-than operator for sorting
-    bool operator<(const LegacyInputV1 &other_input) const
-    {
-        return m_input_image < other_input.m_input_image;
-    }
+    bool operator<(const LegacyInputV1 &other_input) const { return m_input_image < other_input.m_input_image; }
 };
 
 } //namespace sp

@@ -64,10 +64,10 @@ public:
 
 //destructor: default
 
-//getters
-    static rct::xmr_amount get_fee(const std::size_t fee_per_weight, const std::size_t weight);
-    static rct::xmr_amount get_fee(const std::size_t fee_per_weight, const SpTxSquashedV1 &tx);
-    rct::xmr_amount get_fee(const std::size_t fee_per_weight,
+//member functions
+    static rct::xmr_amount compute_fee(const std::size_t fee_per_weight, const std::size_t weight);
+    static rct::xmr_amount compute_fee(const std::size_t fee_per_weight, const SpTxSquashedV1 &tx);
+    rct::xmr_amount compute_fee(const std::size_t fee_per_weight,
         const std::size_t num_legacy_inputs,
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs) const override;

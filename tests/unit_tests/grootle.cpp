@@ -54,23 +54,21 @@ bool test_grootle(const std::size_t N_proofs,
 
     for (std::size_t proof_i = 0; proof_i < N_proofs; proof_i++)
     {
-        proofs.push_back(
-            sp::grootle_prove(M[proof_i],
-                proof_i,
-                proof_offsets[proof_i],
-                proof_privkeys[proof_i],
-                n,
-                m,
-                proof_messages[proof_i])
-            );
+        proofs.emplace_back();
+        sp::make_grootle_proof(M[proof_i],
+            proof_i,
+            proof_offsets[proof_i],
+            proof_privkeys[proof_i],
+            n,
+            m,
+            proof_messages[proof_i],
+            proofs.back());
     }
     for (sp::GrootleProof &proof: proofs)
-    {
         proof_ptrs.push_back(&proof);
-    }
 
     // Verify batch
-    if (!sp::grootle_verify(proof_ptrs, M, proof_offsets, n, m, proof_messages))
+    if (!sp::verify_grootle_proofs(proof_ptrs, M, proof_offsets, n, m, proof_messages))
         return false;
 
     return true;
@@ -101,9 +99,7 @@ bool test_grootle_proof(const std::size_t n,  // size base: N = n^m
         for (std::size_t proof_i = 0; proof_i < N_proofs; proof_i++)
         {
             for (std::size_t k = 0; k < N; k++)
-            {
                 skpkGen(temp, M[proof_i][k]);
-            }
         }
 
         // Signing keys, proof_messages, and commitment offsets
@@ -132,10 +128,7 @@ bool test_grootle_proof(const std::size_t n,  // size base: N = n^m
             if (!test_grootle(N_proofs, n, m, M, proof_offsets, proof_privkeys, proof_messages))
                 return false;
         }
-        catch (...)
-        {
-            return false;
-        }
+        catch (...) { return false; }
     }
 
     return true;

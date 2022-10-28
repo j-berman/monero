@@ -65,11 +65,11 @@ public:
 
 //member functions
     /// get total output amount
-    virtual boost::multiprecision::uint128_t get_total_amount() const = 0;
+    virtual boost::multiprecision::uint128_t total_amount() const = 0;
     /// get number of outputs assuming no change
-    virtual std::size_t get_num_outputs_nochange() const = 0;
+    virtual std::size_t num_outputs_nochange() const = 0;
     /// get number of outputs assuming non-zero change
-    virtual std::size_t get_num_outputs_withchange() const = 0;
+    virtual std::size_t num_outputs_withchange() const = 0;
 };
 
 } //namespace sp

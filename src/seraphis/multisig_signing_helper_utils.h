@@ -160,7 +160,7 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
     std::vector<MultisigPartialSigSetV1> &partial_sig_sets_out);
 /**
 * brief: filter_multisig_partial_signatures_for_combining_v1 - filter multisig partial signature sets into a convenient
-*      map for combining the partial signatures into a complete signature
+*      map for combining them into complete signatures
 *   - weak preconditions: ignores signature sets that don't conform to expectations
 * param: multisig_signers -
 * param: expected_proof_message -

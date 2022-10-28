@@ -65,11 +65,11 @@ public:
 
 //member functions
     /// get total output amount
-    boost::multiprecision::uint128_t get_total_amount() const override { return m_output_amount; }
+    boost::multiprecision::uint128_t total_amount() const override { return m_output_amount; }
     /// get number of outputs assuming no change
-    std::size_t get_num_outputs_nochange() const override { return m_num_outputs; }
+    std::size_t num_outputs_nochange() const override { return m_num_outputs; }
     /// get number of outputs assuming non-zero change
-    std::size_t get_num_outputs_withchange() const override { return m_num_outputs + m_num_additional_with_change; }
+    std::size_t num_outputs_withchange() const override { return m_num_outputs + m_num_additional_with_change; }
 
 //member variables
 private:

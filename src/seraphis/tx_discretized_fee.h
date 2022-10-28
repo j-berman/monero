@@ -71,9 +71,9 @@ struct DiscretizedFee final
     bool operator==(const discretized_fee_level_t other_fee_level) const { return m_fee_level == other_fee_level; }
     bool operator==(const rct::xmr_amount raw_fee_value) const;
 
-    static std::size_t get_size_bytes() { return sizeof(m_fee_level); }
+    static std::size_t size_bytes() { return sizeof(m_fee_level); }
 };
-inline const boost::string_ref get_container_name(const DiscretizedFee&) { return "DiscretizedFee"; }
+inline const boost::string_ref container_name(const DiscretizedFee&) { return "DiscretizedFee"; }
 void append_to_transcript(const DiscretizedFee &container, SpTranscriptBuilder &transcript_inout);
 
 bool operator==(const discretized_fee_level_t fee_level, const DiscretizedFee &discretized_fee);

@@ -74,23 +74,20 @@ struct SpEnoteV1 final
     jamtis::view_tag_t m_view_tag;
 
     /// less-than operator for sorting
-    bool operator<(const SpEnoteV1 &other_enote) const
-    {
-        return m_core < other_enote.m_core;
-    }
+    bool operator<(const SpEnoteV1 &other_enote) const { return m_core < other_enote.m_core; }
 
     /// generate a dummy v1 enote (all random; completely unspendable)
     void gen();
 
-    static std::size_t get_size_bytes()
+    static std::size_t size_bytes()
     {
-        return SpEnote::get_size_bytes() +
+        return SpEnote::size_bytes() +
             sizeof(rct::xmr_amount) +
             sizeof(jamtis::encrypted_address_tag_t) +
             sizeof(jamtis::view_tag_t);
     }
 };
-inline const boost::string_ref get_container_name(const SpEnoteV1&) { return "SpEnoteV1"; }
+inline const boost::string_ref container_name(const SpEnoteV1&) { return "SpEnoteV1"; }
 void append_to_transcript(const SpEnoteV1 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -102,14 +99,11 @@ struct SpEnoteImageV1 final
     SpEnoteImage m_core;
 
     /// less-than operator for sorting
-    bool operator<(const SpEnoteImageV1 &other_image) const
-    {
-        return m_core < other_image.m_core;
-    }
+    bool operator<(const SpEnoteImageV1 &other_image) const { return m_core < other_image.m_core; }
 
-    static std::size_t get_size_bytes() { return SpEnoteImage::get_size_bytes(); }
+    static std::size_t size_bytes() { return SpEnoteImage::size_bytes(); }
 };
-inline const boost::string_ref get_container_name(const SpEnoteImageV1&) { return "SpEnoteImageV1"; }
+inline const boost::string_ref container_name(const SpEnoteImageV1&) { return "SpEnoteImageV1"; }
 void append_to_transcript(const SpEnoteImageV1 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -127,10 +121,10 @@ struct SpMembershipProofV1 final
     std::size_t m_ref_set_decomp_m;
 
     /// size of the membership proof (does not include the ref set decomp)
-    static std::size_t get_size_bytes(const std::size_t n, const std::size_t m, const std::size_t num_bin_members);
-    std::size_t get_size_bytes() const;
+    static std::size_t size_bytes(const std::size_t n, const std::size_t m, const std::size_t num_bin_members);
+    std::size_t size_bytes() const;
 };
-inline const boost::string_ref get_container_name(const SpMembershipProofV1&) { return "SpMembershipProofV1"; }
+inline const boost::string_ref container_name(const SpMembershipProofV1&) { return "SpMembershipProofV1"; }
 void append_to_transcript(const SpMembershipProofV1 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -143,9 +137,9 @@ struct SpImageProofV1 final
     /// a seraphis composition proof
     SpCompositionProof m_composition_proof;
 
-    static std::size_t get_size_bytes() { return SpCompositionProof::get_size_bytes(); }
+    static std::size_t size_bytes() { return SpCompositionProof::size_bytes(); }
 };
-inline const boost::string_ref get_container_name(const SpImageProofV1&) { return "SpImageProofV1"; }
+inline const boost::string_ref container_name(const SpImageProofV1&) { return "SpImageProofV1"; }
 void append_to_transcript(const SpImageProofV1 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -161,16 +155,16 @@ struct SpBalanceProofV1 final
     /// the remainder blinding factor
     rct::key m_remainder_blinding_factor;
 
-    static std::size_t get_size_bytes(const std::size_t num_sp_inputs,
+    static std::size_t size_bytes(const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const bool include_commitments = false);
-    std::size_t get_size_bytes(const bool include_commitments = false) const;
-    static std::size_t get_weight(const std::size_t num_sp_inputs,
+    std::size_t size_bytes(const bool include_commitments = false) const;
+    static std::size_t weight(const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const bool include_commitments = false);
-    std::size_t get_weight(const bool include_commitments = false) const;
+    std::size_t weight(const bool include_commitments = false) const;
 };
-inline const boost::string_ref get_container_name(const SpBalanceProofV1&) { return "SpBalanceProofV1"; }
+inline const boost::string_ref container_name(const SpBalanceProofV1&) { return "SpBalanceProofV1"; }
 void append_to_transcript(const SpBalanceProofV1 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -186,10 +180,10 @@ struct SpTxSupplementV1 final
     /// tx memo
     TxExtra m_tx_extra;
 
-    static std::size_t get_size_bytes(const std::size_t num_outputs, const TxExtra &tx_extra);
-    std::size_t get_size_bytes() const;
+    static std::size_t size_bytes(const std::size_t num_outputs, const TxExtra &tx_extra);
+    std::size_t size_bytes() const;
 };
-inline const boost::string_ref get_container_name(const SpTxSupplementV1&) { return "SpTxSupplementV1"; }
+inline const boost::string_ref container_name(const SpTxSupplementV1&) { return "SpTxSupplementV1"; }
 void append_to_transcript(const SpTxSupplementV1 &container, SpTranscriptBuilder &transcript_inout);
 
 } //namespace sp

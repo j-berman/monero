@@ -69,9 +69,7 @@ class test_grootle
             for (std::size_t proof_i = 0; proof_i < N_proofs; proof_i++)
             {
                 for (std::size_t k = 0; k < N; k++)
-                {
                     skpkGen(temp, M[proof_i][k]);
-                }
             }
 
             // Signing keys, proof_messages, and commitment offsets
@@ -101,26 +99,21 @@ class test_grootle
             {
                 for (std::size_t proof_i = 0; proof_i < N_proofs; proof_i++)
                 {
-                    proofs.push_back(
-                        sp::grootle_prove(M[proof_i],
-                            proof_i,
-                            proof_offsets[proof_i],
-                            proof_privkeys[proof_i],
-                            n,
-                            m,
-                            proof_messages[proof_i])
-                        );
+                    proofs.emplace_back();
+                    sp::make_grootle_proof(M[proof_i],
+                        proof_i,
+                        proof_offsets[proof_i],
+                        proof_privkeys[proof_i],
+                        n,
+                        m,
+                        proof_messages[proof_i],
+                        proofs.back());
                 }
             }
-            catch (...)
-            {
-                return false;
-            }
+            catch (...) { return false; }
 
             for (sp::GrootleProof &proof: proofs)
-            {
                 proof_ptrs.push_back(&proof);
-            }
 
             return true;
         }
@@ -130,13 +123,10 @@ class test_grootle
             // Verify batch
             try
             {
-                if (!sp::grootle_verify(proof_ptrs, M, proof_offsets, n, m, proof_messages))
+                if (!sp::verify_grootle_proofs(proof_ptrs, M, proof_offsets, n, m, proof_messages))
                     return false;
             }
-            catch (...)
-            {
-                return false;
-            }
+            catch (...) { return false; }
 
             return true;
         }

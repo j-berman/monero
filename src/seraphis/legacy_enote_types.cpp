@@ -77,31 +77,31 @@ void LegacyEnoteV4::gen()
 //-------------------------------------------------------------------------------------------------------------------
 const rct::key& LegacyEnoteVariant::onetime_address() const
 {
-    if (is_type<LegacyEnoteV1>())
-        return get_enote<LegacyEnoteV1>().m_onetime_address;
-    else if (is_type<LegacyEnoteV2>())
-        return get_enote<LegacyEnoteV2>().m_onetime_address;
-    else if (is_type<LegacyEnoteV3>())
-        return get_enote<LegacyEnoteV3>().m_onetime_address;
-    else if (is_type<LegacyEnoteV4>())
-        return get_enote<LegacyEnoteV4>().m_onetime_address;
+    if (this->is_type<LegacyEnoteV1>())
+        return this->enote<LegacyEnoteV1>().m_onetime_address;
+    else if (this->is_type<LegacyEnoteV2>())
+        return this->enote<LegacyEnoteV2>().m_onetime_address;
+    else if (this->is_type<LegacyEnoteV3>())
+        return this->enote<LegacyEnoteV3>().m_onetime_address;
+    else if (this->is_type<LegacyEnoteV4>())
+        return this->enote<LegacyEnoteV4>().m_onetime_address;
     else
     {
-        static const rct::key temp{};
+        static constexpr rct::key temp{};
         return temp;
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
 rct::key LegacyEnoteVariant::amount_commitment() const
 {
-    if (is_type<LegacyEnoteV1>())
-        return rct::zeroCommit(get_enote<LegacyEnoteV1>().m_amount);
-    else if (is_type<LegacyEnoteV2>())
-        return get_enote<LegacyEnoteV2>().m_amount_commitment;
-    else if (is_type<LegacyEnoteV3>())
-        return get_enote<LegacyEnoteV3>().m_amount_commitment;
-    else if (is_type<LegacyEnoteV4>())
-        return get_enote<LegacyEnoteV4>().m_amount_commitment;
+    if (this->is_type<LegacyEnoteV1>())
+        return rct::zeroCommit(this->enote<LegacyEnoteV1>().m_amount);
+    else if (this->is_type<LegacyEnoteV2>())
+        return this->enote<LegacyEnoteV2>().m_amount_commitment;
+    else if (this->is_type<LegacyEnoteV3>())
+        return this->enote<LegacyEnoteV3>().m_amount_commitment;
+    else if (this->is_type<LegacyEnoteV4>())
+        return this->enote<LegacyEnoteV4>().m_amount_commitment;
     else
         return rct::key{};
 }

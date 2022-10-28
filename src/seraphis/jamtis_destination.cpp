@@ -100,7 +100,6 @@ bool try_get_jamtis_index_from_destination_v1(const JamtisDestinationV1 &destina
 
     // get the nominal address index from the destination's address tag
     address_index_t nominal_address_index;
-
     if (!try_decipher_address_index(rct::sk2rct(ciphertag_secret), destination.m_addr_tag, nominal_address_index))
         return false;
 

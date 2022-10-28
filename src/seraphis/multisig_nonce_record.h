@@ -74,9 +74,9 @@ struct MultisigPubNonces final
     bool operator==(const MultisigPubNonces &other) const;
 
     /// get size in bytes
-    static std::size_t get_size_bytes() { return 2*sizeof(rct::key); }
+    static std::size_t size_bytes() { return 2*sizeof(rct::key); }
 };
-inline const boost::string_ref get_container_name(const MultisigPubNonces&) { return "MultisigPubNonces"; }
+inline const boost::string_ref container_name(const MultisigPubNonces&) { return "MultisigPubNonces"; }
 void append_to_transcript(const MultisigPubNonces &container, SpTranscriptBuilder &transcript_inout);
 
 struct MultisigNonces final

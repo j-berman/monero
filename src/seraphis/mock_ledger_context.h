@@ -78,11 +78,11 @@ public:
 
 //member functions
     /**
-    * brief: get_chain_height - get current chain height
+    * brief: chain_height - get current chain height
     *   - returns uint64{-1} if there are no blocks
     * return: current chain height (num blocks - 1)
     */
-    std::uint64_t get_chain_height() const;
+    std::uint64_t chain_height() const;
     /**
     * brief: key_image_exists_onchain_v1 - checks if a Seraphis linking tag (key image) exists in the ledger
     * param: key_image -

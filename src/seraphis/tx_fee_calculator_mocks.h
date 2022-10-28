@@ -52,8 +52,8 @@ namespace sp
 class FeeCalculatorMockTrivial final : public FeeCalculator
 {
 public:
-//getters
-    rct::xmr_amount get_fee(const std::size_t fee_per_weight,
+//member functions
+    rct::xmr_amount compute_fee(const std::size_t fee_per_weight,
         const std::size_t num_legacy_inputs,
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs) const override
@@ -66,8 +66,8 @@ public:
 class FeeCalculatorMockSimple final : public FeeCalculator
 {
 public:
-//getters
-    rct::xmr_amount get_fee(const std::size_t fee_per_weight,
+//member functions
+    rct::xmr_amount compute_fee(const std::size_t fee_per_weight,
         const std::size_t num_legacy_inputs,
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs) const override
@@ -82,8 +82,8 @@ class FeeCalculatorMockInputsStepped final : public FeeCalculator
 public:
 //constructors
     FeeCalculatorMockInputsStepped(const std::size_t step_size) : m_step_size{step_size > 0 ? step_size : 1} {}
-//getters
-    rct::xmr_amount get_fee(const std::size_t fee_per_weight,
+//member functions
+    rct::xmr_amount compute_fee(const std::size_t fee_per_weight,
         const std::size_t num_legacy_inputs,
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs) const override

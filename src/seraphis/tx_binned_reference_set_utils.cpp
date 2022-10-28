@@ -248,8 +248,8 @@ static void generate_bin_loci(const SpRefSetIndexMapper &index_mapper,
     std::uint64_t &bin_index_with_real_out)
 {
     /// checks and initialization
-    const std::uint64_t distribution_min_index{index_mapper.get_distribution_min_index()};
-    const std::uint64_t distribution_max_index{index_mapper.get_distribution_max_index()};
+    const std::uint64_t distribution_min_index{index_mapper.distribution_min_index()};
+    const std::uint64_t distribution_max_index{index_mapper.distribution_max_index()};
 
     CHECK_AND_ASSERT_THROW_MES(real_reference_index >= distribution_min_index &&
             real_reference_index <= distribution_max_index,
@@ -261,7 +261,8 @@ static void generate_bin_loci(const SpRefSetIndexMapper &index_mapper,
     CHECK_AND_ASSERT_THROW_MES(distribution_max_index - distribution_min_index >= 
             compute_bin_width(bin_config.m_bin_radius) - 1,
         "generating bin loci: bin width is too large for the distribution range.");
-    CHECK_AND_ASSERT_THROW_MES(check_bin_config_v1(reference_set_size, bin_config), "generating bin loci: invalid config.");
+    CHECK_AND_ASSERT_THROW_MES(validate_bin_config_v1(reference_set_size, bin_config),
+        "generating bin loci: invalid config.");
 
     const std::uint64_t num_bins{reference_set_size/bin_config.m_num_bin_members};
     const std::uint64_t distribution_width{distribution_max_index - distribution_min_index + 1};
@@ -379,7 +380,7 @@ std::uint64_t compute_bin_width(const std::uint64_t bin_radius)
     return 2*bin_radius + 1;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool check_bin_config_v1(const std::uint64_t reference_set_size, const SpBinnedReferenceSetConfigV1 &bin_config)
+bool validate_bin_config_v1(const std::uint64_t reference_set_size, const SpBinnedReferenceSetConfigV1 &bin_config)
 {
     // bin width outside bin dimension
     if (bin_config.m_bin_radius > (std::numeric_limits<ref_set_bin_dimension_v1_t>::max() - 1)/2)
@@ -416,7 +417,7 @@ void make_binned_reference_set_v1(const SpRefSetIndexMapper &index_mapper,
     /// checks and initialization
     const std::uint64_t bin_width{compute_bin_width(bin_config.m_bin_radius)};
 
-    CHECK_AND_ASSERT_THROW_MES(check_bin_config_v1(bin_config.m_num_bin_members * bin_loci.size(), bin_config),
+    CHECK_AND_ASSERT_THROW_MES(validate_bin_config_v1(bin_config.m_num_bin_members * bin_loci.size(), bin_config),
         "binned reference set: invalid bin config.");
 
     CHECK_AND_ASSERT_THROW_MES(std::is_sorted(bin_loci.begin(), bin_loci.end()),
@@ -478,7 +479,7 @@ bool try_get_reference_indices_from_binned_reference_set_v1(const SpBinnedRefere
         };
 
     // sanity check the bin config
-    if (!check_bin_config_v1(reference_set_size, binned_reference_set.m_bin_config))
+    if (!validate_bin_config_v1(reference_set_size, binned_reference_set.m_bin_config))
         return false;
 
     // rotation factor must be within the bins (normalized)

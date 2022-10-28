@@ -61,7 +61,7 @@ struct LegacyEnoteV1 final
     /// a
     rct::xmr_amount m_amount;
 
-    static std::size_t get_size_bytes() { return 32 + 8; }
+    static std::size_t size_bytes() { return 32 + 8; }
 
     /**
     * brief: gen() - generate a legacy v1 enote (all random)
@@ -87,7 +87,7 @@ struct LegacyEnoteV2 final
     /// enc(a)
     rct::key m_encoded_amount;
 
-    static std::size_t get_size_bytes() { return 4*32; }
+    static std::size_t size_bytes() { return 4*32; }
 
     /**
     * brief: gen() - generate a legacy v2 enote (all random)
@@ -110,7 +110,7 @@ struct LegacyEnoteV3 final
     /// enc(a)
     rct::xmr_amount m_encoded_amount;
 
-    static std::size_t get_size_bytes() { return 2*32 + 8; }
+    static std::size_t size_bytes() { return 2*32 + 8; }
 
     /**
     * brief: gen() - generate a legacy v3 enote (all random)
@@ -136,7 +136,7 @@ struct LegacyEnoteV4 final
     /// view_tag
     crypto::view_tag m_view_tag;
 
-    static std::size_t get_size_bytes() { return 2*32 + 8 + sizeof(crypto::view_tag); }
+    static std::size_t size_bytes() { return 2*32 + 8 + sizeof(crypto::view_tag); }
 
     /**
     * brief: gen() - generate a legacy v4 enote (all random)
@@ -165,10 +165,10 @@ struct LegacyEnoteVariant final
 
     /// interact with the variant
     template <typename T>
-    bool is_type() const { return boost::get<T>(&m_enote) != nullptr; }
+    bool is_type() const { return boost::strict_get<T>(&m_enote) != nullptr; }
 
     template <typename T>
-    const T& get_enote() const { static const T empty{}; return is_type<T>() ? boost::get<T>(m_enote) : empty; }
+    const T& enote() const { static constexpr T empty{}; return this->is_type<T>() ? boost::get<T>(m_enote) : empty; }
 };
 
 } //namespace sp

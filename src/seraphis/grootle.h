@@ -90,10 +90,10 @@ struct GrootleProof
     rct::keyV X;
     rct::key zA, z;
 
-    static std::size_t get_size_bytes(const std::size_t n, const std::size_t m);
-    std::size_t get_size_bytes() const;
+    static std::size_t size_bytes(const std::size_t n, const std::size_t m);
+    std::size_t size_bytes() const;
 };
-inline const boost::string_ref get_container_name(const GrootleProof&) { return "GrootleProof"; }
+inline const boost::string_ref container_name(const GrootleProof&) { return "GrootleProof"; }
 void append_to_transcript(const GrootleProof &container, SpTranscriptBuilder &transcript_inout);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +101,7 @@ void append_to_transcript(const GrootleProof &container, SpTranscriptBuilder &tr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
-* brief: grootle_prove - create a grootle proof
+* brief: make_grootle_proof - create a grootle proof
 * param: M - <vec of commitments>  (one column)
 * param: l - secret index into {M}
 * param: C_offset - offset for commitment to zero at index l
@@ -109,17 +109,18 @@ void append_to_transcript(const GrootleProof &container, SpTranscriptBuilder &tr
 * param: n - decomp input set: n^m
 * param: m - ...
 * param: message - message to insert in Fiat-Shamir transform hash
-* return: Grootle proof
+* outparam: proof_out - Grootle proof
 */
-GrootleProof grootle_prove(const rct::keyV &M,
+void make_grootle_proof(const rct::keyV &M,
     const std::size_t l,
     const rct::key &C_offset,
     const crypto::secret_key &privkey,
     const std::size_t n,
     const std::size_t m,
-    const rct::key &message);
+    const rct::key &message,
+    GrootleProof &proof_out);
 /**
-* brief: grootle_verify - verify a batch of grootle proofs
+* brief: verify_grootle_proofs - verify a batch of grootle proofs
 * param: proofs - batch of proofs to verify
 * param: M - (per-proof) vec<<vec of commitments>>
 * param: proof_offsets - (per-proof) offset for commitment to zero at unknown indices in each proof
@@ -128,13 +129,14 @@ GrootleProof grootle_prove(const rct::keyV &M,
 * param: message - (per-proof) message to insert in Fiat-Shamir transform hash
 * return: true/false on verification result
 */
-std::list<SpMultiexpBuilder> get_grootle_verification_data(const std::vector<const GrootleProof*> &proofs,
+void get_grootle_verification_data(const std::vector<const GrootleProof*> &proofs,
     const std::vector<rct::keyV> &M,
     const rct::keyV &proof_offsets,
     const std::size_t n,
     const std::size_t m,
-    const rct::keyV &messages);
-bool grootle_verify(const std::vector<const GrootleProof*> &proofs,
+    const rct::keyV &messages,
+    std::list<SpMultiexpBuilder> &verification_data_out);
+bool verify_grootle_proofs(const std::vector<const GrootleProof*> &proofs,
     const std::vector<rct::keyV> &M,
     const rct::keyV &proof_offsets,
     const std::size_t n,

@@ -100,7 +100,7 @@ void split_selected_input_set(const input_set_tracker_t &input_set,
                 "splitting an input set (legacy): record is supposed to be legacy but is not.");
 
             legacy_contextual_records_out.emplace_back(
-                    mapped_contextual_enote_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>()
+                    mapped_contextual_enote_record.second.contextual_record<LegacyContextualEnoteRecordV1>()
                 );
         }
     }
@@ -113,7 +113,7 @@ void split_selected_input_set(const input_set_tracker_t &input_set,
                 "splitting an input set (legacy): record is supposed to be seraphis but is not.");
 
             sp_contextual_records_out.emplace_back(
-                    mapped_contextual_enote_record.second.get_contextual_record<SpContextualEnoteRecordV1>()
+                    mapped_contextual_enote_record.second.contextual_record<SpContextualEnoteRecordV1>()
                 );
         }
     }
@@ -146,10 +146,7 @@ bool try_update_enote_spent_context_v1(const SpEnoteSpentContextV1 &fresh_spent_
 bool try_update_contextual_enote_record_spent_context_v1(const SpContextualKeyImageSetV1 &contextual_key_image_set,
     SpContextualEnoteRecordV1 &contextual_enote_record_inout)
 {
-    crypto::key_image record_key_image;
-    contextual_enote_record_inout.get_key_image(record_key_image);
-
-    if (!contextual_key_image_set.has_key_image(record_key_image))
+    if (!contextual_key_image_set.has_key_image(contextual_enote_record_inout.key_image()))
         return false;
 
     return try_update_enote_spent_context_v1(contextual_key_image_set.m_spent_context,

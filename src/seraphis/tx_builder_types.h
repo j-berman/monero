@@ -86,7 +86,7 @@ struct SpInputProposalV1 final
     void get_squash_prefix(rct::key &squash_prefix_out) const { m_core.get_squash_prefix(squash_prefix_out); }
 
     /// get the amount of this proposal
-    rct::xmr_amount get_amount() const { return m_core.m_amount; }
+    rct::xmr_amount amount() const { return m_core.m_amount; }
 
     /// generate a v1 input (does not support info recovery)
     void gen(const crypto::secret_key &sp_spend_privkey, const rct::xmr_amount amount)
@@ -122,7 +122,7 @@ struct SpOutputProposalV1 final
     void get_enote_v1(SpEnoteV1 &enote_out) const;
 
     /// get the amount of this proposal
-    rct::xmr_amount get_amount() const { return m_core.m_amount; }
+    rct::xmr_amount amount() const { return m_core.m_amount; }
 
     /**
     * brief: gen - generate a V1 Destination (random)
@@ -225,10 +225,7 @@ struct SpPartialInputV1 final
     crypto::secret_key m_input_amount_blinding_factor;
 
     /// less-than operator for sorting
-    bool operator<(const SpPartialInputV1 &other_input) const
-    {
-        return m_input_image < other_input.m_input_image;
-    }
+    bool operator<(const SpPartialInputV1 &other_input) const { return m_input_image < other_input.m_input_image; }
 };
 
 ////

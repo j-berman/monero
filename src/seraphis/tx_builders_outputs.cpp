@@ -364,7 +364,7 @@ void make_v1_outputs_v1(const std::vector<SpOutputProposalV1> &output_proposals,
         output_proposal.get_enote_v1(outputs_out.back());
 
         // prepare for range proofs
-        output_amounts_out.emplace_back(output_proposal.get_amount());
+        output_amounts_out.emplace_back(output_proposal.amount());
         output_amount_commitment_blinding_factors_out.emplace_back(output_proposal.m_core.m_amount_blinding_factor);
 
         // copy non-duplicate enote pubkeys to tx supplement

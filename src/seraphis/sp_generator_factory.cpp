@@ -63,8 +63,8 @@ struct SpFactoryGenerator final
     ge_cached generator_cached;
 };
 
-// number of generators to generate (enough for a bulletproof with 128 aggregated range proofs)
-static const std::size_t MAX_GENERATOR_COUNT{128*128};
+// number of generators to generate (enough for to make a BPP2 proof with the max number of aggregated range proofs)
+static constexpr std::size_t MAX_GENERATOR_COUNT{config::BULLETPROOF_PLUS2_MAX_COMMITMENTS*128};
 
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

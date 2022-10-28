@@ -480,12 +480,13 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
     }
 
     // get verification data
-    validation_data_out = sp::get_grootle_verification_data(proofs,
+    sp::get_grootle_verification_data(proofs,
         membership_proof_keys,
         offsets,
         sp_membership_proofs[0]->m_ref_set_decomp_n,
         sp_membership_proofs[0]->m_ref_set_decomp_m,
-        messages);
+        messages,
+        validation_data_out);
 
     return true;
 }
@@ -543,7 +544,7 @@ bool validate_sp_composition_proofs_v1(const std::vector<SpImageProofV1> &sp_ima
     // validate each composition proof
     for (std::size_t input_index{0}; input_index < sp_input_images.size(); ++input_index)
     {
-        if (!sp::sp_composition_verify(sp_image_proofs[input_index].m_composition_proof,
+        if (!sp::verify_sp_composition_proof(sp_image_proofs[input_index].m_composition_proof,
                 tx_proposal_prefix,
                 sp_input_images[input_index].m_core.m_masked_address,
                 sp_input_images[input_index].m_core.m_key_image))

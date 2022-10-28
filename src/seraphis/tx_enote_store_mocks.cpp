@@ -261,18 +261,13 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualEnoteRecordV1 &new_rec
 //-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::add_record(const SpContextualEnoteRecordV1 &new_record)
 {
-    crypto::key_image record_key_image;
-    new_record.get_key_image(record_key_image);
+    const crypto::key_image &record_key_image{new_record.key_image()};
 
     // add the record or update an existing record's contexts
     if (m_mapped_sp_contextual_enote_records.find(record_key_image) == m_mapped_sp_contextual_enote_records.end())
-    {
         m_mapped_sp_contextual_enote_records[record_key_image] = new_record;
-    }
     else
-    {
         update_contextual_enote_record_contexts_v1(new_record, m_mapped_sp_contextual_enote_records[record_key_image]);
-    }
 }
 //-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::set_last_legacy_fullscan_height(const std::uint64_t new_height)
@@ -981,7 +976,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_intermediate_le
             onchain_legacy_enote_is_locked(
                     current_contextual_record.m_origin_context.m_block_height,
                     current_contextual_record.m_record.m_unlock_time,
-                    get_top_block_height(),
+                    top_block_height(),
                     m_default_spendable_age,
                     static_cast<std::uint64_t>(std::time(nullptr)))
                 )
@@ -1059,7 +1054,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_full_legacy(
             onchain_legacy_enote_is_locked(
                     current_contextual_record.m_origin_context.m_block_height,
                     current_contextual_record.m_record.m_unlock_time,
-                    get_top_block_height(),
+                    top_block_height(),
                     m_default_spendable_age,
                     static_cast<std::uint64_t>(std::time(nullptr)))
                 )
@@ -1136,7 +1131,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_seraphis(
             current_contextual_record.m_origin_context.m_origin_status == SpEnoteOriginStatus::ONCHAIN &&
             onchain_sp_enote_is_locked(
                     current_contextual_record.m_origin_context.m_block_height,
-                    get_top_block_height(),
+                    top_block_height(),
                     m_default_spendable_age
                 ))
             continue;
@@ -1263,7 +1258,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockPaymentValidatorV1::get_receive
             contextual_record.m_origin_context.m_origin_status == SpEnoteOriginStatus::ONCHAIN &&
             onchain_sp_enote_is_locked(
                     contextual_record.m_origin_context.m_block_height,
-                    get_top_block_height(),
+                    top_block_height(),
                     m_default_spendable_age
                 ))
             continue;

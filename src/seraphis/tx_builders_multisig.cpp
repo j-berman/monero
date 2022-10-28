@@ -147,7 +147,7 @@ static void collect_sp_proof_partial_sigs_v1(const std::vector<MultisigPartialSi
         if (!type_erased_partial_sig.is_type<SpCompositionProofMultisigPartial>())
             continue;
 
-        sp_partial_sigs_out.emplace_back(type_erased_partial_sig.get_partial_sig<SpCompositionProofMultisigPartial>());
+        sp_partial_sigs_out.emplace_back(type_erased_partial_sig.partial_sig<SpCompositionProofMultisigPartial>());
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -167,21 +167,19 @@ static bool try_make_v1_sp_partial_input_v1(const SpInputProposal &input_proposa
         }
 
         // assemble proof (will throw if partial sig assembly doesn't produce a valid proof)
-        partial_input_out.m_image_proof.m_composition_proof = sp_composition_prove_multisig_final(input_proof_partial_sigs);
+        finalize_sp_composition_multisig_proof(input_proof_partial_sigs,
+            partial_input_out.m_image_proof.m_composition_proof);
 
         // copy miscellaneous pieces
         input_proposal.get_enote_image_core(partial_input_out.m_input_image.m_core);
-        partial_input_out.m_address_mask = input_proposal.m_address_mask;
-        partial_input_out.m_commitment_mask = input_proposal.m_commitment_mask;
-        partial_input_out.m_proposal_prefix = expected_proposal_prefix;
-        input_proposal.get_enote_core(partial_input_out.m_input_enote_core);
-        partial_input_out.m_input_amount = input_proposal.m_amount;
+        partial_input_out.m_address_mask     = input_proposal.m_address_mask;
+        partial_input_out.m_commitment_mask  = input_proposal.m_commitment_mask;
+        partial_input_out.m_proposal_prefix  = expected_proposal_prefix;
+        partial_input_out.m_input_enote_core = input_proposal.enote_core();
+        partial_input_out.m_input_amount     = input_proposal.m_amount;
         partial_input_out.m_input_amount_blinding_factor = input_proposal.m_amount_blinding_factor;
     }
-    catch (...)
-    {
-        return false;
-    }
+    catch (...) { return false; }
 
     return true;
 }
@@ -427,11 +425,11 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     {
         sp_input_proposal.get_enote_image_v1(enote_image_temp);
 
-        proposal_out.m_sp_input_proof_proposals.emplace_back(
-                sp_composition_multisig_proposal(proposal_prefix,
+        proposal_out.m_sp_input_proof_proposals.emplace_back();
+        make_sp_composition_multisig_proposal(proposal_prefix,
                     enote_image_temp.m_core.m_masked_address,
-                    enote_image_temp.m_core.m_key_image)
-            );
+                    enote_image_temp.m_core.m_key_image,
+                    proposal_out.m_sp_input_proof_proposals.back());
     }
 
     // 5. add miscellaneous components
@@ -514,7 +512,7 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     for (const SpMultisigInputProposalV1 &sp_multisig_input_proposal : sp_multisig_input_proposals)
     {
         sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, input_proposal_temp);
-        total_input_amount += input_proposal_temp.get_amount();
+        total_input_amount += input_proposal_temp.amount();
     }
 
     // 5. finalize output set
@@ -530,7 +528,7 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
         normal_payment_proposals,
         selfsend_payment_proposals);
 
-    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.get_fee(fee_per_tx_weight,
+    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.compute_fee(fee_per_tx_weight,
                 legacy_contextual_inputs.size(), sp_contextual_inputs.size(),
                 normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
             reported_final_fee,
@@ -878,7 +876,7 @@ bool try_make_partial_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multi
     filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
         tx_proposal_prefix,
         expected_sp_masked_addresses,
-        MultisigPartialSigVariant::get_type_index<SpCompositionProofMultisigPartial>(),
+        MultisigPartialSigVariant::type_index_of<SpCompositionProofMultisigPartial>(),
         sp_input_partial_sigs_per_signer,
         collected_sp_sigs_per_key_per_filter);
 

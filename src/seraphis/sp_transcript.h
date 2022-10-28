@@ -272,10 +272,10 @@ public:
     void append(const boost::string_ref label, const T &named_container)
     {
         // named containers must satisfy two concepts:
-        //   const boost::string_ref get_container_name(const T &container);
+        //   const boost::string_ref container_name(const T &container);
         //   void append_to_transcript(const T &container, SpTranscriptBuilder &transcript_inout);
         append_label(label);
-        begin_named_container(get_container_name(named_container));
+        begin_named_container(container_name(named_container));
         append_to_transcript(named_container, *this);
         end_named_container();
     }

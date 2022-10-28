@@ -84,7 +84,7 @@ bool SpEnoteSpentContextV1::is_older_than(const SpEnoteSpentContextV1 &other_con
     return false;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool LegacyContextualBasicEnoteRecordV1::same_destination(const LegacyContextualBasicEnoteRecordV1 &record1,
+bool LegacyContextualBasicEnoteRecordV1::have_same_destination(const LegacyContextualBasicEnoteRecordV1 &record1,
     const LegacyContextualBasicEnoteRecordV1 &record2)
 {
     return record1.m_record.m_enote.onetime_address() == record2.m_record.m_enote.onetime_address();
@@ -95,21 +95,16 @@ void LegacyContextualIntermediateEnoteRecordV1::get_onetime_address(rct::key &on
     onetime_address_out = m_record.m_enote.onetime_address();
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool LegacyContextualIntermediateEnoteRecordV1::same_destination(const LegacyContextualIntermediateEnoteRecordV1 &record1,
+bool LegacyContextualIntermediateEnoteRecordV1::have_same_destination(const LegacyContextualIntermediateEnoteRecordV1 &record1,
     const LegacyContextualIntermediateEnoteRecordV1 &record2)
 {
     return record1.m_record.m_enote.onetime_address() == record2.m_record.m_enote.onetime_address();
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool LegacyContextualEnoteRecordV1::same_destination(const LegacyContextualEnoteRecordV1 &record1,
+bool LegacyContextualEnoteRecordV1::have_same_destination(const LegacyContextualEnoteRecordV1 &record1,
     const LegacyContextualEnoteRecordV1 &record2)
 {
     return record1.m_record.m_enote.onetime_address() == record2.m_record.m_enote.onetime_address();
-}
-//-------------------------------------------------------------------------------------------------------------------
-void LegacyContextualEnoteRecordV1::get_key_image(crypto::key_image &key_image_out) const
-{
-    key_image_out = m_record.m_key_image;
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool LegacyContextualEnoteRecordV1::has_origin_status(const SpEnoteOriginStatus test_status) const
@@ -122,7 +117,7 @@ bool LegacyContextualEnoteRecordV1::has_spent_status(const SpEnoteSpentStatus te
     return m_spent_context.m_spent_status == test_status;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpContextualBasicEnoteRecordV1::same_destination(const SpContextualBasicEnoteRecordV1 &record1,
+bool SpContextualBasicEnoteRecordV1::have_same_destination(const SpContextualBasicEnoteRecordV1 &record1,
     const SpContextualBasicEnoteRecordV1 &record2)
 {
     return record1.m_record.m_enote.m_core.m_onetime_address == record2.m_record.m_enote.m_core.m_onetime_address;
@@ -133,7 +128,7 @@ void SpContextualIntermediateEnoteRecordV1::get_onetime_address(rct::key &onetim
     onetime_address_out = m_record.m_enote.m_core.m_onetime_address;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpContextualIntermediateEnoteRecordV1::same_destination(const SpContextualIntermediateEnoteRecordV1 &record1,
+bool SpContextualIntermediateEnoteRecordV1::have_same_destination(const SpContextualIntermediateEnoteRecordV1 &record1,
     const SpContextualIntermediateEnoteRecordV1 &record2)
 {
     rct::key onetime_address_1;
@@ -144,15 +139,10 @@ bool SpContextualIntermediateEnoteRecordV1::same_destination(const SpContextualI
     return onetime_address_1 == onetime_address_2;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool SpContextualEnoteRecordV1::same_destination(const SpContextualEnoteRecordV1 &record1,
+bool SpContextualEnoteRecordV1::have_same_destination(const SpContextualEnoteRecordV1 &record1,
     const SpContextualEnoteRecordV1 &record2)
 {
     return record1.m_record.m_enote.m_core.m_onetime_address == record2.m_record.m_enote.m_core.m_onetime_address;
-}
-//-------------------------------------------------------------------------------------------------------------------
-void SpContextualEnoteRecordV1::get_key_image(crypto::key_image &key_image_out) const
-{
-    key_image_out = m_record.m_key_image;
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool SpContextualEnoteRecordV1::has_origin_status(const SpEnoteOriginStatus test_status) const
@@ -167,10 +157,10 @@ bool SpContextualEnoteRecordV1::has_spent_status(const SpEnoteSpentStatus test_s
 //-------------------------------------------------------------------------------------------------------------------
 const SpEnoteOriginContextV1& ContextualBasicRecordVariant::origin_context() const
 {
-    if (is_type<LegacyContextualBasicEnoteRecordV1>())
-        return get_contextual_record<LegacyContextualBasicEnoteRecordV1>().m_origin_context;
-    else if (is_type<SpContextualBasicEnoteRecordV1>())
-        return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
+    if (this->is_type<LegacyContextualBasicEnoteRecordV1>())
+        return this->contextual_record<LegacyContextualBasicEnoteRecordV1>().m_origin_context;
+    else if (this->is_type<SpContextualBasicEnoteRecordV1>())
+        return this->contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
     else
     {
         static const SpEnoteOriginContextV1 temp{};
@@ -178,22 +168,22 @@ const SpEnoteOriginContextV1& ContextualBasicRecordVariant::origin_context() con
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount ContextualRecordVariant::get_amount() const
+rct::xmr_amount ContextualRecordVariant::amount() const
 {
-    if (is_type<LegacyContextualEnoteRecordV1>())
-        return get_contextual_record<LegacyContextualEnoteRecordV1>().get_amount();
-    else if (is_type<SpContextualEnoteRecordV1>())
-        return get_contextual_record<SpContextualEnoteRecordV1>().get_amount();
+    if (this->is_type<LegacyContextualEnoteRecordV1>())
+        return this->contextual_record<LegacyContextualEnoteRecordV1>().amount();
+    else if (this->is_type<SpContextualEnoteRecordV1>())
+        return this->contextual_record<SpContextualEnoteRecordV1>().amount();
     else
         return 0;
 }
 //-------------------------------------------------------------------------------------------------------------------
 const SpEnoteOriginContextV1& ContextualRecordVariant::origin_context() const
 {
-    if (is_type<LegacyContextualEnoteRecordV1>())
-        return get_contextual_record<LegacyContextualEnoteRecordV1>().m_origin_context;
-    else if (is_type<SpContextualEnoteRecordV1>())
-        return get_contextual_record<SpContextualEnoteRecordV1>().m_origin_context;
+    if (this->is_type<LegacyContextualEnoteRecordV1>())
+        return this->contextual_record<LegacyContextualEnoteRecordV1>().m_origin_context;
+    else if (this->is_type<SpContextualEnoteRecordV1>())
+        return this->contextual_record<SpContextualEnoteRecordV1>().m_origin_context;
     else
     {
         static const SpEnoteOriginContextV1 temp{};
@@ -203,10 +193,10 @@ const SpEnoteOriginContextV1& ContextualRecordVariant::origin_context() const
 //-------------------------------------------------------------------------------------------------------------------
 const SpEnoteSpentContextV1& ContextualRecordVariant::spent_context() const
 {
-    if (is_type<LegacyContextualEnoteRecordV1>())
-        return get_contextual_record<LegacyContextualEnoteRecordV1>().m_spent_context;
-    else if (is_type<SpContextualEnoteRecordV1>())
-        return get_contextual_record<SpContextualEnoteRecordV1>().m_spent_context;
+    if (this->is_type<LegacyContextualEnoteRecordV1>())
+        return this->contextual_record<LegacyContextualEnoteRecordV1>().m_spent_context;
+    else if (this->is_type<SpContextualEnoteRecordV1>())
+        return this->contextual_record<SpContextualEnoteRecordV1>().m_spent_context;
     else
     {
         static const SpEnoteSpentContextV1 temp{};

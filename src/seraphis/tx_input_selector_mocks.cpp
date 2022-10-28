@@ -88,8 +88,8 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
                 if (!comparison_record.second.is_type<LegacyContextualEnoteRecordV1>())
                     return false;
 
-                return LegacyContextualEnoteRecordV1::same_destination(contextual_enote_record,
-                    comparison_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>());
+                return LegacyContextualEnoteRecordV1::have_same_destination(contextual_enote_record,
+                    comparison_record.second.contextual_record<LegacyContextualEnoteRecordV1>());
             };
 
         // ignore already added legacy inputs
@@ -118,8 +118,8 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
                 if (!comparison_record.second.is_type<SpContextualEnoteRecordV1>())
                     return false;
 
-                return SpContextualEnoteRecordV1::same_destination(contextual_enote_record,
-                    comparison_record.second.get_contextual_record<SpContextualEnoteRecordV1>());
+                return SpContextualEnoteRecordV1::have_same_destination(contextual_enote_record,
+                    comparison_record.second.contextual_record<SpContextualEnoteRecordV1>());
             };
 
         // ignore already added seraphis inputs
@@ -159,8 +159,10 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
                 if (!comparison_record.second.is_type<LegacyContextualEnoteRecordV1>())
                     return false;
 
-                return LegacyContextualEnoteRecordV1::same_destination(mapped_enote_record.second,
-                    comparison_record.second.get_contextual_record<LegacyContextualEnoteRecordV1>());
+                return LegacyContextualEnoteRecordV1::have_same_destination(
+                        mapped_enote_record.second,
+                        comparison_record.second.contextual_record<LegacyContextualEnoteRecordV1>()
+                    );
             };
 
         // ignore already added legacy inputs
@@ -217,8 +219,10 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
                 if (!comparison_record.second.is_type<SpContextualEnoteRecordV1>())
                     return false;
 
-                return SpContextualEnoteRecordV1::same_destination(mapped_enote_record.second,
-                    comparison_record.second.get_contextual_record<SpContextualEnoteRecordV1>());
+                return SpContextualEnoteRecordV1::have_same_destination(
+                        mapped_enote_record.second,
+                        comparison_record.second.contextual_record<SpContextualEnoteRecordV1>()
+                    );
             };
 
         // ignore already added seraphis inputs

@@ -80,19 +80,19 @@ void append_to_transcript(const SpEnoteImageV1 &container, SpTranscriptBuilder &
     transcript_inout.append("core", container.m_core);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpMembershipProofV1::get_size_bytes(const std::size_t n, const std::size_t m, const std::size_t num_bin_members)
+std::size_t SpMembershipProofV1::size_bytes(const std::size_t n, const std::size_t m, const std::size_t num_bin_members)
 {
     const std::size_t ref_set_size{ref_set_size_from_decomp(n, m)};
 
-    return sp::GrootleProof::get_size_bytes(n, m) +
+    return sp::GrootleProof::size_bytes(n, m) +
         (num_bin_members > 0
-        ? SpBinnedReferenceSetV1::get_size_bytes(ref_set_size / num_bin_members)
+        ? SpBinnedReferenceSetV1::size_bytes(ref_set_size / num_bin_members)
         : 0);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpMembershipProofV1::get_size_bytes() const
+std::size_t SpMembershipProofV1::size_bytes() const
 {
-    return SpMembershipProofV1::get_size_bytes(m_ref_set_decomp_n,
+    return SpMembershipProofV1::size_bytes(m_ref_set_decomp_n,
         m_ref_set_decomp_m,
         m_binned_reference_set.m_bin_config.m_num_bin_members);
 }
@@ -110,7 +110,7 @@ void append_to_transcript(const SpImageProofV1 &container, SpTranscriptBuilder &
     transcript_inout.append("composition_proof", container.m_composition_proof);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBalanceProofV1::get_size_bytes(const std::size_t num_sp_inputs,
+std::size_t SpBalanceProofV1::size_bytes(const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
     const bool include_commitments /*=false*/)
 {
@@ -125,12 +125,12 @@ std::size_t SpBalanceProofV1::get_size_bytes(const std::size_t num_sp_inputs,
     return size;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBalanceProofV1::get_size_bytes(const bool include_commitments /*=false*/) const
+std::size_t SpBalanceProofV1::size_bytes(const bool include_commitments /*=false*/) const
 {
-    return SpBalanceProofV1::get_size_bytes(m_bpp2_proof.V.size(), 0, include_commitments);
+    return SpBalanceProofV1::size_bytes(m_bpp2_proof.V.size(), 0, include_commitments);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBalanceProofV1::get_weight(const std::size_t num_sp_inputs,
+std::size_t SpBalanceProofV1::weight(const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
     const bool include_commitments /*=false*/)
 {
@@ -145,9 +145,9 @@ std::size_t SpBalanceProofV1::get_weight(const std::size_t num_sp_inputs,
     return weight;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpBalanceProofV1::get_weight(const bool include_commitments /*=false*/) const
+std::size_t SpBalanceProofV1::weight(const bool include_commitments /*=false*/) const
 {
-    return SpBalanceProofV1::get_weight(m_bpp2_proof.V.size(), 0, include_commitments);
+    return SpBalanceProofV1::weight(m_bpp2_proof.V.size(), 0, include_commitments);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void append_to_transcript(const SpBalanceProofV1 &container, SpTranscriptBuilder &transcript_inout)
@@ -156,7 +156,7 @@ void append_to_transcript(const SpBalanceProofV1 &container, SpTranscriptBuilder
     transcript_inout.append("remainder_blinding_factor", container.m_remainder_blinding_factor);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSupplementV1::get_size_bytes(const std::size_t num_outputs, const TxExtra &tx_extra)
+std::size_t SpTxSupplementV1::size_bytes(const std::size_t num_outputs, const TxExtra &tx_extra)
 {
     std::size_t size{0};
 
@@ -172,7 +172,7 @@ std::size_t SpTxSupplementV1::get_size_bytes(const std::size_t num_outputs, cons
     return size;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSupplementV1::get_size_bytes() const
+std::size_t SpTxSupplementV1::size_bytes() const
 {
     return 32 * m_output_enote_ephemeral_pubkeys.size() + m_tx_extra.size();
 }

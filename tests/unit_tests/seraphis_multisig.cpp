@@ -114,45 +114,45 @@ static void make_multisig_accounts(const cryptonote::account_generator_era accou
     const std::uint32_t num_signers,
     std::vector<multisig::multisig_account> &accounts_out)
 {
-  std::vector<crypto::public_key> signers;
-  std::vector<multisig::multisig_kex_msg> current_round_msgs;
-  std::vector<multisig::multisig_kex_msg> next_round_msgs;
-  accounts_out.clear();
-  accounts_out.reserve(num_signers);
-  signers.reserve(num_signers);
-  next_round_msgs.reserve(accounts_out.size());
-
-  // create multisig accounts for each signer
-  for (std::size_t account_index{0}; account_index < num_signers; ++account_index)
-  {
-    // create account [[ROUND 0]]
-    accounts_out.emplace_back(account_era, make_secret_key(), make_secret_key());
-
-    // collect signer
-    signers.emplace_back(accounts_out.back().get_base_pubkey());
-
-    // collect account's first kex msg
-    next_round_msgs.emplace_back(accounts_out.back().get_next_kex_round_msg());
-  }
-
-  // perform key exchange rounds until the accounts are ready
-  while (accounts_out.size() && !accounts_out[0].multisig_is_ready())
-  {
-    current_round_msgs = std::move(next_round_msgs);
-    next_round_msgs.clear();
+    std::vector<crypto::public_key> signers;
+    std::vector<multisig::multisig_kex_msg> current_round_msgs;
+    std::vector<multisig::multisig_kex_msg> next_round_msgs;
+    accounts_out.clear();
+    accounts_out.reserve(num_signers);
+    signers.reserve(num_signers);
     next_round_msgs.reserve(accounts_out.size());
 
-    for (multisig::multisig_account &account : accounts_out)
+    // create multisig accounts for each signer
+    for (std::size_t account_index{0}; account_index < num_signers; ++account_index)
     {
-        // initialize or update account
-        if (!account.account_is_active())
-            account.initialize_kex(threshold, signers, current_round_msgs);  //[[ROUND 1]]
-        else
-            account.kex_update(current_round_msgs);  //[[ROUND 2+]]
+        // create account [[ROUND 0]]
+        accounts_out.emplace_back(account_era, make_secret_key(), make_secret_key());
 
-        next_round_msgs.emplace_back(account.get_next_kex_round_msg());
+        // collect signer
+        signers.emplace_back(accounts_out.back().get_base_pubkey());
+
+        // collect account's first kex msg
+        next_round_msgs.emplace_back(accounts_out.back().get_next_kex_round_msg());
     }
-  }
+
+    // perform key exchange rounds until the accounts are ready
+    while (accounts_out.size() && !accounts_out[0].multisig_is_ready())
+    {
+        current_round_msgs = std::move(next_round_msgs);
+        next_round_msgs.clear();
+        next_round_msgs.reserve(accounts_out.size());
+
+        for (multisig::multisig_account &account : accounts_out)
+        {
+            // initialize or update account
+            if (!account.account_is_active())
+                account.initialize_kex(threshold, signers, current_round_msgs);  //[[ROUND 1]]
+            else
+                account.kex_update(current_round_msgs);  //[[ROUND 2+]]
+
+            next_round_msgs.emplace_back(account.get_next_kex_round_msg());
+        }
+    }
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -198,8 +198,9 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
         sp::make_seraphis_key_image(accounts[0].get_common_privkey(), accounts[0].get_multisig_pubkey(), KI);
 
         // tx proposer: make proposal and specify which other signers should try to co-sign (all of them)
-        rct::key message{rct::zero()};
-        sp::SpCompositionProofMultisigProposal proposal{sp::sp_composition_multisig_proposal(message, K, KI)};
+        const rct::key message{rct::zero()};
+        sp::SpCompositionProofMultisigProposal proposal;
+        sp::make_sp_composition_multisig_proposal(message, K, KI, proposal);
         multisig::signer_set_filter aggregate_filter;
         multisig::multisig_signers_to_filter(accounts[0].get_signers(), accounts[0].get_signers(), aggregate_filter);
 
@@ -281,17 +282,14 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
             EXPECT_TRUE(partial_sigs.size() == threshold);
 
             // make proof
-            proof = sp::sp_composition_prove_multisig_final(partial_sigs);
+            sp::finalize_sp_composition_multisig_proof(partial_sigs, proof);
 
             // verify proof
-            if (!sp::sp_composition_verify(proof, message, K, KI))
+            if (!sp::verify_sp_composition_proof(proof, message, K, KI))
                 return false;
         }
     }
-    catch (...)
-    {
-        return false;
-    }
+    catch (...) { return false; }
 
     return true;
 }
@@ -451,11 +449,11 @@ static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig:
 
     // 2. prepare key image import cycle
     const std::uint64_t intermediate_height_pre_import_cycle{
-            enote_store_inout.get_top_legacy_partialscanned_block_height()
+            enote_store_inout.top_legacy_partialscanned_block_height()
         };
 
     // 3. export intermediate onetime addresses that need key images
-    const auto &legacy_intermediate_records = enote_store_inout.get_legacy_intermediate_records();
+    const auto &legacy_intermediate_records = enote_store_inout.legacy_intermediate_records();
 
     // 4. get partial key image messages for the intermediate records' onetime addresses from all multisig group members
     std::unordered_map<crypto::public_key,
@@ -534,7 +532,7 @@ static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig:
         enote_store_inout);
 
     // 9. check results of key image refresh scan
-    ASSERT_TRUE(enote_store_inout.get_legacy_intermediate_records().size() == 0);
+    ASSERT_TRUE(enote_store_inout.legacy_intermediate_records().size() == 0);
 
     // 10. update the legacy fullscan height to account for a complete view-only scan cycle with key image recovery
     ASSERT_NO_THROW(enote_store_inout.set_last_legacy_fullscan_height(intermediate_height_pre_import_cycle));
@@ -924,7 +922,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         completed_tx));
 
     // - sanity check fee (can't do this with the trivial fee calculator)
-    //ASSERT_TRUE(completed_tx.m_fee == tx_fee_calculator.get_fee(tx_fee_per_weight, completed_tx));
+    //ASSERT_TRUE(completed_tx.m_fee == tx_fee_calculator.compute_fee(tx_fee_per_weight, completed_tx));
 
     // f) verify tx
     const TxValidationContextMock tx_validation_context{ledger_context};

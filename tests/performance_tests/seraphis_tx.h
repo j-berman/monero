@@ -345,8 +345,8 @@ public:
 
         // report tx info
         std::string report;
-        report += sp::get_descriptor<SpTxType>() + " || ";
-        report += std::string{"Size (bytes): "} + std::to_string(m_txs.back().get_size_bytes()) + " || ";
+        report += sp::tx_descriptor<SpTxType>() + " || ";
+        report += std::string{"Size (bytes): "} + std::to_string(m_txs.back().size_bytes()) + " || ";
         report += std::string{"batch size: "} + std::to_string(params.batch_size) + " || ";
         report += std::string{"legacy inputs: "} + std::to_string(params.legacy_in_count) + " || ";
         report += std::string{"sp inputs: "} + std::to_string(params.sp_in_count) + " || ";
@@ -365,8 +365,8 @@ public:
 
             std::string report_csv;
             std::string separator{','};
-            report_csv += sp::get_descriptor<SpTxType>() + separator;
-            report_csv += std::to_string(m_txs.back().get_size_bytes()) + separator;
+            report_csv += sp::tx_descriptor<SpTxType>() + separator;
+            report_csv += std::to_string(m_txs.back().size_bytes()) + separator;
             report_csv += std::to_string(params.batch_size) + separator;
             report_csv += std::to_string(params.legacy_in_count) + separator;
             report_csv += std::to_string(params.sp_in_count) + separator;

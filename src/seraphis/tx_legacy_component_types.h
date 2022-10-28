@@ -66,14 +66,11 @@ struct LegacyEnoteImageV2 final
     crypto::key_image m_key_image;
 
     /// less-than operator for sorting
-    bool operator<(const LegacyEnoteImageV2 &other_image) const
-    {
-        return m_key_image < other_image.m_key_image;
-    }
+    bool operator<(const LegacyEnoteImageV2 &other_image) const { return m_key_image < other_image.m_key_image; }
 
-    static std::size_t get_size_bytes() { return 32 + 32; }
+    static std::size_t size_bytes() { return 32 + 32; }
 };
-inline const boost::string_ref get_container_name(const LegacyEnoteImageV2&) { return "LegacyEnoteImageV2"; }
+inline const boost::string_ref container_name(const LegacyEnoteImageV2&) { return "LegacyEnoteImageV2"; }
 void append_to_transcript(const LegacyEnoteImageV2 &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -98,10 +95,10 @@ struct LegacyRingSignatureV3 final
     std::vector<std::uint64_t> m_reference_set;
 
     /// size of the membership proof (does not include the ref set decomp)
-    static std::size_t get_size_bytes(const std::size_t num_ring_members);
-    std::size_t get_size_bytes() const;
+    static std::size_t size_bytes(const std::size_t num_ring_members);
+    std::size_t size_bytes() const;
 };
-inline const boost::string_ref get_container_name(const LegacyRingSignatureV3&) { return "LegacyRingSignatureV3"; }
+inline const boost::string_ref container_name(const LegacyRingSignatureV3&) { return "LegacyRingSignatureV3"; }
 void append_to_transcript(const LegacyRingSignatureV3 &container, SpTranscriptBuilder &transcript_inout);
 
 } //namespace sp

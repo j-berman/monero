@@ -119,12 +119,12 @@ OutputSetContextForInputSelectionV1::OutputSetContextForInputSelectionV1(
         m_total_output_amount += selfsend_proposal.m_amount;
 }
 //-------------------------------------------------------------------------------------------------------------------
-boost::multiprecision::uint128_t OutputSetContextForInputSelectionV1::get_total_amount() const
+boost::multiprecision::uint128_t OutputSetContextForInputSelectionV1::total_amount() const
 {
     return m_total_output_amount;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t OutputSetContextForInputSelectionV1::get_num_outputs_nochange() const
+std::size_t OutputSetContextForInputSelectionV1::num_outputs_nochange() const
 {
     const std::size_t num_additional_outputs_no_change{
         compute_num_additional_outputs(m_num_outputs, m_output_ephemeral_pubkeys_are_unique, m_self_send_output_types, 0)
@@ -133,7 +133,7 @@ std::size_t OutputSetContextForInputSelectionV1::get_num_outputs_nochange() cons
     return m_num_outputs + num_additional_outputs_no_change;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t OutputSetContextForInputSelectionV1::get_num_outputs_withchange() const
+std::size_t OutputSetContextForInputSelectionV1::num_outputs_withchange() const
 {
     const std::size_t num_additional_outputs_with_change{
         compute_num_additional_outputs(m_num_outputs, m_output_ephemeral_pubkeys_are_unique, m_self_send_output_types, 1)

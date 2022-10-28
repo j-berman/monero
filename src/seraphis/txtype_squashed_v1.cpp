@@ -72,7 +72,7 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSquashedV1::get_size_bytes(const std::size_t num_legacy_inputs,
+std::size_t SpTxSquashedV1::size_bytes(const std::size_t num_legacy_inputs,
     const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
     const std::size_t legacy_ring_size,
@@ -87,36 +87,36 @@ std::size_t SpTxSquashedV1::get_size_bytes(const std::size_t num_legacy_inputs,
     std::size_t size{0};
 
     // legacy input images
-    size += num_legacy_inputs * LegacyEnoteImageV2::get_size_bytes();
+    size += num_legacy_inputs * LegacyEnoteImageV2::size_bytes();
 
     // seraphis input images
-    size += num_sp_inputs * SpEnoteImageV1::get_size_bytes();
+    size += num_sp_inputs * SpEnoteImageV1::size_bytes();
 
     // outputs
-    size += num_outputs * SpEnoteV1::get_size_bytes();
+    size += num_outputs * SpEnoteV1::size_bytes();
 
     // balance proof (note: only seraphis inputs are range proofed)
-    size += SpBalanceProofV1::get_size_bytes(num_sp_inputs, num_outputs);
+    size += SpBalanceProofV1::size_bytes(num_sp_inputs, num_outputs);
 
     // legacy ring signatures
-    size += num_legacy_inputs * LegacyRingSignatureV3::get_size_bytes(legacy_ring_size);
+    size += num_legacy_inputs * LegacyRingSignatureV3::size_bytes(legacy_ring_size);
 
     // ownership/key-image-legitimacy proof for all seraphis inputs
-    size += num_sp_inputs * SpImageProofV1::get_size_bytes();
+    size += num_sp_inputs * SpImageProofV1::size_bytes();
 
     // membership proofs for seraphis inputs
-    size += num_sp_inputs * SpMembershipProofV1::get_size_bytes(ref_set_decomp_n, ref_set_decomp_m, num_bin_members);
+    size += num_sp_inputs * SpMembershipProofV1::size_bytes(ref_set_decomp_n, ref_set_decomp_m, num_bin_members);
 
     // extra data in tx
-    size += SpTxSupplementV1::get_size_bytes(num_outputs, tx_extra);
+    size += SpTxSupplementV1::size_bytes(num_outputs, tx_extra);
 
     // tx fee
-    size += DiscretizedFee::get_size_bytes();
+    size += DiscretizedFee::size_bytes();
 
     return size;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSquashedV1::get_size_bytes() const
+std::size_t SpTxSquashedV1::size_bytes() const
 {
     const std::size_t legacy_ring_size{
             m_legacy_ring_signatures.size()
@@ -139,7 +139,7 @@ std::size_t SpTxSquashedV1::get_size_bytes() const
             : 0u
         };
 
-    return SpTxSquashedV1::get_size_bytes(m_legacy_input_images.size(),
+    return SpTxSquashedV1::size_bytes(m_legacy_input_images.size(),
         m_sp_input_images.size(),
         m_outputs.size(),
         legacy_ring_size,
@@ -149,7 +149,7 @@ std::size_t SpTxSquashedV1::get_size_bytes() const
         m_tx_supplement.m_tx_extra);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSquashedV1::get_weight(const std::size_t num_legacy_inputs,
+std::size_t SpTxSquashedV1::weight(const std::size_t num_legacy_inputs,
     const std::size_t num_sp_inputs,
     const std::size_t num_outputs,
     const std::size_t legacy_ring_size,
@@ -160,7 +160,7 @@ std::size_t SpTxSquashedV1::get_weight(const std::size_t num_legacy_inputs,
 {
     // tx weight = tx size + balance proof clawback
     std::size_t weight{
-            SpTxSquashedV1::get_size_bytes(num_legacy_inputs,
+            SpTxSquashedV1::size_bytes(num_legacy_inputs,
                 num_sp_inputs,
                 num_outputs,
                 legacy_ring_size,
@@ -171,13 +171,13 @@ std::size_t SpTxSquashedV1::get_weight(const std::size_t num_legacy_inputs,
         };
 
     // subtract balance proof size and add its weight
-    weight -= SpBalanceProofV1::get_size_bytes(num_sp_inputs, num_outputs);
-    weight += SpBalanceProofV1::get_weight(num_sp_inputs, num_outputs);
+    weight -= SpBalanceProofV1::size_bytes(num_sp_inputs, num_outputs);
+    weight += SpBalanceProofV1::weight(num_sp_inputs, num_outputs);
 
     return weight;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t SpTxSquashedV1::get_weight() const
+std::size_t SpTxSquashedV1::weight() const
 {
     const std::size_t legacy_ring_size{
             m_legacy_ring_signatures.size()
@@ -200,7 +200,7 @@ std::size_t SpTxSquashedV1::get_weight() const
             : 0u
         };
 
-    return SpTxSquashedV1::get_weight(m_legacy_input_images.size(),
+    return SpTxSquashedV1::weight(m_legacy_input_images.size(),
         m_sp_input_images.size(),
         m_outputs.size(),
         legacy_ring_size,

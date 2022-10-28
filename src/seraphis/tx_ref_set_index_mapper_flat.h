@@ -67,8 +67,8 @@ public:
 //destructor: default
 
 //getters
-    std::uint64_t get_distribution_min_index() const override { return m_distribution_min_index; }
-    std::uint64_t get_distribution_max_index() const override { return m_distribution_max_index; }
+    std::uint64_t distribution_min_index() const override { return m_distribution_min_index; }
+    std::uint64_t distribution_max_index() const override { return m_distribution_max_index; }
 
 //member functions
     /// [min, max] --(projection)-> [0, 2^64 - 1]

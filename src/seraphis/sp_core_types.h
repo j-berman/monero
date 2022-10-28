@@ -71,14 +71,14 @@ struct SpEnote final
     */
     bool onetime_address_is_canonical() const;
 
-    static std::size_t get_size_bytes() { return 32*2; }
+    static std::size_t size_bytes() { return 32*2; }
 
     /**
     * brief: gen() - generate a seraphis enote (all random)
     */
     void gen();
 };
-inline const boost::string_ref get_container_name(const SpEnote&) { return "SpEnote"; }
+inline const boost::string_ref container_name(const SpEnote&) { return "SpEnote"; }
 void append_to_transcript(const SpEnote &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -99,9 +99,9 @@ struct SpEnoteImage final
         return m_key_image < other_image.m_key_image;
     }
 
-    static std::size_t get_size_bytes() { return 32*3; }
+    static std::size_t size_bytes() { return 32*3; }
 };
-inline const boost::string_ref get_container_name(const SpEnoteImage&) { return "SpEnoteImage"; }
+inline const boost::string_ref container_name(const SpEnoteImage&) { return "SpEnoteImage"; }
 void append_to_transcript(const SpEnoteImage &container, SpTranscriptBuilder &transcript_inout);
 
 ////
@@ -135,16 +135,16 @@ struct SpInputProposal final
     bool operator<(const SpInputProposal &other_proposal) const { return m_key_image < other_proposal.m_key_image; }
 
     /**
-    * brief: get_key_image - get this input's key image
+    * brief: key_image - get this input's key image
     * outparam: key_image_out - KI
     */
-    void get_key_image(crypto::key_image &key_image_out) const { key_image_out = m_key_image; }
+    const crypto::key_image& key_image() const { return m_key_image; }
 
     /**
-    * brief: get_enote_core - get the enote this input proposal represents
+    * brief: enote_core - get the enote this input proposal represents
     * outparam: enote_out -
     */
-    void get_enote_core(SpEnote &enote_out) const { enote_out = m_enote_core; }
+    const SpEnote& enote_core() const { return m_enote_core; }
 
     /**
     * brief: get_squash_prefix - get this input's enote's squash prefix

@@ -104,7 +104,7 @@ struct SpTxSquashedV1 final
     void get_hash(rct::key &tx_hash_out) const;
 
     /// get size of a possible tx
-    static std::size_t get_size_bytes(const std::size_t num_legacy_inputs,
+    static std::size_t size_bytes(const std::size_t num_legacy_inputs,
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const std::size_t legacy_ring_size,
@@ -113,9 +113,9 @@ struct SpTxSquashedV1 final
         const std::size_t num_bin_members,
         const TxExtra &tx_extra);
     /// get size of the tx
-    std::size_t get_size_bytes() const;
+    std::size_t size_bytes() const;
     /// get weight of a possible tx
-    static std::size_t get_weight(const std::size_t num_legacy_inputs,
+    static std::size_t weight(const std::size_t num_legacy_inputs,
         const std::size_t num_sp_inputs,
         const std::size_t num_outputs,
         const std::size_t legacy_ring_size,
@@ -124,7 +124,7 @@ struct SpTxSquashedV1 final
         const std::size_t num_bin_members,
         const TxExtra &tx_extra);
     /// get weight of the tx
-    std::size_t get_weight() const;
+    std::size_t weight() const;
 };
 
 /**
@@ -209,11 +209,11 @@ SemanticConfigSpRefSetV1 semantic_config_sp_ref_sets_v1(
 
 /// short descriptor of the tx type
 template <>
-inline std::string get_descriptor<SpTxSquashedV1>() { return "Sp-Squashed-V1"; }
+inline std::string tx_descriptor<SpTxSquashedV1>() { return "Sp-Squashed-V1"; }
 
 /// tx structure version
 template <>
-inline unsigned char get_structure_version<SpTxSquashedV1>()
+inline unsigned char tx_structure_version<SpTxSquashedV1>()
 {
     return static_cast<unsigned char>(TxStructureVersionSp::TxTypeSpSquashedV1);
 }

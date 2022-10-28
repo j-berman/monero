@@ -110,21 +110,21 @@ struct MultisigPartialSigVariant final
 
     /// interact with the variant
     template <typename T>
-    bool is_type() const { return boost::get<T>(&m_partial_sig) != nullptr; }
+    bool is_type() const { return boost::strict_get<T>(&m_partial_sig) != nullptr; }
 
     template <typename T>
-    const T& get_partial_sig() const
+    const T& partial_sig() const
     {
-        static const T empty{};
-        return is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
+        static constexpr T empty{};
+        return this->is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
     }
 
     /// get the type index of a requested type (compile error for invalid types)
     template <typename T>
-    static int get_type_index()
+    static int type_index_of()
     {
-        static const int type_index{VType{T{}}.which()};
-        return type_index;
+        static const int type_index_of_T{VType{T{}}.which()};
+        return type_index_of_T;
     }
 
     /// check if two variants have the same type

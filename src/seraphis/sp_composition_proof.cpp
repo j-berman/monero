@@ -164,7 +164,7 @@ static rct::key multisig_binonce_merge_factor(const rct::key &message, const std
     // build hash
     SpKDFTranscript transcript{
             config::HASH_KEY_MULTISIG_BINONCE_MERGE_FACTOR,
-            sizeof(rct::key) + nonces.size() * MultisigPubNonces::get_size_bytes()
+            sizeof(rct::key) + nonces.size() * MultisigPubNonces::size_bytes()
         };
     transcript.append("message", message);
     transcript.append("nonces", nonces);
@@ -186,11 +186,12 @@ void append_to_transcript(const SpCompositionProof &container, SpTranscriptBuild
     transcript_inout.append("K_t1", container.K_t1);
 }
 //-------------------------------------------------------------------------------------------------------------------
-SpCompositionProof sp_composition_prove(const rct::key &message,
+void make_sp_composition_proof(const rct::key &message,
     const rct::key &K,
     const crypto::secret_key &x,
     const crypto::secret_key &y,
-    const crypto::secret_key &z)
+    const crypto::secret_key &z,
+    SpCompositionProof &proof_out)
 {
     /// input checks and initialization
     CHECK_AND_ASSERT_THROW_MES(!(K == rct::identity()), "Bad proof key (K identity)!");
@@ -212,13 +213,11 @@ SpCompositionProof sp_composition_prove(const rct::key &message,
 
     const rct::key U_gen{rct::pk2rct(crypto::get_U())};
 
-    SpCompositionProof proof;
-
 
     /// make K_t1 and KI
 
     // K_t1 = (1/8) * (1/y) * K
-    compute_K_t1_for_proof(y, K, proof.K_t1);
+    compute_K_t1_for_proof(y, K, proof_out.K_t1);
 
     // KI = (z / y) * U
     // note: plain KI is used in all byte-aware contexts
@@ -245,28 +244,24 @@ SpCompositionProof sp_composition_prove(const rct::key &message,
 
 
     /// compute proof challenge
-    const rct::key m{compute_challenge_message(message, K, KI, proof.K_t1)};
-    proof.c = compute_challenge(m, alpha_t1_pub, alpha_t2_pub, alpha_ki_pub);
+    const rct::key m{compute_challenge_message(message, K, KI, proof_out.K_t1)};
+    proof_out.c = compute_challenge(m, alpha_t1_pub, alpha_t2_pub, alpha_ki_pub);
 
 
     /// responses
-    compute_responses(proof.c,
+    compute_responses(proof_out.c,
         rct::sk2rct(alpha_t1),
         rct::sk2rct(alpha_t2),
         rct::sk2rct(alpha_ki),
         x,
         y,
         z,
-        proof.r_t1,
-        proof.r_t2,
-        proof.r_ki);
-
-
-    /// done
-    return proof;
+        proof_out.r_t1,
+        proof_out.r_t2,
+        proof_out.r_ki);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool sp_composition_verify(const SpCompositionProof &proof,
+bool verify_sp_composition_proof(const SpCompositionProof &proof,
     const rct::key &message,
     const rct::key &K,
     const crypto::key_image &KI)
@@ -341,31 +336,29 @@ bool sp_composition_verify(const SpCompositionProof &proof,
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-SpCompositionProofMultisigProposal sp_composition_multisig_proposal(const rct::key &message,
+void make_sp_composition_multisig_proposal(const rct::key &message,
     const rct::key &K,
-    const crypto::key_image &KI)
+    const crypto::key_image &KI,
+    SpCompositionProofMultisigProposal &proposal_out)
 {
     /// assemble proposal
-    SpCompositionProofMultisigProposal proposal;
-
-    proposal.message = message;
-    proposal.K = K;
-    proposal.KI = KI;
+    proposal_out.message = message;
+    proposal_out.K = K;
+    proposal_out.KI = KI;
 
     rct::key dummy;
-    generate_proof_nonce(K, proposal.signature_nonce_K_t1, dummy);
-    generate_proof_nonce(rct::G, proposal.signature_nonce_K_t2, dummy);
-
-    return proposal;
+    generate_proof_nonce(K, proposal_out.signature_nonce_K_t1, dummy);
+    generate_proof_nonce(rct::G, proposal_out.signature_nonce_K_t2, dummy);
 }
 //-------------------------------------------------------------------------------------------------------------------
-SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCompositionProofMultisigProposal &proposal,
+void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigProposal &proposal,
     const crypto::secret_key &x,
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
     const std::vector<MultisigPubNonces> &signer_pub_nonces,
     const crypto::secret_key &local_nonce_1_priv,
-    const crypto::secret_key &local_nonce_2_priv)
+    const crypto::secret_key &local_nonce_2_priv,
+    SpCompositionProofMultisigPartial &partial_sig_out)
 {
     /// input checks and initialization
     const std::size_t num_signers{signer_pub_nonces.size()};
@@ -424,19 +417,23 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
 
 
     /// prepare partial signature
-    SpCompositionProofMultisigPartial partial_sig;
 
     // set partial sig pieces
-    partial_sig.message = proposal.message;
-    partial_sig.K = proposal.K;
-    partial_sig.KI = proposal.KI;
+    partial_sig_out.message = proposal.message;
+    partial_sig_out.K = proposal.K;
+    partial_sig_out.KI = proposal.KI;
 
     // make K_t1 = (1/8) * (1/y) * K
-    compute_K_t1_for_proof(y, proposal.K, partial_sig.K_t1);
+    compute_K_t1_for_proof(y, proposal.K, partial_sig_out.K_t1);
 
 
     /// challenge message and binonce merge factor
-    const rct::key m{compute_challenge_message(partial_sig.message, partial_sig.K, partial_sig.KI, partial_sig.K_t1)};
+    const rct::key m{
+            compute_challenge_message(partial_sig_out.message,
+                partial_sig_out.K,
+                partial_sig_out.KI,
+                partial_sig_out.K_t1)
+        };
 
     const rct::key binonce_merge_factor{multisig_binonce_merge_factor(m, signer_nonces_pub_mul8)};
 
@@ -445,7 +442,7 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
 
     // alpha_t1 * K
     rct::key alpha_t1_pub;
-    rct::scalarmultKey(alpha_t1_pub, partial_sig.K, rct::sk2rct(proposal.signature_nonce_K_t1));
+    rct::scalarmultKey(alpha_t1_pub, partial_sig_out.K, rct::sk2rct(proposal.signature_nonce_K_t1));
 
     // alpha_t2 * G
     rct::key alpha_t2_pub;
@@ -474,7 +471,7 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
 
 
     /// compute proof challenge
-    partial_sig.c = compute_challenge(m, alpha_t1_pub, alpha_t2_pub, alpha_ki_pub);
+    partial_sig_out.c = compute_challenge(m, alpha_t1_pub, alpha_t2_pub, alpha_ki_pub);
 
 
     /// responses
@@ -484,21 +481,17 @@ SpCompositionProofMultisigPartial sp_composition_multisig_partial_sig(const SpCo
         binonce_merge_factor.bytes,
         to_bytes(local_nonce_1_priv));
 
-    compute_responses(partial_sig.c,
+    compute_responses(partial_sig_out.c,
             rct::sk2rct(proposal.signature_nonce_K_t1),
             rct::sk2rct(proposal.signature_nonce_K_t2),
             rct::sk2rct(merged_nonce_KI_priv),  // for partial signature
             x,
             y,
             z_e,  // for partial signature
-            partial_sig.r_t1,
-            partial_sig.r_t2,
-            partial_sig.r_ki_partial  // partial response
+            partial_sig_out.r_t1,
+            partial_sig_out.r_t2,
+            partial_sig_out.r_ki_partial  // partial response
         );
-
-
-    /// done
-    return partial_sig;
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_make_sp_composition_multisig_partial_sig(
@@ -524,16 +517,15 @@ bool try_make_sp_composition_multisig_partial_sig(
     }
 
     // make the partial signature
-    SpCompositionProofMultisigPartial partial_sig_temp{
-            sp_composition_multisig_partial_sig(
-                proposal,
-                x,
-                y,
-                z_e,
-                signer_pub_nonces,
-                nonce_privkey_1,
-                nonce_privkey_2)
-        };
+    SpCompositionProofMultisigPartial partial_sig_temp;
+    make_sp_composition_multisig_partial_sig(proposal,
+        x,
+        y,
+        z_e,
+        signer_pub_nonces,
+        nonce_privkey_1,
+        nonce_privkey_2,
+        partial_sig_temp);
 
     // clear the used nonces
     CHECK_AND_ASSERT_THROW_MES(nonce_record_inout.try_remove_record(proposal.message, proposal.K, filter),
@@ -545,7 +537,8 @@ bool try_make_sp_composition_multisig_partial_sig(
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-SpCompositionProof sp_composition_prove_multisig_final(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs)
+void finalize_sp_composition_multisig_proof(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
+    SpCompositionProof &proof_out)
 {
     /// input checks and initialization
     CHECK_AND_ASSERT_THROW_MES(partial_sigs.size() > 0, "No partial signatures to make proof out of!");
@@ -565,32 +558,26 @@ SpCompositionProof sp_composition_prove_multisig_final(const std::vector<SpCompo
 
 
     /// assemble the final proof
-    SpCompositionProof proof;
+    proof_out.c = partial_sigs[0].c;
+    proof_out.r_t1 = partial_sigs[0].r_t1;
+    proof_out.r_t2 = partial_sigs[0].r_t2;
 
-    proof.c = partial_sigs[0].c;
-    proof.r_t1 = partial_sigs[0].r_t1;
-    proof.r_t2 = partial_sigs[0].r_t2;
-
-    proof.r_ki = rct::zero();
+    proof_out.r_ki = rct::zero();
     for (const SpCompositionProofMultisigPartial &partial_sig : partial_sigs)
     {
         // sum of responses from each multisig participant
-        sc_add(proof.r_ki.bytes, proof.r_ki.bytes, partial_sig.r_ki_partial.bytes);
+        sc_add(proof_out.r_ki.bytes, proof_out.r_ki.bytes, partial_sig.r_ki_partial.bytes);
     }
 
-    proof.K_t1 = partial_sigs[0].K_t1;
+    proof_out.K_t1 = partial_sigs[0].K_t1;
 
 
     /// verify that proof assembly succeeded
-    CHECK_AND_ASSERT_THROW_MES(sp_composition_verify(proof,
+    CHECK_AND_ASSERT_THROW_MES(verify_sp_composition_proof(proof_out,
             partial_sigs[0].message,
             partial_sigs[0].K,
             partial_sigs[0].KI),
         "Multisig composition proof failed to verify on assembly!");
-
-
-    /// done
-    return proof;
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

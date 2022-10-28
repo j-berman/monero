@@ -80,9 +80,9 @@ public:
     /// try to get the internal recorded block id for a given height
     virtual bool try_get_block_id(const std::uint64_t block_height, rct::key &block_id_out) const = 0;
     /// get height of first block the internal enote store cares about
-    virtual std::uint64_t get_refresh_height() const = 0;
+    virtual std::uint64_t refresh_height() const = 0;
     /// get height of first block the updater wants to have scanned
-    virtual std::uint64_t get_desired_first_block() const = 0;
+    virtual std::uint64_t desired_first_block() const = 0;
 };
 
 ////

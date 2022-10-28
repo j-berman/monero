@@ -310,17 +310,17 @@ static void build_verification_multiexps_for_proof(const GrootleProof &proof,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t GrootleProof::get_size_bytes(const std::size_t n, const std::size_t m)
+std::size_t GrootleProof::size_bytes(const std::size_t n, const std::size_t m)
 {
     return 32 * (m + m*(n-1) + 4);  // X + f + {A, B, zA, z}
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::size_t GrootleProof::get_size_bytes() const
+std::size_t GrootleProof::size_bytes() const
 {
     const std::size_t n{f.size() ? f[0].size() : 0};
     const std::size_t m{X.size()};
 
-    return GrootleProof::get_size_bytes(n, m);
+    return GrootleProof::size_bytes(n, m);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void append_to_transcript(const GrootleProof &container, SpTranscriptBuilder &transcript_inout)
@@ -333,13 +333,14 @@ void append_to_transcript(const GrootleProof &container, SpTranscriptBuilder &tr
     transcript_inout.append("z", container.z);
 }
 //-------------------------------------------------------------------------------------------------------------------
-GrootleProof grootle_prove(const rct::keyV &M, // [vec<commitments>]
+void make_grootle_proof(const rct::keyV &M, // [vec<commitments>]
     const std::size_t l,        // secret index into {{M}}
     const rct::key &C_offset,   // offset for commitment to zero at index l
     const crypto::secret_key &privkey,  // privkey of commitment to zero 'M[l] - C_offset'
     const std::size_t n,        // decomp input set: n^m
     const std::size_t m,
-    const rct::key &message)    // message to insert in Fiat-Shamir transform hash
+    const rct::key &message,    // message to insert in Fiat-Shamir transform hash
+    GrootleProof &proof_out)
 {
     /// input checks and initialization
     CHECK_AND_ASSERT_THROW_MES(n > 1, "grootle proof proving: must have n > 1!");
@@ -548,15 +549,18 @@ GrootleProof grootle_prove(const rct::keyV &M, // [vec<commitments>]
     }
     memwipe(rho.data(), rho.size()*sizeof(rct::key));
 
-    return proof;
+
+    /// save result
+    proof_out = std::move(proof);
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::list<SpMultiexpBuilder> get_grootle_verification_data(const std::vector<const GrootleProof*> &proofs,
+void get_grootle_verification_data(const std::vector<const GrootleProof*> &proofs,
     const std::vector<rct::keyV> &M,
     const rct::keyV &proof_offsets,
     const std::size_t n,
     const std::size_t m,
-    const rct::keyV &messages)
+    const rct::keyV &messages,
+    std::list<SpMultiexpBuilder> &verification_data_out)
 {
     /// Global checks
     const std::size_t N_proofs = proofs.size();
@@ -641,20 +645,22 @@ std::list<SpMultiexpBuilder> get_grootle_verification_data(const std::vector<con
 
 
     /// return multiexp data for caller to deal with
-    return builders;
+    verification_data_out = builders;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool grootle_verify(const std::vector<const GrootleProof*> &proofs,
+bool verify_grootle_proofs(const std::vector<const GrootleProof*> &proofs,
     const std::vector<rct::keyV> &M,
     const rct::keyV &proof_offsets,
     const std::size_t n,
     const std::size_t m,
     const rct::keyV &messages)
 {
-    // build and verify multiexp
-    if (!SpMultiexp{
-            get_grootle_verification_data(proofs, M, proof_offsets, n, m, messages)
-        }.evaluates_to_point_at_infinity())
+    // build multiexp
+    std::list<SpMultiexpBuilder> verification_data;
+    get_grootle_verification_data(proofs, M, proof_offsets, n, m, messages, verification_data);
+
+    // verify multiexp
+    if (!SpMultiexp{verification_data}.evaluates_to_point_at_infinity())
     {
         MERROR("Grootle proof: verification failed!");
         return false;
