@@ -397,7 +397,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     {
         sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey,
             k_view_balance,
-            next_element(sp_input_proposals));
+            add_element(sp_input_proposals));
     }
 
     // 2. make a temporary normal tx proposal
@@ -429,7 +429,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
         make_sp_composition_multisig_proposal(proposal_prefix,
             enote_image_temp.m_core.m_masked_address,
             enote_image_temp.m_core.m_key_image,
-            next_element(proposal_out.m_sp_input_proof_proposals));
+            add_element(proposal_out.m_sp_input_proof_proposals));
     }
 
     // 5. add miscellaneous components
@@ -501,7 +501,7 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
         make_v1_sp_multisig_input_proposal_v1(contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
             rct::rct2sk(rct::skGen()),
-            next_element(sp_multisig_input_proposals));
+            add_element(sp_multisig_input_proposals));
     }
 
     // 4. get total input amount
@@ -713,7 +713,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
         enote_view_privkeys_x.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_x);
         enote_view_privkeys_u.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_u);
         address_masks.emplace_back(sp_input_proposal.m_core.m_address_mask);
-        sp_input_proposal.get_squash_prefix(next_element(squash_prefixes));
+        sp_input_proposal.get_squash_prefix(add_element(squash_prefixes));
     }
 
     // 5. filter permutations
@@ -768,7 +768,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     {
         multisig::multisig_signer_to_filter(available_signer,
             multisig_signers,
-            next_element(available_signers_as_filters));
+            add_element(available_signers_as_filters));
     }
 
 

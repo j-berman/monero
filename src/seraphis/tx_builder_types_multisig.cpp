@@ -119,7 +119,7 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &legacy_spend_
         multisig_input_proposal.get_input_proposal_v1(legacy_spend_pubkey,
             legacy_subaddress_map,
             legacy_view_privkey,
-            next_element(legacy_input_proposals));
+            add_element(legacy_input_proposals));
     }
 
     // extract seraphis input proposals
@@ -129,7 +129,7 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &legacy_spend_
     {
         multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey,
             k_view_balance,
-            next_element(sp_input_proposals));
+            add_element(sp_input_proposals));
     }
 
     // extract memo field elements

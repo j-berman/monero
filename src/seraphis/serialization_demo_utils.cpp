@@ -68,7 +68,7 @@ static void copy_array(const CopyFuncT &copy_func, const std::vector<Type1> &arr
     array2_out.clear();
     array2_out.reserve(array1.size());
     for (const Type1 &obj : array1)
-        copy_func(obj, next_element(array2_out));
+        copy_func(obj, add_element(array2_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 // array2 consumes array1 via relay_func() on each element
@@ -79,7 +79,7 @@ static void relay_array(const RelayFuncT &relay_func, std::vector<Type1> &array1
     array2_out.clear();
     array2_out.reserve(array1_in.size());
     for (Type1 &obj_in : array1_in)
-        relay_func(obj_in, next_element(array2_out));
+        relay_func(obj_in, add_element(array2_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ static void recover_legacy_ring_signatures_v3(
     {
         recover_legacy_ring_signature_v3(serializable_legacy_ring_signatures_in[legacy_input_index],
             legacy_enote_images[legacy_input_index].m_key_image,
-            next_element(legacy_ring_signatures_out));
+            add_element(legacy_ring_signatures_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -161,7 +161,7 @@ static void recover_sp_membership_proofs_v1(
             generator_seed_temp,
             sp_ref_set_decomp_n,
             sp_ref_set_decomp_m,
-            next_element(membership_proofs_out));
+            add_element(membership_proofs_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -175,7 +175,7 @@ static void make_serializable_legacy_ring_signatures_v3(const std::vector<Legacy
     for (const LegacyRingSignatureV3 &legacy_ring_signature : legacy_ring_signatures)
     {
         make_serializable_legacy_ring_signature_v3(legacy_ring_signature,
-            next_element(serializable_legacy_ring_signatures_out));
+            add_element(serializable_legacy_ring_signatures_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -187,7 +187,7 @@ static void make_serializable_sp_membership_proofs_v1(const std::vector<SpMember
     serializable_membership_proofs_out.reserve(membership_proofs.size());
 
     for (const SpMembershipProofV1 &membership_proof : membership_proofs)
-        make_serializable_sp_membership_proof_v1(membership_proof, next_element(serializable_membership_proofs_out));
+        make_serializable_sp_membership_proof_v1(membership_proof, add_element(serializable_membership_proofs_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

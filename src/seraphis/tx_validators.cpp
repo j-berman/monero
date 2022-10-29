@@ -473,7 +473,7 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
 
         // proof message
         make_tx_membership_proof_message_v1(sp_membership_proofs[proof_index]->m_binned_reference_set,
-            next_element(messages));
+            add_element(messages));
 
         // save the proof
         proofs.emplace_back(&(sp_membership_proofs[proof_index]->m_grootle_proof));

@@ -230,7 +230,7 @@ static void add_sp_coinbase_enotes_for_user(const rct::key &mock_input_context,
         payment_proposal_temp.get_output_proposal_v1(mock_input_context, output_proposal);
 
         // save enote and ephemeral pubkey
-        output_proposal.get_enote_v1(next_element(coinbase_enotes_inout));
+        output_proposal.get_enote_v1(add_element(coinbase_enotes_inout));
         tx_supplement_inout.m_output_enote_ephemeral_pubkeys.emplace_back(output_proposal.m_enote_ephemeral_pubkey);
     }
 }
@@ -394,7 +394,7 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
         convert_outlay_to_payment_proposal(std::get<rct::xmr_amount>(outlay),
             std::get<JamtisDestinationV1>(outlay),
             std::get<TxExtra>(outlay),
-            next_element(normal_payment_proposals));
+            add_element(normal_payment_proposals));
     }
 
     // 2. tx proposal

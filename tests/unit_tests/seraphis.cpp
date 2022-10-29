@@ -1180,7 +1180,7 @@ TEST(seraphis, txtype_squashed_v1)
             discretized_transaction_fee,
             sp::SpTxSquashedV1::SemanticRulesVersion::MOCK,
             ledger_context,
-            next_element(txs));
+            add_element(txs));
         tx_ptrs.push_back(&(txs.back()));
     }
 

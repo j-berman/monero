@@ -148,7 +148,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
             signer_pub_nonces_temp,
             local_signer_privkey,
             nonce_record_inout,
-            next_element(new_partial_sig_set_out.m_partial_signatures));
+            add_element(new_partial_sig_set_out.m_partial_signatures));
     }
 
     // 3. copy miscellanea
@@ -367,7 +367,7 @@ void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
             nonce_record_inout.try_add_nonces(proof_message, proof_info.first, filter);
 
             // add nonces to the inits at this filter permutation
-            next_element(init_set_out.m_inits[proof_info.first]).reserve(proof_info.second.size());
+            add_element(init_set_out.m_inits[proof_info.first]).reserve(proof_info.second.size());
 
             // record the nonce pubkeys for each requested proof base point (should not fail)
             for (const rct::key &proof_base : proof_info.second)
@@ -376,7 +376,7 @@ void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
                         proof_info.first,
                         filter,
                         proof_base,
-                        next_element(init_set_out.m_inits[proof_info.first].back())),
+                        add_element(init_set_out.m_inits[proof_info.first].back())),
                     "make multisig proof initializer: could not get nonce pubkeys from nonce record (bug).");
             }
         }

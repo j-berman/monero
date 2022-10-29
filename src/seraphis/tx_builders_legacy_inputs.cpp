@@ -89,7 +89,7 @@ static void prepare_clsag_proof_keys(const rct::ctkeyV &referenced_enotes,
     {
         referenced_onetime_addresses_out.emplace_back(referenced_enote.dest);
         referenced_amount_commitments_out.emplace_back(referenced_enote.mask);
-        rct::subKeys(next_element(nominal_commitments_to_zero_out), referenced_enote.mask, masked_commitment);
+        rct::subKeys(add_element(nominal_commitments_to_zero_out), referenced_enote.mask, masked_commitment);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -328,7 +328,7 @@ void make_v3_legacy_ring_signatures_v1(std::vector<LegacyRingSignaturePrepV1> ri
     {
         make_v3_legacy_ring_signature_v1(std::move(signature_prep),
             legacy_spend_privkey,
-            next_element(ring_signatures_out));
+            add_element(ring_signatures_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -415,7 +415,7 @@ void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
             input_proposals[input_index],
             std::move(ring_signature_preps[input_index]),
             legacy_spend_privkey,
-            next_element(inputs_out));
+            add_element(inputs_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -427,7 +427,7 @@ std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const cryp
     input_proposals.reserve(input_amounts.size());
 
     for (const rct::xmr_amount in_amount : input_amounts)
-        next_element(input_proposals).gen(legacy_spend_privkey, in_amount);
+        add_element(input_proposals).gen(legacy_spend_privkey, in_amount);
 
     return input_proposals;
 }

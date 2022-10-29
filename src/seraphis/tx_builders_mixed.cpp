@@ -123,7 +123,7 @@ static void legacy_enote_records_to_input_proposals(
         // convert legacy inputs to input proposals
         make_v1_legacy_input_proposal_v1(legacy_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
-            next_element(legacy_input_proposals_out));
+            add_element(legacy_input_proposals_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -146,7 +146,7 @@ static void sp_enote_records_to_input_proposals(const std::list<SpContextualEnot
         make_v1_input_proposal_v1(sp_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
             rct::rct2sk(rct::skGen()),
-            next_element(sp_input_proposals_out));
+            add_element(sp_input_proposals_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------

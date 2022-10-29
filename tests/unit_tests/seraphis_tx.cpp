@@ -192,7 +192,7 @@ static void run_mock_tx_test_batch(const std::vector<SpTxGenData> &gen_data)
                     gen.output_amounts,
                     gen.discretized_transaction_fee,
                     ledger_context,
-                    sp::next_element(txs_to_verify));
+                    sp::add_element(txs_to_verify));
             }
             catch (...)
             {

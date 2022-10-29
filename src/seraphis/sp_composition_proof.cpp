@@ -404,7 +404,7 @@ void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigPr
     signer_nonces_pub_mul8.reserve(num_signers);
 
     for (const MultisigPubNonces &signer_pub_nonce_pair : signer_pub_nonces)
-        signer_nonces_mul8(signer_pub_nonce_pair, next_element(signer_nonces_pub_mul8));
+        signer_nonces_mul8(signer_pub_nonce_pair, add_element(signer_nonces_pub_mul8));
 
     // sort participant nonces so binonce merge factor is deterministic
     std::sort(signer_nonces_pub_mul8.begin(), signer_nonces_pub_mul8.end());

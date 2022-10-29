@@ -255,7 +255,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                     proposal.K,
                     filter,
                     rct::pk2rct(crypto::get_U()),
-                    next_element(signer_nonces_pubs)));
+                    add_element(signer_nonces_pubs)));
             }
 
             // each signer partially signs for this attempt
@@ -272,7 +272,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                     signer_nonces_pubs,
                     filter,
                     signer_nonce_records[signer_index],
-                    next_element(partial_sigs)));
+                    add_element(partial_sigs)));
             }
 
             // sanity checks
@@ -384,7 +384,7 @@ static void send_sp_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> 
         payment_proposal_temp.get_output_proposal_v1(mock_input_context, output_proposal);
 
         // save enote and ephemeral pubkey
-        output_proposal.get_enote_v1(next_element(coinbase_enotes));
+        output_proposal.get_enote_v1(add_element(coinbase_enotes));
         tx_supplement.m_output_enote_ephemeral_pubkeys.emplace_back(output_proposal.m_enote_ephemeral_pubkey);
     }
 
@@ -700,7 +700,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     normal_payment_proposals.reserve(out_amounts_normal.size());
 
     for (const rct::xmr_amount out_amount : out_amounts_normal)
-        next_element(normal_payment_proposals).gen(out_amount, 0);
+        add_element(normal_payment_proposals).gen(out_amount, 0);
 
     // - self-send payments
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals;

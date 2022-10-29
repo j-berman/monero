@@ -360,7 +360,7 @@ void make_v1_outputs_v1(const std::vector<SpOutputProposalV1> &output_proposals,
             "making v1 outputs: invalid amount blinding factor (non-canonical).");
 
         // convert to enote
-        output_proposal.get_enote_v1(next_element(outputs_out));
+        output_proposal.get_enote_v1(add_element(outputs_out));
 
         // prepare for range proofs
         output_amounts_out.emplace_back(output_proposal.amount());
@@ -607,7 +607,7 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
         {
             make_additional_output_dummy_v1(additional_output_type,
                 first_enote_ephemeral_pubkey,
-                next_element(normal_payment_proposals_inout));
+                add_element(normal_payment_proposals_inout));
         }
         else
         {
@@ -617,7 +617,7 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
                 dummy_destination,
                 k_view_balance,
                 change_amount,
-                next_element(selfsend_payment_proposals_inout));
+                add_element(selfsend_payment_proposals_inout));
         }
     }
 }
@@ -630,7 +630,7 @@ std::vector<SpOutputProposalV1> gen_mock_sp_output_proposals_v1(const std::vecto
     output_proposals.reserve(out_amounts.size());
 
     for (const rct::xmr_amount out_amount : out_amounts)
-        next_element(output_proposals).gen(out_amount, num_random_memo_elements);
+        add_element(output_proposals).gen(out_amount, num_random_memo_elements);
 
     // sort them
     std::sort(output_proposals.begin(), output_proposals.end());
