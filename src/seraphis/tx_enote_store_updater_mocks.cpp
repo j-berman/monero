@@ -37,6 +37,7 @@
 #include "jamtis_core_utils.h"
 #include "ringct/rctTypes.h"
 #include "tx_enote_record_types.h"
+#include "tx_enote_scanning.h"
 #include "tx_enote_scanning_utils.h"
 #include "tx_enote_store_mocks.h"
 
@@ -242,11 +243,11 @@ void EnoteStoreUpdaterNonLedgerMock::process_and_handle_chunk(
 EnoteStoreUpdaterLedgerMockLegacyIntermediate::EnoteStoreUpdaterLedgerMockLegacyIntermediate(
     const rct::key &legacy_base_spend_pubkey,
     const crypto::secret_key &legacy_view_privkey,
-    const bool legacy_key_image_recovery_mode,
+    const LegacyScanMode legacy_scan_mode,
     SpEnoteStoreMockV1 &enote_store) :
         m_legacy_base_spend_pubkey{legacy_base_spend_pubkey},
         m_legacy_view_privkey{legacy_view_privkey},
-        m_legacy_key_image_recovery_mode{legacy_key_image_recovery_mode},
+        m_legacy_scan_mode{legacy_scan_mode},
         m_enote_store{enote_store}
 {}
 //-------------------------------------------------------------------------------------------------------------------
@@ -278,7 +279,7 @@ void EnoteStoreUpdaterLedgerMockLegacyIntermediate::end_chunk_handling_session(c
 {
     m_enote_store.update_with_intermediate_legacy_records_from_ledger(first_new_block,
         alignment_block_id,
-        m_legacy_key_image_recovery_mode  //only add new block ids if not in recovery mode
+        m_legacy_scan_mode == LegacyScanMode::KEY_IMAGES_ONLY  //only add new block ids if not in recovery mode
             ? std::vector<rct::key>{}
             : new_block_ids,
         m_found_enote_records,
@@ -303,7 +304,7 @@ std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::refresh_height() co
 //-------------------------------------------------------------------------------------------------------------------
 std::uint64_t EnoteStoreUpdaterLedgerMockLegacyIntermediate::desired_first_block() const
 {
-    if (m_legacy_key_image_recovery_mode)
+    if (m_legacy_scan_mode == LegacyScanMode::KEY_IMAGES_ONLY)
         return m_enote_store.top_legacy_fullscanned_block_height() + 1;
     else
         return m_enote_store.top_legacy_partialscanned_block_height() + 1;

@@ -46,7 +46,6 @@
 #include "tx_component_types.h"
 
 //third party headers
-#include <boost/optional/optional.hpp>
 #include <boost/thread/shared_mutex.hpp>
 
 //standard headers
@@ -61,6 +60,7 @@ namespace sp
     struct SpTxSquashedV1;
     struct EnoteScanningChunkLedgerV1;
     struct EnoteScanningChunkNonLedgerV1;
+    enum class LegacyScanMode : unsigned char;
 }
 
 
@@ -134,13 +134,15 @@ public:
     * param: legacy_base_spend_pubkey -
     * param: legacy_subaddress_map -
     * param: legacy_view_privkey -
+    * param: legacy_scan_mode -
     * outparam: chunk_out - chunk of scanned blocks (or empty chunk representing top of current chain)
     */
     void get_onchain_chunk_legacy(const std::uint64_t chunk_start_height,
         const std::uint64_t chunk_max_size,
         const rct::key &legacy_base_spend_pubkey,
         const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
-        const boost::optional<crypto::secret_key> &legacy_view_privkey,
+        const crypto::secret_key &legacy_view_privkey,
+        const LegacyScanMode legacy_scan_mode,
         EnoteScanningChunkLedgerV1 &chunk_out) const;
     /**
     * brief: get_onchain_chunk_sp - find-received scan a chunk of blocks
@@ -226,7 +228,8 @@ private:
         const std::uint64_t chunk_max_size,
         const rct::key &legacy_base_spend_pubkey,
         const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
-        const boost::optional<crypto::secret_key> &legacy_view_privkey,
+        const crypto::secret_key &legacy_view_privkey,
+        const LegacyScanMode legacy_scan_mode,
         EnoteScanningChunkLedgerV1 &chunk_out) const;
     void get_onchain_chunk_sp_impl(const std::uint64_t chunk_start_height,
         const std::uint64_t chunk_max_size,

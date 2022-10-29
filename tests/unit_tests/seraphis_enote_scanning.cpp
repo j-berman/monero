@@ -316,7 +316,8 @@ static void refresh_user_enote_store_legacy_full(const rct::key &legacy_base_spe
             ledger_context,
             legacy_base_spend_pubkey,
             legacy_subaddress_map,
-            legacy_view_privkey
+            legacy_view_privkey,
+            LegacyScanMode::SCAN
         };
     EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
     EnoteStoreUpdaterLedgerMockLegacy enote_store_updater{
@@ -333,7 +334,7 @@ static void refresh_user_enote_store_legacy_full(const rct::key &legacy_base_spe
 static void refresh_user_enote_store_legacy_intermediate(const rct::key &legacy_base_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
-    const bool key_image_refresh_mode,
+    const sp::LegacyScanMode legacy_scan_mode,
     const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
     const sp::MockLedgerContext &ledger_context,
     sp::SpEnoteStoreMockV1 &user_enote_store_inout)
@@ -344,15 +345,14 @@ static void refresh_user_enote_store_legacy_intermediate(const rct::key &legacy_
             ledger_context,
             legacy_base_spend_pubkey,
             legacy_subaddress_map,
-            key_image_refresh_mode
-                ? boost::optional<crypto::secret_key>{}
-                : legacy_view_privkey
+            legacy_view_privkey,
+            legacy_scan_mode
         };
     EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
     EnoteStoreUpdaterLedgerMockLegacyIntermediate enote_store_updater{
             legacy_base_spend_pubkey,
             legacy_view_privkey,
-            key_image_refresh_mode,
+            legacy_scan_mode,
             user_enote_store_inout
         };
 
@@ -2842,7 +2842,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -2875,7 +2875,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -2925,7 +2925,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,  //only collect key images with spent contexts
+        LegacyScanMode::KEY_IMAGES_ONLY,  //only collect key images with spent contexts
         refresh_config,
         ledger_context,
         enote_store);
@@ -2953,7 +2953,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -2971,7 +2971,8 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_2)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,  //key image recovery mode to demonstrate it doesn't affect seraphis block height tracker or block ids
+        //key image recovery mode to demonstrate it doesn't affect seraphis block height tracker or block ids
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3086,7 +3087,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3158,7 +3159,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3182,7 +3183,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3217,7 +3218,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3252,7 +3253,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3286,7 +3287,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3375,7 +3376,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3458,7 +3459,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_3)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store);
@@ -3566,7 +3567,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3606,7 +3607,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3641,7 +3642,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3677,7 +3678,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3725,7 +3726,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3773,7 +3774,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3827,7 +3828,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -3881,7 +3882,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_4)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4052,7 +4053,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4092,7 +4093,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4125,7 +4126,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4165,7 +4166,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4230,7 +4231,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4284,7 +4285,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4332,7 +4333,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_5)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4500,7 +4501,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4547,7 +4548,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4594,7 +4595,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4639,7 +4640,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4684,7 +4685,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4727,7 +4728,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_6)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4883,7 +4884,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4928,7 +4929,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -4975,7 +4976,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -5020,7 +5021,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -5061,7 +5062,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -5118,7 +5119,7 @@ TEST(seraphis_enote_scanning, legacy_pre_transition_7)
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_int);
@@ -5197,7 +5198,7 @@ static void legacy_view_scan_recovery_cycle(const sp::legacy_mock_keys &legacy_k
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_inout);
@@ -5240,7 +5241,7 @@ static void legacy_view_scan_recovery_cycle(const sp::legacy_mock_keys &legacy_k
     refresh_user_enote_store_legacy_intermediate(legacy_keys.Ks,
         legacy_subaddress_map,
         legacy_keys.k_v,
-        true,  //true = legacy key image refresh mode
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store_inout);

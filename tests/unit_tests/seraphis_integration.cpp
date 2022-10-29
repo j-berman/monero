@@ -233,7 +233,8 @@ static void refresh_user_enote_store_legacy_full(const rct::key &legacy_base_spe
             ledger_context,
             legacy_base_spend_pubkey,
             legacy_subaddress_map,
-            legacy_view_privkey
+            legacy_view_privkey,
+            LegacyScanMode::SCAN
         };
     EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
     EnoteStoreUpdaterLedgerMockLegacy enote_store_updater{

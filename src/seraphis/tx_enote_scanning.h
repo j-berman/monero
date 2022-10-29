@@ -57,6 +57,13 @@ namespace sp
 namespace sp
 {
 
+/// LegacyScanMode: convenience enum for specifying legacy scan mode (scan or only process legacy key images)
+enum class LegacyScanMode : unsigned char
+{
+    SCAN,
+    KEY_IMAGES_ONLY
+};
+
 ////
 // EnoteScanningChunkLedgerV1
 // - contextual basic enote records for owned enote candidates in a chunk of blocks

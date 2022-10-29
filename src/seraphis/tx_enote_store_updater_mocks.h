@@ -52,7 +52,7 @@
 #include <vector>
 
 //forward declarations
-
+namespace sp { enum class LegacyScanMode : unsigned char; }
 
 namespace sp
 {
@@ -194,7 +194,7 @@ public:
     /// normal constructor
     EnoteStoreUpdaterLedgerMockLegacyIntermediate(const rct::key &legacy_base_spend_pubkey,
         const crypto::secret_key &legacy_view_privkey,
-        const bool legacy_key_image_recovery_mode,
+        const LegacyScanMode legacy_scan_mode,
         SpEnoteStoreMockV1 &enote_store);
 
 //overloaded operators
@@ -222,12 +222,13 @@ public:
 
 //member variables
 private:
-    /// If this is set, then desired_first_block() will be defined from the last block that was legacy view-scanned
-    /// and where legacy key images were fully handled. Otherwise, it will be defined from the last block that was only
-    /// legacy view-scanned.
-    /// - Goal: when set, expect the enote scanner to return key images for all blocks that were only legacy view-scanned
-    ///   but that didn't have key images handled (i.e. because key images weren't available during a previous scan).
-    bool m_legacy_key_image_recovery_mode;
+    /// If this is set to KEY_IMAGES_ONLY, then desired_first_block() will be defined from the last block that was legacy
+    /// view-scanned and where legacy key images were fully handled. Otherwise, it will be defined from the last block
+    /// that was only legacy view-scanned.
+    /// - Goal: when scanning for legacy key images, expect the enote scanner to return key images for all blocks that
+    ///   were only legacy view-scanned but that didn't have key images handled (i.e. because key images weren't available
+    ///   during a previous scan).
+    const LegacyScanMode m_legacy_scan_mode;
 
     /// static data
     const rct::key &m_legacy_base_spend_pubkey;

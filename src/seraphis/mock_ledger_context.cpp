@@ -48,7 +48,6 @@
 #include "txtype_squashed_v1.h"
 
 //third party headers
-#include <boost/optional/optional.hpp>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
 
@@ -157,7 +156,8 @@ void MockLedgerContext::get_onchain_chunk_legacy(const std::uint64_t chunk_start
     const std::uint64_t chunk_max_size,
     const rct::key &legacy_base_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
-    const boost::optional<crypto::secret_key> &legacy_view_privkey,
+    const crypto::secret_key &legacy_view_privkey,
+    const LegacyScanMode legacy_scan_mode,
     EnoteScanningChunkLedgerV1 &chunk_out) const
 {
     boost::shared_lock<boost::shared_mutex> lock{m_context_mutex};
@@ -167,6 +167,7 @@ void MockLedgerContext::get_onchain_chunk_legacy(const std::uint64_t chunk_start
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
         legacy_view_privkey,
+        legacy_scan_mode,
         chunk_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -267,7 +268,8 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
     const std::uint64_t chunk_max_size,
     const rct::key &legacy_base_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
-    const boost::optional<crypto::secret_key> &legacy_view_privkey,
+    const crypto::secret_key &legacy_view_privkey,
+    const LegacyScanMode legacy_scan_mode,
     EnoteScanningChunkLedgerV1 &chunk_out) const
 {
     chunk_out.m_basic_records_per_tx.clear();
@@ -375,12 +377,12 @@ void MockLedgerContext::get_onchain_chunk_legacy_impl(const std::uint64_t chunk_
 
                 for (const auto &tx_with_output_contents : block_of_tx_output_contents.second)
                 {
-                    // legacy view-scan the tx (if view key is available)
-                    if (legacy_view_privkey)
+                    // legacy view-scan the tx if in scan mode
+                    if (legacy_scan_mode == LegacyScanMode::SCAN)
                     {
                         try_find_legacy_enotes_in_tx(legacy_base_spend_pubkey,
                             legacy_subaddress_map,
-                            *legacy_view_privkey,
+                            legacy_view_privkey,
                             block_of_tx_output_contents.first,
                             std::get<std::uint64_t>(m_block_infos.at(block_of_tx_output_contents.first)),
                             sortable2rct(tx_with_output_contents.first),

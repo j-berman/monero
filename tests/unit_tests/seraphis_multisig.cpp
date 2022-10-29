@@ -398,7 +398,7 @@ static void send_sp_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> 
 static void refresh_user_enote_store_legacy_intermediate(const rct::key &legacy_base_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
-    const bool key_image_refresh_mode,
+    const sp::LegacyScanMode legacy_scan_mode,
     const sp::RefreshLedgerEnoteStoreConfig &refresh_config,
     const sp::MockLedgerContext &ledger_context,
     sp::SpEnoteStoreMockV1 &user_enote_store_inout)
@@ -409,15 +409,14 @@ static void refresh_user_enote_store_legacy_intermediate(const rct::key &legacy_
             ledger_context,
             legacy_base_spend_pubkey,
             legacy_subaddress_map,
-            key_image_refresh_mode
-                ? boost::optional<crypto::secret_key>{}
-                : legacy_view_privkey
+            legacy_view_privkey,
+            legacy_scan_mode
         };
     EnoteScanningContextLedgerSimple enote_scanning_context{enote_finding_context};
     EnoteStoreUpdaterLedgerMockLegacyIntermediate enote_store_updater{
             legacy_base_spend_pubkey,
             legacy_view_privkey,
-            key_image_refresh_mode,
+            legacy_scan_mode,
             user_enote_store_inout
         };
 
@@ -439,7 +438,7 @@ static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig:
     refresh_user_enote_store_legacy_intermediate(rct::pk2rct(accounts[0].get_multisig_pubkey()),
         legacy_subaddress_map,
         accounts[0].get_common_privkey(),
-        false,
+        LegacyScanMode::SCAN,
         refresh_config,
         ledger_context,
         enote_store_inout);
@@ -523,7 +522,7 @@ static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig:
     refresh_user_enote_store_legacy_intermediate(rct::pk2rct(accounts[0].get_multisig_pubkey()),
         legacy_subaddress_map,
         accounts[0].get_common_privkey(),
-        true,  //true = legacy key image refresh mode
+        LegacyScanMode::KEY_IMAGES_ONLY,
         refresh_config,
         ledger_context,
         enote_store_inout);

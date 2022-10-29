@@ -53,6 +53,7 @@ void EnoteFindingContextLedgerMockLegacy::get_onchain_chunk(const std::uint64_t 
         m_legacy_base_spend_pubkey,
         m_legacy_subaddress_map,
         m_legacy_view_privkey,
+        m_legacy_scan_mode,
         chunk_out);
 }
 //-------------------------------------------------------------------------------------------------------------------

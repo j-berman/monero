@@ -43,7 +43,6 @@
 #include "tx_enote_scanning.h"
 
 //third party headers
-#include <boost/optional/optional.hpp>
 
 //standard headers
 #include <unordered_map>
@@ -66,11 +65,13 @@ public:
     EnoteFindingContextLedgerMockLegacy(const MockLedgerContext &mock_ledger_context,
         const rct::key &legacy_base_spend_pubkey,
         const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
-        const boost::optional<crypto::secret_key> legacy_view_privkey) :
+        const crypto::secret_key &legacy_view_privkey,
+        const LegacyScanMode legacy_scan_mode) :
             m_mock_ledger_context{mock_ledger_context},
             m_legacy_base_spend_pubkey{legacy_base_spend_pubkey},
             m_legacy_subaddress_map{legacy_subaddress_map},
-            m_legacy_view_privkey{legacy_view_privkey}
+            m_legacy_view_privkey{legacy_view_privkey},
+            m_legacy_scan_mode{legacy_scan_mode}
     {}
 
 //overloaded operators
@@ -90,7 +91,8 @@ private:
     const MockLedgerContext &m_mock_ledger_context;
     const rct::key &m_legacy_base_spend_pubkey;
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &m_legacy_subaddress_map;
-    const boost::optional<crypto::secret_key> m_legacy_view_privkey;
+    const crypto::secret_key &m_legacy_view_privkey;
+    const LegacyScanMode m_legacy_scan_mode;
 };
 
 ////
