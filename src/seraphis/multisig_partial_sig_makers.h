@@ -73,18 +73,18 @@ public:
     * brief: attempt_make_partial_sig - attempt to make a partial multisig signature (i.e. partially sign using the local
     *     multisig signer's private key)
     *  - throws on failure
-    * param: signature_proposal_index - index into the set of multisig proposals stored in this signature maker
+    * param: proof_key - proof key of one of the multisig proposals stored in this signature maker
     * param: signer_group_filter - filter representing the subgroup of multisig signers who are expected to participate
     *                              in making this partial signature (i.e. their public nonces will be used)
     * param: signer_group_pub_nonces - the public nonces of the signers who are participating in this signature attempt
     * param: local_multisig_signing_key - the local multisig signer's multisig signing key for the multisig subgroup
     *                                     represented by 'signer_group_filter'
-    * inoutparam: nonce_record_inout - the nonce record where the local signer's nonce private keys for this signing attempt
-    *                                  will be extracted
+    * inoutparam: nonce_record_inout - the nonce record from which the local signer's nonce private keys for this
+    *                                  signing attempt will be extracted
     * outparam: partial_sig_out - partial signature created by the local signer for the specified signature proposal and
     *                             signing group
     */
-    virtual void attempt_make_partial_sig(const std::size_t signature_proposal_index,
+    virtual void attempt_make_partial_sig(const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
         const std::vector<MultisigPubNonces> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
@@ -103,18 +103,17 @@ public:
 //constructors
     MultisigPartialSigMakerSpCompositionProof(const std::uint32_t threshold,
         const std::vector<SpCompositionProofMultisigProposal> &proof_proposals,
-        const rct::keyV &squash_prefixes,
-        const std::vector<crypto::secret_key> &enote_view_privkeys_g,
-        const std::vector<crypto::secret_key> &enote_view_privkeys_x,
-        const std::vector<crypto::secret_key> &enote_view_privkeys_u,
-        const std::vector<crypto::secret_key> &address_masks);
+        const std::vector<crypto::secret_key> &proof_privkeys_x,
+        const std::vector<crypto::secret_key> &proof_privkeys_y,
+        const std::vector<crypto::secret_key> &proof_privkeys_z_offset,
+        const std::vector<crypto::secret_key> &proof_privkeys_z_multiplier);
 
 //overloaded operators
     /// disable copy/move (this is a scoped manager [reference wrapper])
     MultisigPartialSigMakerSpCompositionProof& operator=(MultisigPartialSigMakerSpCompositionProof&&) = delete;
 
 //member functions
-    void attempt_make_partial_sig(const std::size_t signature_proposal_index,
+    void attempt_make_partial_sig(const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
         const std::vector<MultisigPubNonces> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
@@ -125,11 +124,13 @@ public:
 private:
     const rct::key m_inv_threshold;  // 1/threshold
     const std::vector<SpCompositionProofMultisigProposal> &m_proof_proposals;
-    const rct::keyV &m_squash_prefixes;
-    const std::vector<crypto::secret_key> &m_enote_view_privkeys_g;
-    const std::vector<crypto::secret_key> &m_enote_view_privkeys_x;
-    const std::vector<crypto::secret_key> &m_enote_view_privkeys_u;
-    const std::vector<crypto::secret_key> &m_address_masks;
+    const std::vector<crypto::secret_key> &m_proof_privkeys_x;
+    const std::vector<crypto::secret_key> &m_proof_privkeys_y;
+    const std::vector<crypto::secret_key> &m_proof_privkeys_z_offset;
+    const std::vector<crypto::secret_key> &m_proof_privkeys_z_multiplier;
+
+    // cached proof keys mapped to indices in the set of proof proposals
+    std::unordered_map<rct::key, std::size_t> m_cached_proof_keys;
 };
 
 } //namespace sp

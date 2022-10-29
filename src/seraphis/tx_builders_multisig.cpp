@@ -135,6 +135,34 @@ static void get_masked_addresses(const std::vector<SpInputProposalV1> &sp_input_
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void prepare_sp_composition_proof_privkeys_for_multisig(const crypto::secret_key &enote_view_privkey_g,
+    const crypto::secret_key &enote_view_privkey_x,
+    const crypto::secret_key &enote_view_privkey_u,
+    const crypto::secret_key &address_mask,
+    const rct::key &squash_prefix,
+    crypto::secret_key &x_out,
+    crypto::secret_key &y_out,
+    crypto::secret_key &z_offset_out,
+    crypto::secret_key &z_multiplier_out)
+{
+    // prepare x: t_k + Hn(Ko, C) * k_mask
+    sc_mul(to_bytes(x_out), squash_prefix.bytes, to_bytes(enote_view_privkey_g));
+    sc_add(to_bytes(x_out), to_bytes(address_mask), to_bytes(x_out));
+
+    // prepare y: Hn(Ko, C) * k_a
+    sc_mul(to_bytes(y_out), squash_prefix.bytes, to_bytes(enote_view_privkey_x));
+
+    // prepare z_offset: k_view_u
+    z_offset_out = enote_view_privkey_u;
+
+    // prepare z_multiplier: Hn(Ko, C)
+    z_multiplier_out = rct::rct2sk(squash_prefix);
+
+    // note: z = z_multiplier * (z_offset + sum_e(z_e))
+    //         = Hn(Ko, C)    * (k_view_u + k_spend_u )
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void collect_sp_proof_partial_sigs_v1(const std::vector<MultisigPartialSigVariant> &type_erased_partial_sigs,
     std::vector<SpCompositionProofMultisigPartial> &sp_partial_sigs_out)
 {
@@ -696,24 +724,31 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     get_masked_addresses(tx_proposal.m_sp_input_proposals, input_masked_addresses);
 
     // c. seraphis enote view privkeys, address masks, and squash prefixes (for signing)
-    std::vector<crypto::secret_key> enote_view_privkeys_g;
-    std::vector<crypto::secret_key> enote_view_privkeys_x;
-    std::vector<crypto::secret_key> enote_view_privkeys_u;
-    std::vector<crypto::secret_key> address_masks;
-    rct::keyV squash_prefixes;
-    enote_view_privkeys_g.reserve(tx_proposal.m_sp_input_proposals.size());
-    enote_view_privkeys_x.reserve(tx_proposal.m_sp_input_proposals.size());
-    enote_view_privkeys_u.reserve(tx_proposal.m_sp_input_proposals.size());
-    address_masks.reserve(tx_proposal.m_sp_input_proposals.size());
-    squash_prefixes.reserve(tx_proposal.m_sp_input_proposals.size());
+    std::vector<crypto::secret_key> proof_privkeys_x;
+    std::vector<crypto::secret_key> proof_privkeys_y;
+    std::vector<crypto::secret_key> proof_privkeys_z_offset;
+    std::vector<crypto::secret_key> proof_privkeys_z_multiplier;
+    proof_privkeys_x.reserve(tx_proposal.m_sp_input_proposals.size());
+    proof_privkeys_y.reserve(tx_proposal.m_sp_input_proposals.size());
+    proof_privkeys_z_offset.reserve(tx_proposal.m_sp_input_proposals.size());
+    proof_privkeys_z_multiplier.reserve(tx_proposal.m_sp_input_proposals.size());
+    rct::key squash_prefix_temp;
 
     for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
     {
-        enote_view_privkeys_g.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_g);
-        enote_view_privkeys_x.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_x);
-        enote_view_privkeys_u.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_u);
-        address_masks.emplace_back(sp_input_proposal.m_core.m_address_mask);
-        sp_input_proposal.get_squash_prefix(add_element(squash_prefixes));
+        // Hn(Ko, C)
+        sp_input_proposal.get_squash_prefix(squash_prefix_temp);
+
+        // x, y, z_offset, z_multiplier
+        prepare_sp_composition_proof_privkeys_for_multisig(sp_input_proposal.m_core.m_enote_view_privkey_g,
+            sp_input_proposal.m_core.m_enote_view_privkey_x,
+            sp_input_proposal.m_core.m_enote_view_privkey_u,
+            sp_input_proposal.m_core.m_address_mask,
+            squash_prefix_temp,
+            add_element(proof_privkeys_x),
+            add_element(proof_privkeys_y),
+            add_element(proof_privkeys_z_offset),
+            add_element(proof_privkeys_z_multiplier));
     }
 
     // 5. filter permutations
@@ -778,11 +813,10 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     const MultisigPartialSigMakerSpCompositionProof &partial_sig_maker{
             signer_account.get_threshold(),
             multisig_tx_proposal.m_sp_input_proof_proposals,
-            squash_prefixes,
-            enote_view_privkeys_g,
-            enote_view_privkeys_x,
-            enote_view_privkeys_u,
-            address_masks
+            proof_privkeys_x,
+            proof_privkeys_y,
+            proof_privkeys_z_offset,
+            proof_privkeys_z_multiplier
         };
 
     // 2. make the partial signature sets

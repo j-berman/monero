@@ -111,7 +111,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
     std::vector<MultisigPubNonces> signer_pub_nonces_set_temp;
     new_partial_sig_set_out.m_partial_signatures.reserve(proof_keys.size());
 
-    for (std::size_t proof_proposal_index{0}; proof_proposal_index < proof_keys.size(); ++proof_proposal_index)
+    for (const rct::key &proof_key : proof_keys)
     {
         // a. collect nonces from all signers in this signing group
         signer_pub_nonces_temp.clear();
@@ -125,7 +125,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
             // - this signer's init set
             // - select the proof we are working on (via this proof's proof key)
             // - select the nonces that line up with the signer's nonce tracker
-            if (!all_init_sets[signer_index].try_get_nonces(proof_keys[proof_proposal_index],
+            if (!all_init_sets[signer_index].try_get_nonces(proof_key,
                     signer_nonce_trackers[signer_index],
                     signer_pub_nonces_set_temp))
                 throw;
@@ -143,7 +143,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
             throw;
 
         // c. make a partial signature
-        partial_sig_maker.attempt_make_partial_sig(proof_proposal_index,
+        partial_sig_maker.attempt_make_partial_sig(proof_key,
             filter,
             signer_pub_nonces_temp,
             local_signer_privkey,
