@@ -74,6 +74,13 @@ bool is_sorted_and_unique(const T& container)
 
     return true;
 }
+/// convenience wrapper for getting the last element after emplacing back
+template <typename ContainerT>
+typename ContainerT::value_type& next_element(ContainerT &container)
+{
+    container.emplace_back();
+    return container.back();
+}
 /**
 * brief: ref_set_size_from_decomp - compute n^m from decomposition of a reference set
 * param: ref_set_decomp_n -

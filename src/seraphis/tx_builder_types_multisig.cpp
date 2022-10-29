@@ -39,6 +39,7 @@
 #include "ringct/rctTypes.h"
 #include "sp_core_enote_utils.h"
 #include "sp_crypto_utils.h"
+#include "sp_misc_utils.h"
 #include "tx_builder_types.h"
 #include "tx_builders_inputs.h"
 #include "tx_builders_legacy_inputs.h"
@@ -115,11 +116,10 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &legacy_spend_
 
     for (const LegacyMultisigInputProposalV1 &multisig_input_proposal : m_legacy_multisig_input_proposals)
     {
-        legacy_input_proposals.emplace_back();
         multisig_input_proposal.get_input_proposal_v1(legacy_spend_pubkey,
             legacy_subaddress_map,
             legacy_view_privkey,
-            legacy_input_proposals.back());
+            next_element(legacy_input_proposals));
     }
 
     // extract seraphis input proposals
@@ -127,8 +127,9 @@ void SpMultisigTxProposalV1::get_v1_tx_proposal_v1(const rct::key &legacy_spend_
 
     for (const SpMultisigInputProposalV1 &multisig_input_proposal : m_sp_multisig_input_proposals)
     {
-        sp_input_proposals.emplace_back();
-        multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, sp_input_proposals.back());
+        multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey,
+            k_view_balance,
+            next_element(sp_input_proposals));
     }
 
     // extract memo field elements

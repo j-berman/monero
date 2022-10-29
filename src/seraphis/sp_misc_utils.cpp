@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_misc_utils.h"
+#include "sp_misc_utils.h"
 
 //local headers
 #include "bulletproofs_plus2.h"

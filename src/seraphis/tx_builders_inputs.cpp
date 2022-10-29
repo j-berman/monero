@@ -51,6 +51,7 @@ extern "C"
 #include "sp_core_enote_utils.h"
 #include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
+#include "sp_misc_utils.h"
 #include "sp_transcript.h"
 #include "tx_binned_reference_set.h"
 #include "tx_binned_reference_set_utils.h"
@@ -58,7 +59,6 @@ extern "C"
 #include "tx_component_types.h"
 #include "tx_legacy_builder_types.h"
 #include "tx_legacy_component_types.h"
-#include "tx_misc_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
 #include "tx_ref_set_index_mapper_flat.h"
@@ -392,10 +392,7 @@ void make_v1_image_proofs_v1(const std::vector<SpInputProposalV1> &input_proposa
     image_proofs_out.reserve(input_proposals.size());
 
     for (const SpInputProposalV1 &input_proposal : input_proposals)
-    {
-        image_proofs_out.emplace_back();
-        make_v1_image_proof_v1(input_proposal.m_core, message, sp_spend_privkey, image_proofs_out.back());
-    }
+        make_v1_image_proof_v1(input_proposal.m_core, message, sp_spend_privkey, next_element(image_proofs_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_membership_proof_v1(const std::size_t ref_set_decomp_n,
@@ -530,10 +527,7 @@ void make_v1_membership_proofs_v1(std::vector<SpMembershipProofPrepV1> membershi
     membership_proofs_out.reserve(membership_proof_preps.size());
 
     for (SpMembershipProofPrepV1 &proof_prep : membership_proof_preps)
-    {
-        membership_proofs_out.emplace_back();
-        make_v1_membership_proof_v1(std::move(proof_prep), membership_proofs_out.back());
-    }
+        make_v1_membership_proof_v1(std::move(proof_prep), next_element(membership_proofs_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_membership_proofs_v1(std::vector<SpMembershipProofPrepV1> membership_proof_preps,
@@ -544,10 +538,7 @@ void make_v1_membership_proofs_v1(std::vector<SpMembershipProofPrepV1> membershi
     alignable_membership_proofs_out.reserve(membership_proof_preps.size());
 
     for (SpMembershipProofPrepV1 &proof_prep : membership_proof_preps)
-    {
-        alignable_membership_proofs_out.emplace_back();
-        make_v1_membership_proof_v1(std::move(proof_prep), alignable_membership_proofs_out.back());
-    }
+        make_v1_membership_proof_v1(std::move(proof_prep), next_element(alignable_membership_proofs_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input)
@@ -622,10 +613,7 @@ void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_propo
 
     // make all inputs
     for (const SpInputProposalV1 &input_proposal : input_proposals)
-    {
-        partial_inputs_out.emplace_back();
-        make_v1_partial_input_v1(input_proposal, proposal_prefix, sp_spend_privkey, partial_inputs_out.back());
-    }
+        make_v1_partial_input_v1(input_proposal, proposal_prefix, sp_spend_privkey, next_element(partial_inputs_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secret_key &sp_spend_privkey,
@@ -636,10 +624,7 @@ std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secr
     input_proposals.reserve(in_amounts.size());
 
     for (const rct::xmr_amount in_amount : in_amounts)
-    {
-        input_proposals.emplace_back();
-        input_proposals.back().gen(sp_spend_privkey, in_amount);
-    }
+        next_element(input_proposals).gen(sp_spend_privkey, in_amount);
 
     return input_proposals;
 }

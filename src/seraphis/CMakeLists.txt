@@ -53,6 +53,7 @@ set(seraphis_sources
   sp_crypto_utils.cpp
   sp_generator_factory.cpp
   sp_hash_functions.cpp
+  sp_misc_utils.cpp
   sp_multiexp.cpp
   tx_base.cpp
   tx_binned_reference_set.cpp
@@ -82,7 +83,6 @@ set(seraphis_sources
   tx_legacy_builder_types.cpp
   tx_legacy_component_types.cpp
   tx_legacy_enote_record_utils.cpp
-  tx_misc_utils.cpp
   tx_ref_set_index_mapper_flat.cpp
   tx_validators.cpp
   txtype_squashed_v1.cpp)

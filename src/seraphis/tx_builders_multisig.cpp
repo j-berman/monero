@@ -51,6 +51,7 @@
 #include "seraphis_config_temp.h"
 #include "sp_core_enote_utils.h"
 #include "sp_crypto_utils.h"
+#include "sp_misc_utils.h"
 #include "tx_builder_types.h"
 #include "tx_builder_types_multisig.h"
 #include "tx_builders_mixed.h"
@@ -61,7 +62,6 @@
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
 #include "tx_input_selection_output_context_v1.h"
-#include "tx_misc_utils.h"
 
 //third party headers
 
@@ -395,8 +395,9 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
 
     for (const SpMultisigInputProposalV1 &sp_multisig_input_proposal : sp_multisig_input_proposals)
     {
-        sp_input_proposals.emplace_back();
-        sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, sp_input_proposals.back());
+        sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey,
+            k_view_balance,
+            next_element(sp_input_proposals));
     }
 
     // 2. make a temporary normal tx proposal
@@ -425,11 +426,10 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     {
         sp_input_proposal.get_enote_image_v1(enote_image_temp);
 
-        proposal_out.m_sp_input_proof_proposals.emplace_back();
         make_sp_composition_multisig_proposal(proposal_prefix,
-                    enote_image_temp.m_core.m_masked_address,
-                    enote_image_temp.m_core.m_key_image,
-                    proposal_out.m_sp_input_proof_proposals.back());
+            enote_image_temp.m_core.m_masked_address,
+            enote_image_temp.m_core.m_key_image,
+            next_element(proposal_out.m_sp_input_proof_proposals));
     }
 
     // 5. add miscellaneous components
@@ -498,11 +498,10 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
             contextual_input.m_origin_context.m_enote_ledger_index;
 
         // convert inputs to input proposals
-        sp_multisig_input_proposals.emplace_back();
         make_v1_sp_multisig_input_proposal_v1(contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
             rct::rct2sk(rct::skGen()),
-            sp_multisig_input_proposals.back());
+            next_element(sp_multisig_input_proposals));
     }
 
     // 4. get total input amount
@@ -714,8 +713,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
         enote_view_privkeys_x.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_x);
         enote_view_privkeys_u.emplace_back(sp_input_proposal.m_core.m_enote_view_privkey_u);
         address_masks.emplace_back(sp_input_proposal.m_core.m_address_mask);
-        squash_prefixes.emplace_back();
-        sp_input_proposal.get_squash_prefix(squash_prefixes.back());
+        sp_input_proposal.get_squash_prefix(next_element(squash_prefixes));
     }
 
     // 5. filter permutations
@@ -768,8 +766,9 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
 
     for (const crypto::public_key &available_signer : available_signers)
     {
-        available_signers_as_filters.emplace_back();
-        multisig::multisig_signer_to_filter(available_signer, multisig_signers, available_signers_as_filters.back());
+        multisig::multisig_signer_to_filter(available_signer,
+            multisig_signers,
+            next_element(available_signers_as_filters));
     }
 
 

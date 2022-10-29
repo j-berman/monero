@@ -41,6 +41,7 @@
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "sp_crypto_utils.h"
+#include "sp_misc_utils.h"
 
 //third party headers
 #include <boost/math/special_functions/binomial.hpp>
@@ -142,14 +143,12 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
             throw;
 
         // c. make a partial signature
-        new_partial_sig_set_out.m_partial_signatures.emplace_back();
-
         partial_sig_maker.attempt_make_partial_sig(proof_proposal_index,
             filter,
             signer_pub_nonces_temp,
             local_signer_privkey,
             nonce_record_inout,
-            new_partial_sig_set_out.m_partial_signatures.back());
+            next_element(new_partial_sig_set_out.m_partial_signatures));
     }
 
     // 3. copy miscellanea
@@ -368,18 +367,16 @@ void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
             nonce_record_inout.try_add_nonces(proof_message, proof_info.first, filter);
 
             // add nonces to the inits at this filter permutation
-            init_set_out.m_inits[proof_info.first].emplace_back();
-            init_set_out.m_inits[proof_info.first].back().reserve(proof_info.second.size());
+            next_element(init_set_out.m_inits[proof_info.first]).reserve(proof_info.second.size());
 
             // record the nonce pubkeys for each requested proof base point (should not fail)
             for (const rct::key &proof_base : proof_info.second)
             {
-                init_set_out.m_inits[proof_info.first].back().emplace_back();
                 CHECK_AND_ASSERT_THROW_MES(nonce_record_inout.try_get_nonce_pubkeys_for_base(proof_message,
                         proof_info.first,
                         filter,
                         proof_base,
-                        init_set_out.m_inits[proof_info.first].back().back()),
+                        next_element(init_set_out.m_inits[proof_info.first].back())),
                     "make multisig proof initializer: could not get nonce pubkeys from nonce record (bug).");
             }
         }

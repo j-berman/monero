@@ -40,6 +40,7 @@
 #include "ringct/rctTypes.h"
 #include "sp_composition_proof.h"
 #include "sp_crypto_utils.h"
+#include "sp_misc_utils.h"
 #include "tx_binned_reference_set_utils.h"
 #include "tx_builders_inputs.h"
 #include "tx_builders_legacy_inputs.h"
@@ -47,7 +48,6 @@
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
 #include "tx_legacy_component_types.h"
-#include "tx_misc_utils.h"
 #include "tx_validation_context.h"
 
 //third party headers
@@ -472,8 +472,8 @@ bool try_get_sp_membership_proofs_v1_validation_data(const std::vector<const SpM
             sp_input_images[proof_index]->m_masked_commitment);
 
         // proof message
-        messages.emplace_back();
-        make_tx_membership_proof_message_v1(sp_membership_proofs[proof_index]->m_binned_reference_set, messages.back());
+        make_tx_membership_proof_message_v1(sp_membership_proofs[proof_index]->m_binned_reference_set,
+            next_element(messages));
 
         // save the proof
         proofs.emplace_back(&(sp_membership_proofs[proof_index]->m_grootle_proof));

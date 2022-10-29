@@ -37,6 +37,7 @@
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "sp_misc_utils.h"
 #include "tx_builders_inputs.h"
 #include "tx_builders_mixed.h"
 #include "tx_builders_outputs.h"
@@ -97,15 +98,13 @@ void SpTxProposalV1::get_output_proposals_v1(const crypto::secret_key &k_view_ba
     output_proposals_out.reserve(m_normal_payment_proposals.size() + m_selfsend_payment_proposals.size());
 
     for (const jamtis::JamtisPaymentProposalV1 &normal_payment_proposal : m_normal_payment_proposals)
-    {
-        output_proposals_out.emplace_back();
-        normal_payment_proposal.get_output_proposal_v1(input_context, output_proposals_out.back());
-    }
+        normal_payment_proposal.get_output_proposal_v1(input_context, next_element(output_proposals_out));
 
     for (const jamtis::JamtisPaymentProposalSelfSendV1 &selfsend_payment_proposal : m_selfsend_payment_proposals)
     {
-        output_proposals_out.emplace_back();
-        selfsend_payment_proposal.get_output_proposal_v1(k_view_balance, input_context, output_proposals_out.back());
+        selfsend_payment_proposal.get_output_proposal_v1(k_view_balance,
+            input_context,
+            next_element(output_proposals_out));
     }
 
     // sort output proposals

@@ -43,6 +43,7 @@
 #include "sp_core_types.h"
 #include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
+#include "sp_misc_utils.h"
 #include "sp_multiexp.h"
 #include "sp_transcript.h"
 #include "tx_binned_reference_set.h"
@@ -54,7 +55,6 @@
 #include "tx_component_types.h"
 #include "tx_discretized_fee.h"
 #include "tx_legacy_component_types.h"
-#include "tx_misc_utils.h"
 #include "tx_validation_context.h"
 #include "tx_validators.h"
 

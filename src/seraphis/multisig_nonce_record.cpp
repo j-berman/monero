@@ -36,8 +36,8 @@
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "sp_crypto_utils.h"
+#include "sp_misc_utils.h"  //for equals_from_less
 #include "sp_transcript.h"
-#include "tx_misc_utils.h"  //for equals_from_less
 
 //third party headers
 #include <boost/utility/string_ref.hpp>

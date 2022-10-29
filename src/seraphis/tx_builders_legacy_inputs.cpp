@@ -50,10 +50,10 @@ extern "C"
 #include "seraphis_config_temp.h"
 #include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
+#include "sp_misc_utils.h"
 #include "sp_transcript.h"
 #include "tx_legacy_builder_types.h"
 #include "tx_legacy_component_types.h"
-#include "tx_misc_utils.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
 
@@ -89,8 +89,7 @@ static void prepare_clsag_proof_keys(const rct::ctkeyV &referenced_enotes,
     {
         referenced_onetime_addresses_out.emplace_back(referenced_enote.dest);
         referenced_amount_commitments_out.emplace_back(referenced_enote.mask);
-        nominal_commitments_to_zero_out.emplace_back();
-        rct::subKeys(nominal_commitments_to_zero_out.back(), referenced_enote.mask, masked_commitment);
+        rct::subKeys(next_element(nominal_commitments_to_zero_out), referenced_enote.mask, masked_commitment);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -327,8 +326,9 @@ void make_v3_legacy_ring_signatures_v1(std::vector<LegacyRingSignaturePrepV1> ri
 
     for (LegacyRingSignaturePrepV1 &signature_prep : ring_signature_preps)
     {
-        ring_signatures_out.emplace_back();
-        make_v3_legacy_ring_signature_v1(std::move(signature_prep), legacy_spend_privkey, ring_signatures_out.back());
+        make_v3_legacy_ring_signature_v1(std::move(signature_prep),
+            legacy_spend_privkey,
+            next_element(ring_signatures_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -411,12 +411,11 @@ void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
     // make all inputs
     for (std::size_t input_index{0}; input_index < input_proposals.size(); ++input_index)
     {
-        inputs_out.emplace_back();
         make_v1_legacy_input_v1(proposal_prefix,
             input_proposals[input_index],
             std::move(ring_signature_preps[input_index]),
             legacy_spend_privkey,
-            inputs_out.back());
+            next_element(inputs_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -428,10 +427,7 @@ std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const cryp
     input_proposals.reserve(input_amounts.size());
 
     for (const rct::xmr_amount in_amount : input_amounts)
-    {
-        input_proposals.emplace_back();
-        input_proposals.back().gen(legacy_spend_privkey, in_amount);
-    }
+        next_element(input_proposals).gen(legacy_spend_privkey, in_amount);
 
     return input_proposals;
 }

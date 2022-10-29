@@ -46,6 +46,7 @@
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/sp_core_types.h"
 #include "seraphis/sp_crypto_utils.h"
+#include "seraphis/sp_misc_utils.h"
 #include "seraphis/tx_base.h"
 #include "seraphis/tx_binned_reference_set.h"
 #include "seraphis/tx_binned_reference_set_utils.h"
@@ -69,7 +70,6 @@
 #include "seraphis/tx_input_selection.h"
 #include "seraphis/tx_input_selection_output_context_v1.h"
 #include "seraphis/tx_input_selector_mocks.h"
-#include "seraphis/tx_misc_utils.h"
 #include "seraphis/tx_validation_context_mock.h"
 #include "seraphis/txtype_squashed_v1.h"
 
@@ -192,8 +192,7 @@ static void send_sp_coinbase_amounts_to_user(const std::vector<rct::xmr_amount> 
         payment_proposal_temp.get_output_proposal_v1(mock_input_context, output_proposal);
 
         // save enote and ephemeral pubkey
-        coinbase_enotes.emplace_back();
-        output_proposal.get_enote_v1(coinbase_enotes.back());
+        output_proposal.get_enote_v1(next_element(coinbase_enotes));
         tx_supplement.m_output_enote_ephemeral_pubkeys.emplace_back(output_proposal.m_enote_ephemeral_pubkey);
     }
 
@@ -279,12 +278,10 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
 
     for (const auto &outlay : outlays)
     {
-        normal_payment_proposals.emplace_back();
-
         convert_outlay_to_payment_proposal(std::get<rct::xmr_amount>(outlay),
             std::get<JamtisDestinationV1>(outlay),
             std::get<TxExtra>(outlay),
-            normal_payment_proposals.back());
+            next_element(normal_payment_proposals));
     }
 
     // 2. tx proposal

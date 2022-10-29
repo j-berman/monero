@@ -39,9 +39,9 @@
 #include "ringct/rctTypes.h"
 #include "seraphis_config_temp.h"
 #include "sp_hash_functions.h"
+#include "sp_misc_utils.h"
 #include "sp_transcript.h"
 #include "tx_binned_reference_set.h"
-#include "tx_misc_utils.h"
 #include "tx_ref_set_index_mapper.h"
 
 //third party headers

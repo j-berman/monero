@@ -35,8 +35,6 @@
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
 #include "cryptonote_config.h"
-#include "seraphis/tx_extra.h"
-#include "seraphis_config_temp.h"
 #include "jamtis_core_utils.h"
 #include "jamtis_destination.h"
 #include "jamtis_payment_proposal.h"
@@ -44,10 +42,12 @@
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "seraphis/tx_extra.h"
+#include "seraphis_config_temp.h"
+#include "sp_misc_utils.h"
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
 #include "tx_extra.h"
-#include "tx_misc_utils.h"
 
 //third party headers
 #include "boost/multiprecision/cpp_int.hpp"
@@ -360,8 +360,7 @@ void make_v1_outputs_v1(const std::vector<SpOutputProposalV1> &output_proposals,
             "making v1 outputs: invalid amount blinding factor (non-canonical).");
 
         // convert to enote
-        outputs_out.emplace_back();
-        output_proposal.get_enote_v1(outputs_out.back());
+        output_proposal.get_enote_v1(next_element(outputs_out));
 
         // prepare for range proofs
         output_amounts_out.emplace_back(output_proposal.amount());
@@ -606,21 +605,19 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
         if (additional_output_type == OutputProposalSetExtraTypesV1::NORMAL_DUMMY ||
             additional_output_type == OutputProposalSetExtraTypesV1::SPECIAL_DUMMY)
         {
-            normal_payment_proposals_inout.emplace_back();
             make_additional_output_dummy_v1(additional_output_type,
                 first_enote_ephemeral_pubkey,
-                normal_payment_proposals_inout.back());
+                next_element(normal_payment_proposals_inout));
         }
         else
         {
-            selfsend_payment_proposals_inout.emplace_back();
             make_additional_output_selfsend_v1(additional_output_type,
                 first_enote_ephemeral_pubkey,
                 change_destination,
                 dummy_destination,
                 k_view_balance,
                 change_amount,
-                selfsend_payment_proposals_inout.back());
+                next_element(selfsend_payment_proposals_inout));
         }
     }
 }
@@ -633,10 +630,7 @@ std::vector<SpOutputProposalV1> gen_mock_sp_output_proposals_v1(const std::vecto
     output_proposals.reserve(out_amounts.size());
 
     for (const rct::xmr_amount out_amount : out_amounts)
-    {
-        output_proposals.emplace_back();
-        output_proposals.back().gen(out_amount, num_random_memo_elements);
-    }
+        next_element(output_proposals).gen(out_amount, num_random_memo_elements);
 
     // sort them
     std::sort(output_proposals.begin(), output_proposals.end());

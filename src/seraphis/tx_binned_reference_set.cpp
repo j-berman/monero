@@ -29,16 +29,16 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "sp_transcript.h"
 #include "tx_binned_reference_set.h"
 
 //local headers
-#include "tx_misc_utils.h"
+#include "sp_misc_utils.h"
+#include "sp_transcript.h"
 
 //third party headers
 
 //standard headers
-#include <string>
+
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"

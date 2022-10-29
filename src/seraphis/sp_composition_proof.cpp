@@ -48,6 +48,7 @@ extern "C"
 #include "sp_core_enote_utils.h"
 #include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
+#include "sp_misc_utils.h"
 #include "sp_transcript.h"
 
 //third party headers
@@ -174,6 +175,18 @@ static rct::key multisig_binonce_merge_factor(const rct::key &message, const std
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(merge_factor.bytes), "Binonce merge factor must be nonzero!");
 
     return merge_factor;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void signer_nonces_mul8(const MultisigPubNonces &signer_pub_nonce_pair, MultisigPubNonces &nonce_pair_mul8_out)
+{
+    nonce_pair_mul8_out.signature_nonce_1_pub = rct::scalarmult8(signer_pub_nonce_pair.signature_nonce_1_pub);
+    nonce_pair_mul8_out.signature_nonce_2_pub = rct::scalarmult8(signer_pub_nonce_pair.signature_nonce_2_pub);
+
+    CHECK_AND_ASSERT_THROW_MES(!(nonce_pair_mul8_out.signature_nonce_1_pub == rct::identity()),
+        "Bad signer nonce (alpha_1 identity)!");
+    CHECK_AND_ASSERT_THROW_MES(!(nonce_pair_mul8_out.signature_nonce_2_pub == rct::identity()),
+        "Bad signer nonce (alpha_2 identity)!");
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -391,16 +404,7 @@ void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigPr
     signer_nonces_pub_mul8.reserve(num_signers);
 
     for (const MultisigPubNonces &signer_pub_nonce_pair : signer_pub_nonces)
-    {
-        signer_nonces_pub_mul8.emplace_back();
-        signer_nonces_pub_mul8.back().signature_nonce_1_pub = rct::scalarmult8(signer_pub_nonce_pair.signature_nonce_1_pub);
-        signer_nonces_pub_mul8.back().signature_nonce_2_pub = rct::scalarmult8(signer_pub_nonce_pair.signature_nonce_2_pub);
-
-        CHECK_AND_ASSERT_THROW_MES(!(signer_nonces_pub_mul8.back().signature_nonce_1_pub == rct::identity()),
-            "Bad signer nonce (alpha_1 identity)!");
-        CHECK_AND_ASSERT_THROW_MES(!(signer_nonces_pub_mul8.back().signature_nonce_2_pub == rct::identity()),
-            "Bad signer nonce (alpha_2 identity)!");
-    }
+        signer_nonces_mul8(signer_pub_nonce_pair, next_element(signer_nonces_pub_mul8));
 
     // sort participant nonces so binonce merge factor is deterministic
     std::sort(signer_nonces_pub_mul8.begin(), signer_nonces_pub_mul8.end());

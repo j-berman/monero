@@ -30,6 +30,7 @@
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "seraphis/mock_ledger_context.h"
+#include "seraphis/sp_misc_utils.h"
 #include "seraphis/tx_base.h"
 #include "seraphis/tx_binned_reference_set.h"
 #include "seraphis/tx_validation_context_mock.h"
@@ -185,14 +186,13 @@ static void run_mock_tx_test_batch(const std::vector<SpTxGenData> &gen_data)
                 tx_params.bin_config = gen.bin_config;
 
                 // make tx
-                txs_to_verify.emplace_back();
                 sp::make_mock_tx<SpTxType>(tx_params,
                     legacy_input_amounts,
                     sp_input_amounts,
                     gen.output_amounts,
                     gen.discretized_transaction_fee,
                     ledger_context,
-                    txs_to_verify.back());
+                    sp::next_element(txs_to_verify));
             }
             catch (...)
             {

@@ -43,11 +43,11 @@
 #include "seraphis/seraphis_config_temp.h"
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/sp_crypto_utils.h"
+#include "seraphis/sp_misc_utils.h"
 #include "seraphis/tx_builder_types.h"
 #include "seraphis/tx_component_types.h"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils.h"
-#include "seraphis/tx_misc_utils.h"
 #include "performance_tests.h"
 
 //---------------------------------------------------------------------------------------------------------------------

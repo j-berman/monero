@@ -49,6 +49,7 @@ extern "C"
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/sp_core_types.h"
 #include "seraphis/sp_crypto_utils.h"
+#include "seraphis/sp_misc_utils.h"
 #include "seraphis/tx_base.h"
 #include "seraphis/tx_binned_reference_set.h"
 #include "seraphis/tx_binned_reference_set_utils.h"
@@ -64,7 +65,6 @@ extern "C"
 #include "seraphis/tx_extra.h"
 #include "seraphis/tx_legacy_builder_types.h"
 #include "seraphis/tx_legacy_component_types.h"
-#include "seraphis/tx_misc_utils.h"
 #include "seraphis/tx_ref_set_index_mapper_flat.h"
 #include "seraphis/tx_validation_context_mock.h"
 #include "seraphis/txtype_squashed_v1.h"
@@ -1166,7 +1166,6 @@ TEST(seraphis, txtype_squashed_v1)
 
     for (std::size_t tx_index{0}; tx_index < num_txs; ++tx_index)
     {
-        txs.emplace_back();
         make_sp_txtype_squashed_v1(2,
             2,
             2,
@@ -1181,7 +1180,7 @@ TEST(seraphis, txtype_squashed_v1)
             discretized_transaction_fee,
             sp::SpTxSquashedV1::SemanticRulesVersion::MOCK,
             ledger_context,
-            txs.back());
+            next_element(txs));
         tx_ptrs.push_back(&(txs.back()));
     }
 

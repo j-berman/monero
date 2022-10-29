@@ -39,6 +39,7 @@
 #include "ringct/rctTypes.h"
 #include "serialization_demo_types.h"
 #include "sp_composition_proof.h"
+#include "sp_misc_utils.h"
 #include "tx_binned_reference_set.h"
 #include "tx_builders_inputs.h"
 #include "tx_component_types.h"
@@ -67,10 +68,7 @@ static void copy_array(const CopyFuncT &copy_func, const std::vector<Type1> &arr
     array2_out.clear();
     array2_out.reserve(array1.size());
     for (const Type1 &obj : array1)
-    {
-        array2_out.emplace_back();
-        copy_func(obj, array2_out.back());
-    }
+        copy_func(obj, next_element(array2_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 // array2 consumes array1 via relay_func() on each element
@@ -81,10 +79,7 @@ static void relay_array(const RelayFuncT &relay_func, std::vector<Type1> &array1
     array2_out.clear();
     array2_out.reserve(array1_in.size());
     for (Type1 &obj_in : array1_in)
-    {
-        array2_out.emplace_back();
-        relay_func(obj_in, array2_out.back());
-    }
+        relay_func(obj_in, next_element(array2_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -133,10 +128,9 @@ static void recover_legacy_ring_signatures_v3(
 
     for (std::size_t legacy_input_index{0}; legacy_input_index < legacy_enote_images.size(); ++legacy_input_index)
     {
-        legacy_ring_signatures_out.emplace_back();
         recover_legacy_ring_signature_v3(serializable_legacy_ring_signatures_in[legacy_input_index],
             legacy_enote_images[legacy_input_index].m_key_image,
-            legacy_ring_signatures_out.back());
+            next_element(legacy_ring_signatures_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -162,13 +156,12 @@ static void recover_sp_membership_proofs_v1(
             enote_images[sp_input_index].m_core.m_masked_commitment,
             generator_seed_temp);
 
-        membership_proofs_out.emplace_back();
         recover_sp_membership_proof_v1(serializable_membership_proofs_in[sp_input_index],
             sp_refset_bin_config,
             generator_seed_temp,
             sp_ref_set_decomp_n,
             sp_ref_set_decomp_m,
-            membership_proofs_out.back());
+            next_element(membership_proofs_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -181,8 +174,8 @@ static void make_serializable_legacy_ring_signatures_v3(const std::vector<Legacy
 
     for (const LegacyRingSignatureV3 &legacy_ring_signature : legacy_ring_signatures)
     {
-        serializable_legacy_ring_signatures_out.emplace_back();
-        make_serializable_legacy_ring_signature_v3(legacy_ring_signature, serializable_legacy_ring_signatures_out.back());
+        make_serializable_legacy_ring_signature_v3(legacy_ring_signature,
+            next_element(serializable_legacy_ring_signatures_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -194,10 +187,7 @@ static void make_serializable_sp_membership_proofs_v1(const std::vector<SpMember
     serializable_membership_proofs_out.reserve(membership_proofs.size());
 
     for (const SpMembershipProofV1 &membership_proof : membership_proofs)
-    {
-        serializable_membership_proofs_out.emplace_back();
-        make_serializable_sp_membership_proof_v1(membership_proof, serializable_membership_proofs_out.back());
-    }
+        make_serializable_sp_membership_proof_v1(membership_proof, next_element(serializable_membership_proofs_out));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

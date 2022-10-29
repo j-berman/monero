@@ -46,6 +46,7 @@
 #include "sp_core_enote_utils.h"
 #include "sp_crypto_utils.h"
 #include "sp_hash_functions.h"
+#include "sp_misc_utils.h"
 #include "sp_transcript.h"
 #include "tx_builder_types.h"
 #include "tx_builders_inputs.h"
@@ -55,7 +56,6 @@
 #include "tx_contextual_enote_record_utils.h"
 #include "tx_input_selection_output_context_v1.h"
 #include "tx_legacy_component_types.h"
-#include "tx_misc_utils.h"
 #include "tx_validation_context_mock.h"
 #include "txtype_squashed_v1.h"
 
@@ -121,10 +121,9 @@ static void legacy_enote_records_to_input_proposals(
             legacy_contextual_input.m_origin_context.m_enote_ledger_index;
 
         // convert legacy inputs to input proposals
-        legacy_input_proposals_out.emplace_back();
         make_v1_legacy_input_proposal_v1(legacy_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
-            legacy_input_proposals_out.back());
+            next_element(legacy_input_proposals_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -144,11 +143,10 @@ static void sp_enote_records_to_input_proposals(const std::list<SpContextualEnot
             sp_contextual_input.m_origin_context.m_enote_ledger_index;
 
         // convert seraphis inputs to input proposals
-        sp_input_proposals_out.emplace_back();
         make_v1_input_proposal_v1(sp_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
             rct::rct2sk(rct::skGen()),
-            sp_input_proposals_out.back());
+            next_element(sp_input_proposals_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
