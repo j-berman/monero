@@ -80,9 +80,7 @@ static std::uint32_t n_choose_k(const std::uint32_t n, const std::uint32_t k)
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key &local_signer_id,
-    const std::uint32_t threshold,
-    const rct::key &proof_message,
+static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t threshold,
     const multisig::signer_set_filter filter,
     const rct::keyV &proof_keys,
     const std::vector<MultisigProofInitSetV1> &all_init_sets,
@@ -91,7 +89,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
     const MultisigPartialSigMaker &partial_sig_maker,
     const crypto::secret_key &local_signer_privkey,
     MultisigNonceRecord &nonce_record_inout,
-    MultisigPartialSigSetV1 &new_partial_sig_set_out)
+    std::vector<MultisigPartialSigVariant> &partial_signatures_out)
 {
     /// make partial signatures for one group of signers of size threshold that is presumed to include the local signer
 
@@ -105,11 +103,12 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
 
     // 2. try to make the partial sig set (if unable to make a partial signature on all proof proposals in the set, then
     //    an exception will be thrown)
+    std::vector<MultisigPubNonces> signer_pub_nonces_set_temp;
     std::vector<MultisigPubNonces> signer_pub_nonces_temp;
     signer_pub_nonces_temp.reserve(threshold);
 
-    std::vector<MultisigPubNonces> signer_pub_nonces_set_temp;
-    new_partial_sig_set_out.m_partial_signatures.reserve(proof_keys.size());
+    partial_signatures_out.clear();
+    partial_signatures_out.reserve(proof_keys.size());
 
     for (const rct::key &proof_key : proof_keys)
     {
@@ -148,13 +147,8 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const crypto::public_key
             signer_pub_nonces_temp,
             local_signer_privkey,
             nonce_record_inout,
-            add_element(new_partial_sig_set_out.m_partial_signatures));
+            add_element(partial_signatures_out));
     }
-
-    // 3. copy miscellanea
-    new_partial_sig_set_out.m_signer_id = local_signer_id;
-    new_partial_sig_set_out.m_proof_message = proof_message;
-    new_partial_sig_set_out.m_signer_set_filter = filter;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -471,9 +465,7 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
                     throw;
 
                 // 2. attempt to make the partial sig set
-                attempt_make_v1_multisig_partial_sig_set_v1(signer_account.get_base_pubkey(),
-                    signer_account.get_threshold(),
-                    proof_message,
+                attempt_make_v1_multisig_partial_sig_set_v1(signer_account.get_threshold(),
                     filter,
                     proof_keys,
                     all_init_sets,
@@ -482,9 +474,14 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
                     partial_sig_maker,
                     k_b_e_temp,
                     nonce_record_inout,
-                    partial_sig_sets_out.back());
+                    partial_sig_sets_out.back().m_partial_signatures);
 
-                // 3. sanity check
+                // 3. copy miscellanea
+                partial_sig_sets_out.back().m_signer_id = signer_account.get_base_pubkey();
+                partial_sig_sets_out.back().m_proof_message = proof_message;
+                partial_sig_sets_out.back().m_signer_set_filter = filter;
+
+                // 4. sanity check
                 check_v1_multisig_partial_sig_set_semantics_v1(partial_sig_sets_out.back(), signer_account.get_signers());
             }
             catch (...)

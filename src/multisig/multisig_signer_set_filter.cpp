@@ -123,7 +123,8 @@ namespace multisig
   //----------------------------------------------------------------------------------------------------------------------
   // - assumes input signer is a member of the list
   //----------------------------------------------------------------------------------------------------------------------
-  static std::size_t signer_index_in_list(const crypto::public_key &signer, const std::vector<crypto::public_key> &signer_list)
+  static std::size_t signer_index_in_list(const crypto::public_key &signer,
+    const std::vector<crypto::public_key> &signer_list)
   {
     std::size_t signer_index{0};
     for (const crypto::public_key &other_signer : signer_list)
@@ -216,7 +217,9 @@ namespace multisig
       {
         filter_permutations_out.emplace_back(reference_filter_to_filter(reference_filter, aggregate_filter));
 
-        CHECK_AND_ASSERT_THROW_MES(validate_multisig_signer_set_filter(threshold, num_signers, filter_permutations_out.back()),
+        CHECK_AND_ASSERT_THROW_MES(validate_multisig_signer_set_filter(threshold,
+            num_signers,
+            filter_permutations_out.back()),
           "Invalid multisig set filter extracted from aggregate filter.");
       }
     //note: post-increment the reference filter so the filter 'just used' is tested

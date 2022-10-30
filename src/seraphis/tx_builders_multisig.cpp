@@ -163,6 +163,83 @@ static void prepare_sp_composition_proof_privkeys_for_multisig(const crypto::sec
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void collect_sp_composition_proof_privkeys_for_multisig(const std::vector<SpInputProposalV1> &sp_input_proposals,
+    std::vector<crypto::secret_key> &proof_privkeys_x_out,
+    std::vector<crypto::secret_key> &proof_privkeys_y_out,
+    std::vector<crypto::secret_key> &proof_privkeys_z_offset_out,
+    std::vector<crypto::secret_key> &proof_privkeys_z_multiplier_out)
+{
+    proof_privkeys_x_out.clear();
+    proof_privkeys_y_out.clear();
+    proof_privkeys_z_offset_out.clear();
+    proof_privkeys_z_multiplier_out.clear();
+    proof_privkeys_x_out.reserve(sp_input_proposals.size());
+    proof_privkeys_y_out.reserve(sp_input_proposals.size());
+    proof_privkeys_z_offset_out.reserve(sp_input_proposals.size());
+    proof_privkeys_z_multiplier_out.reserve(sp_input_proposals.size());
+    rct::key squash_prefix_temp;
+
+    for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
+    {
+        // Hn(Ko, C)
+        sp_input_proposal.get_squash_prefix(squash_prefix_temp);
+
+        // x, y, z_offset, z_multiplier
+        prepare_sp_composition_proof_privkeys_for_multisig(sp_input_proposal.m_core.m_enote_view_privkey_g,
+            sp_input_proposal.m_core.m_enote_view_privkey_x,
+            sp_input_proposal.m_core.m_enote_view_privkey_u,
+            sp_input_proposal.m_core.m_address_mask,
+            squash_prefix_temp,
+            add_element(proof_privkeys_x_out),
+            add_element(proof_privkeys_y_out),
+            add_element(proof_privkeys_z_offset_out),
+            add_element(proof_privkeys_z_multiplier_out));
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void prepare_filters_for_multisig_partial_signing(const std::uint32_t threshold,
+    const std::vector<crypto::public_key> &multisig_signers,
+    const crypto::public_key &local_signer_id,
+    const multisig::signer_set_filter multisig_proposal_aggregate_signer_set_filter,
+    const std::vector<MultisigProofInitSetV1> &all_input_init_sets,
+    multisig::signer_set_filter &local_signer_filter_out,
+    multisig::signer_set_filter &available_signers_filter_out,
+    std::vector<multisig::signer_set_filter> &available_signers_as_filters_out,
+    std::vector<multisig::signer_set_filter> &filter_permutations_out)
+{
+    // 1. save local signer as filter
+    multisig::multisig_signer_to_filter(local_signer_id, multisig_signers, local_signer_filter_out);
+
+    // 2. collect available signers
+    std::vector<crypto::public_key> available_signers;
+    available_signers.reserve(all_input_init_sets.size());
+
+    for (const MultisigProofInitSetV1 &input_init_set : all_input_init_sets)
+        available_signers.emplace_back(input_init_set.m_signer_id);
+
+    // 3. available signers as a filter
+    multisig::multisig_signers_to_filter(available_signers, multisig_signers, available_signers_filter_out);
+
+    // 4. available signers as individual filters
+    available_signers_as_filters_out.clear();
+    available_signers_as_filters_out.reserve(available_signers.size());
+
+    for (const crypto::public_key &available_signer : available_signers)
+    {
+        multisig::multisig_signer_to_filter(available_signer,
+            multisig_signers,
+            add_element(available_signers_as_filters_out));
+    }
+
+    // 5. filter permutations (every subgroup of signers that is eligible to make a signature attempt)
+    multisig::aggregate_multisig_signer_set_filter_to_permutations(threshold,
+        multisig_signers.size(),
+        multisig_proposal_aggregate_signer_set_filter,
+        filter_permutations_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void collect_sp_proof_partial_sigs_v1(const std::vector<MultisigPartialSigVariant> &type_erased_partial_sigs,
     std::vector<SpCompositionProofMultisigPartial> &sp_partial_sigs_out)
 {
@@ -837,38 +914,14 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     std::vector<crypto::secret_key> proof_privkeys_y;
     std::vector<crypto::secret_key> proof_privkeys_z_offset;
     std::vector<crypto::secret_key> proof_privkeys_z_multiplier;
-    proof_privkeys_x.reserve(tx_proposal.m_sp_input_proposals.size());
-    proof_privkeys_y.reserve(tx_proposal.m_sp_input_proposals.size());
-    proof_privkeys_z_offset.reserve(tx_proposal.m_sp_input_proposals.size());
-    proof_privkeys_z_multiplier.reserve(tx_proposal.m_sp_input_proposals.size());
-    rct::key squash_prefix_temp;
 
-    for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
-    {
-        // Hn(Ko, C)
-        sp_input_proposal.get_squash_prefix(squash_prefix_temp);
+    collect_sp_composition_proof_privkeys_for_multisig(tx_proposal.m_sp_input_proposals,
+        proof_privkeys_x,
+        proof_privkeys_y,
+        proof_privkeys_z_offset,
+        proof_privkeys_z_multiplier);
 
-        // x, y, z_offset, z_multiplier
-        prepare_sp_composition_proof_privkeys_for_multisig(sp_input_proposal.m_core.m_enote_view_privkey_g,
-            sp_input_proposal.m_core.m_enote_view_privkey_x,
-            sp_input_proposal.m_core.m_enote_view_privkey_u,
-            sp_input_proposal.m_core.m_address_mask,
-            squash_prefix_temp,
-            add_element(proof_privkeys_x),
-            add_element(proof_privkeys_y),
-            add_element(proof_privkeys_z_offset),
-            add_element(proof_privkeys_z_multiplier));
-    }
-
-    // 5. filter permutations
-    std::vector<multisig::signer_set_filter> filter_permutations;
-    multisig::aggregate_multisig_signer_set_filter_to_permutations(threshold,
-        multisig_signers.size(),
-        multisig_tx_proposal.m_aggregate_signer_set_filter,
-        filter_permutations);
-
-
-    /// validate and assemble input inits
+    // 5. validate and assemble input inits
     std::vector<MultisigProofInitSetV1> all_input_init_sets;
 
     validate_and_prepare_multisig_init_sets_v1(multisig_tx_proposal.m_aggregate_signer_set_filter,
@@ -882,38 +935,26 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
         std::move(other_input_init_sets),
         all_input_init_sets);
 
-
-    /// prepare for signing (todo: move this part to separate function for use in legacy version of this function)
-
-    // 1. save local signer as filter
+    // 6. prepare filters for signing
     multisig::signer_set_filter local_signer_filter;
-    multisig::multisig_signer_to_filter(local_signer_id, multisig_signers, local_signer_filter);
-
-    // 2. collect available signers
-    std::vector<crypto::public_key> available_signers;
-    available_signers.reserve(all_input_init_sets.size());
-
-    for (const MultisigProofInitSetV1 &input_init_set : all_input_init_sets)
-        available_signers.emplace_back(input_init_set.m_signer_id);
-
-    // give up if not enough signers
-    if (available_signers.size() < threshold)
-        return false;
-
-    // 3. available signers as a filter
     multisig::signer_set_filter available_signers_filter;
-    multisig::multisig_signers_to_filter(available_signers, multisig_signers, available_signers_filter);
-
-    // 4. available signers as individual filters
     std::vector<multisig::signer_set_filter> available_signers_as_filters;
-    available_signers_as_filters.reserve(available_signers.size());
+    std::vector<multisig::signer_set_filter> filter_permutations;
 
-    for (const crypto::public_key &available_signer : available_signers)
-    {
-        multisig::multisig_signer_to_filter(available_signer,
-            multisig_signers,
-            add_element(available_signers_as_filters));
-    }
+    prepare_filters_for_multisig_partial_signing(threshold,
+        multisig_signers,
+        local_signer_id,
+        multisig_tx_proposal.m_aggregate_signer_set_filter,
+        all_input_init_sets,
+        local_signer_filter,
+        available_signers_filter,
+        available_signers_as_filters,  //note: expected to align with all_input_init_sets
+        filter_permutations);
+
+
+    /// give up if not enough signers provided material to initialize a signature
+    if (available_signers_as_filters.size() < threshold)
+        return false;
 
 
     /// make partial signatures
