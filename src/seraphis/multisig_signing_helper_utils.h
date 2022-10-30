@@ -165,14 +165,14 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
 * param: multisig_signers -
 * param: expected_proof_message -
 * param: expected_proof_keys -
-* param: expected_variant_index -
+* param: expected_partial_sig_variant_index -
 * param: partial_sigs_per_signer -
 * outparam: collected_sigs_per_key_per_filter_out -
 */
 void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypto::public_key> &multisig_signers,
     const rct::key &expected_proof_message,
     const std::unordered_set<rct::key> &expected_proof_keys,
-    const int expected_variant_index,
+    const int expected_partial_sig_variant_index,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &partial_sigs_per_signer,
     std::unordered_map<multisig::signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key

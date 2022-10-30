@@ -213,6 +213,115 @@ static bool try_make_v1_sp_partial_input_v1(const SpInputProposal &input_proposa
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static bool try_make_legacy_partial_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
+    const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const std::vector<crypto::public_key> &multisig_signers,
+    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
+    std::vector<LegacyInputV1> &legacy_inputs_out)
+{
+    // 1. collect onetime addresses of legacy inputs and map legacy input proposals to their onetime addresses
+    std::unordered_set<rct::key> expected_legacy_onetime_addresses;
+    std::unordered_map<rct::key, LegacyInputProposalV1> mapped_legacy_input_proposals;
+
+    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
+    {
+        expected_legacy_onetime_addresses.insert(legacy_input_proposal.m_onetime_address);
+        mapped_legacy_input_proposals[legacy_input_proposal.m_onetime_address] = legacy_input_proposal;
+    }
+
+    // 2. filter the legacy partial signatures into a map
+    /*
+    std::unordered_map<multisig::signer_set_filter,  //signing group
+        std::unordered_map<rct::key,                 //proof key (onetime address)
+            std::vector<MultisigPartialSigVariant>>> collected_legacy_sigs_per_key_per_filter;
+
+    filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
+        tx_proposal_prefix,
+        expected_legacy_onetime_addresses,
+        legacy_input_partial_sigs_per_signer,
+        collected_legacy_sigs_per_key_per_filter);
+    */
+
+    // 3. todo: try to make one legacy input per onetime address
+    legacy_inputs_out.clear();
+    legacy_inputs_out.reserve(expected_legacy_onetime_addresses.size());
+
+    if (legacy_inputs_out.size() != expected_legacy_onetime_addresses.size())
+        return false;
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
+    const std::vector<crypto::public_key> &multisig_signers,
+    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
+    std::vector<SpPartialInputV1> &sp_partial_inputs_out)
+{
+    // 1. collect seraphis masked addresses of input images and map seraphis input proposals to their masked addresses
+    std::unordered_set<rct::key> expected_sp_masked_addresses;
+    std::unordered_map<rct::key, SpInputProposalV1> mapped_sp_input_proposals;
+    SpEnoteImageV1 enote_image_temp;
+
+    for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
+    {
+        sp_input_proposal.get_enote_image_v1(enote_image_temp);
+        expected_sp_masked_addresses.insert(enote_image_temp.m_core.m_masked_address);
+        mapped_sp_input_proposals[enote_image_temp.m_core.m_masked_address] = sp_input_proposal;
+    }
+
+    // 2. filter the seraphis partial signatures into a map
+    std::unordered_map<multisig::signer_set_filter,  //signing group
+        std::unordered_map<rct::key,                 //proof key (masked address)
+            std::vector<MultisigPartialSigVariant>>> collected_sp_sigs_per_key_per_filter;
+
+    filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
+        tx_proposal_prefix,
+        expected_sp_masked_addresses,
+        MultisigPartialSigVariant::type_index_of<SpCompositionProofMultisigPartial>(),
+        sp_input_partial_sigs_per_signer,
+        collected_sp_sigs_per_key_per_filter);
+
+    // 3. try to make one seraphis partial input per masked address
+    sp_partial_inputs_out.clear();
+    sp_partial_inputs_out.reserve(expected_sp_masked_addresses.size());
+    std::unordered_set<rct::key> masked_addresses_with_partial_inputs;
+    std::vector<SpCompositionProofMultisigPartial> sp_partial_sigs_temp;
+
+    for (const auto &signer_group_partial_sigs : collected_sp_sigs_per_key_per_filter)
+    {
+        for (const auto &masked_address_partial_sigs : signer_group_partial_sigs.second)
+        {
+            // a. skip partial sig sets for masked addresses that already have a completed proof (from a different
+            //   signer group)
+            if (masked_addresses_with_partial_inputs.find(masked_address_partial_sigs.first) != 
+                    masked_addresses_with_partial_inputs.end())
+                continue;
+
+            // b. convert type-erased partial sigs to seraphis composition proof partial sigs
+            collect_sp_proof_partial_sigs_v1(masked_address_partial_sigs.second, sp_partial_sigs_temp);
+
+            // c. try to make the partial input
+            sp_partial_inputs_out.emplace_back();
+
+            if (try_make_v1_sp_partial_input_v1(mapped_sp_input_proposals[masked_address_partial_sigs.first].m_core,
+                    tx_proposal_prefix,
+                    sp_partial_sigs_temp,
+                    sp_partial_inputs_out.back()))
+                masked_addresses_with_partial_inputs.insert(masked_address_partial_sigs.first);
+            else
+                sp_partial_inputs_out.pop_back();
+        }
+    }
+
+    if (sp_partial_inputs_out.size() != expected_sp_masked_addresses.size())
+        return false;
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 void check_v1_legacy_multisig_input_proposal_semantics_v1(const LegacyMultisigInputProposalV1 &multisig_input_proposal)
 {
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(multisig_input_proposal.m_commitment_mask)),
@@ -850,10 +959,10 @@ bool try_make_partial_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multi
     std::vector<LegacyInputV1> &legacy_inputs_out,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out)
 {
-    // note: do not validate semantics of multisig tx proposal or partial sig sets here, because this function is
-    //       just optimistically attempting to combine partial sig sets into partial inputs if possible
+    // note: we do not validate semantics of anything here, because this function is just optimistically attempting to
+    //       combine partial sig sets into partial inputs if possible
 
-    // 1. get normal tx proposal
+    // 1. get tx proposal
     SpTxProposalV1 tx_proposal;
     multisig_tx_proposal.get_v1_tx_proposal_v1(legacy_spend_pubkey,
         legacy_subaddress_map,
@@ -862,95 +971,24 @@ bool try_make_partial_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multi
         k_view_balance,
         tx_proposal);
 
-    // 2. collect onetime addresses of legacy inputs and map legacy input proposals to their onetime addresses
-    std::unordered_set<rct::key> expected_legacy_onetime_addresses;
-    std::unordered_map<rct::key, LegacyInputProposalV1> mapped_legacy_input_proposals;
-
-    for (const LegacyInputProposalV1 &legacy_input_proposal : tx_proposal.m_legacy_input_proposals)
-    {
-        expected_legacy_onetime_addresses.insert(legacy_input_proposal.m_onetime_address);
-        mapped_legacy_input_proposals[legacy_input_proposal.m_onetime_address] = legacy_input_proposal;
-    }
-
-    // 3. collect seraphis masked addresses of input images and map seraphis input proposals to their masked addresses
-    std::unordered_set<rct::key> expected_sp_masked_addresses;
-    std::unordered_map<rct::key, SpInputProposalV1> mapped_sp_input_proposals;
-    SpEnoteImageV1 enote_image_temp;
-
-    for (const SpInputProposalV1 &sp_input_proposal : tx_proposal.m_sp_input_proposals)
-    {
-        sp_input_proposal.get_enote_image_v1(enote_image_temp);
-        expected_sp_masked_addresses.insert(enote_image_temp.m_core.m_masked_address);
-        mapped_sp_input_proposals[enote_image_temp.m_core.m_masked_address] = sp_input_proposal;
-    }
-
-    // 4. the expected proof message is the tx's proposal prefix
+    // 2. the expected proof message is the tx's proposal prefix
     rct::key tx_proposal_prefix;
     tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
-    // 5. filter the legacy partial signatures into a map
-    /*
-    std::unordered_map<multisig::signer_set_filter,  //signing group
-        std::unordered_map<rct::key,                 //proof key (onetime address)
-            std::vector<MultisigPartialSigVariant>>> collected_legacy_sigs_per_key_per_filter;
+    // 3. try to make legacy inputs
+    if (!try_make_legacy_partial_inputs_for_multisig_v1(tx_proposal_prefix,
+            tx_proposal.m_legacy_input_proposals,
+            multisig_signers,
+            legacy_input_partial_sigs_per_signer,
+            legacy_inputs_out))
+        return false;
 
-    filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
-        tx_proposal_prefix,
-        expected_legacy_onetime_addresses,
-        legacy_input_partial_sigs_per_signer,
-        collected_legacy_sigs_per_key_per_filter);
-    */
-
-    // 6. filter the seraphis partial signatures into a map
-    std::unordered_map<multisig::signer_set_filter,  //signing group
-        std::unordered_map<rct::key,                 //proof key (masked address)
-            std::vector<MultisigPartialSigVariant>>> collected_sp_sigs_per_key_per_filter;
-
-    filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
-        tx_proposal_prefix,
-        expected_sp_masked_addresses,
-        MultisigPartialSigVariant::type_index_of<SpCompositionProofMultisigPartial>(),
-        sp_input_partial_sigs_per_signer,
-        collected_sp_sigs_per_key_per_filter);
-
-    // 7. todo: try to make one legacy input per onetime address
-    legacy_inputs_out.clear();
-    legacy_inputs_out.reserve(expected_legacy_onetime_addresses.size());
-
-    // 8. try to make one seraphis partial input per masked address
-    sp_partial_inputs_out.clear();
-    sp_partial_inputs_out.reserve(expected_sp_masked_addresses.size());
-    std::unordered_set<rct::key> masked_addresses_with_partial_inputs;
-    std::vector<SpCompositionProofMultisigPartial> sp_partial_sigs_temp;
-
-    for (const auto &signer_group_partial_sigs : collected_sp_sigs_per_key_per_filter)
-    {
-        for (const auto &masked_address_partial_sigs : signer_group_partial_sigs.second)
-        {
-            // a. skip partial sig sets for masked addresses that already have a completed proof (from a different
-            //   signer group)
-            if (masked_addresses_with_partial_inputs.find(masked_address_partial_sigs.first) != 
-                    masked_addresses_with_partial_inputs.end())
-                continue;
-
-            // b. convert type-erased partial sigs to seraphis composition proof partial sigs
-            collect_sp_proof_partial_sigs_v1(masked_address_partial_sigs.second, sp_partial_sigs_temp);
-
-            // c. try to make the partial input
-            sp_partial_inputs_out.emplace_back();
-
-            if (try_make_v1_sp_partial_input_v1(mapped_sp_input_proposals[masked_address_partial_sigs.first].m_core,
-                    tx_proposal_prefix,
-                    sp_partial_sigs_temp,
-                    sp_partial_inputs_out.back()))
-                masked_addresses_with_partial_inputs.insert(masked_address_partial_sigs.first);
-            else
-                sp_partial_inputs_out.pop_back();
-        }
-    }
-
-    if (legacy_inputs_out.size() != expected_legacy_onetime_addresses.size() ||
-        sp_partial_inputs_out.size() != expected_sp_masked_addresses.size())
+    // 4. try to make seraphis partial inputs
+    if (!try_make_sp_partial_inputs_for_multisig_v1(tx_proposal_prefix,
+            tx_proposal.m_sp_input_proposals,
+            multisig_signers,
+            sp_input_partial_sigs_per_signer,
+            sp_partial_inputs_out))
         return false;
 
     return true;
