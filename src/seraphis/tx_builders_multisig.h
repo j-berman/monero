@@ -161,8 +161,12 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 * param: additional_memo_elements -
 * param: tx_fee -
 * param: version_string -
+* param: legacy_multisig_input_proposals -
 * param: sp_multisig_input_proposals -
 * param: aggregate_signer_set_filter -
+* param: legacy_spend_pubkey -
+* param: legacy_subaddress_map -
+* param: legacy_view_privkey -
 * param: jamtis_spend_pubkey
 * param: k_view_balance -
 * outparam: proposal_out -
@@ -172,8 +176,12 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::vector<ExtraFieldElement> additional_memo_elements,
     const DiscretizedFee &tx_fee,
     std::string version_string,
+    std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals,
     std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals,
     const multisig::signer_set_filter aggregate_signer_set_filter,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out);
@@ -191,6 +199,9 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
 * param: normal_payment_proposals -
 * param: selfsend_payment_proposals -
 * param: partial_memo_for_tx -
+* param: legacy_spend_pubkey -
+* param: legacy_subaddress_map -
+* param: legacy_view_privkey -
 * param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * outparam: multisig_tx_proposal_out -
@@ -207,6 +218,9 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &multisig_tx_proposal_out,

@@ -544,7 +544,7 @@ bool try_make_sp_composition_multisig_partial_sig(
 void finalize_sp_composition_multisig_proof(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
     SpCompositionProof &proof_out)
 {
-    /// input checks and initialization
+    /// input checks
     CHECK_AND_ASSERT_THROW_MES(partial_sigs.size() > 0, "No partial signatures to make proof out of!");
 
     // common parts between partial signatures should match

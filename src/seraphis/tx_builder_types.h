@@ -175,14 +175,14 @@ struct SpAlignableMembershipProofV1 final
 ///
 struct SpTxProposalV1 final
 {
-    /// outputs
+    /// outputs (SORTED)
     std::vector<jamtis::JamtisPaymentProposalV1> m_normal_payment_proposals;
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> m_selfsend_payment_proposals;
     /// tx fee
     DiscretizedFee m_tx_fee;
-    /// legacy input proposals
+    /// legacy input proposals (SORTED)
     std::vector<LegacyInputProposalV1> m_legacy_input_proposals;
-    /// seraphis input proposals
+    /// seraphis input proposals (SORTED)
     std::vector<SpInputProposalV1> m_sp_input_proposals;
     /// partial memo
     TxExtra m_partial_memo;
@@ -233,29 +233,29 @@ struct SpPartialInputV1 final
 ///
 struct SpPartialTxV1 final
 {
-    /// legacy tx input images  (spent legacy enotes)
+    /// legacy tx input images  (spent legacy enotes) (SORTED)
     std::vector<LegacyEnoteImageV2> m_legacy_input_images;
-    /// seraphis tx input images  (spent seraphis enotes)
+    /// seraphis tx input images  (spent seraphis enotes) (SORTED)
     std::vector<SpEnoteImageV1> m_sp_input_images;
-    /// tx outputs (new enotes)
+    /// tx outputs (new enotes) (SORTED)
     std::vector<SpEnoteV1> m_outputs;
     /// balance proof (balance proof and range proofs)
     SpBalanceProofV1 m_balance_proof;
-    /// legacy ring signatures: membership/ownership/unspentness for each legacy input
+    /// legacy ring signatures: membership/ownership/unspentness for each legacy input (ALIGNED TO LEGACY INPUTS)
     std::vector<LegacyRingSignatureV3> m_legacy_ring_signatures;
-    /// composition proofs: ownership/unspentness for each seraphis input
+    /// composition proofs: ownership/unspentness for each seraphis input (ALIGNED TO SERAPHIS INPUTS)
     std::vector<SpImageProofV1> m_sp_image_proofs;
     /// supplemental data for tx
     SpTxSupplementV1 m_tx_supplement;
     /// tx fee (discretized representation)
     DiscretizedFee m_tx_fee;
 
-    /// ring members for each legacy input; for validating ring signatures stored here
+    /// ring members for each legacy input; for validating ring signatures stored here (ALIGNED TO LEGACY INPUTS)
     std::vector<rct::ctkeyV> m_legacy_ring_signature_rings;
 
-    /// seraphis input enotes; for creating seraphis input membership proofs
+    /// seraphis input enotes; for creating seraphis input membership proofs (ALIGNED TO SERAPHIS INPUTS)
     std::vector<SpEnote> m_sp_input_enotes;
-    /// seraphis image masks; for creating seraphis input membership proofs
+    /// seraphis image masks; for creating seraphis input membership proofs (ALIGNED TO SERAPHIS INPUTS)
     std::vector<crypto::secret_key> m_sp_address_masks;
     std::vector<crypto::secret_key> m_sp_commitment_masks;
 };

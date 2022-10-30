@@ -128,21 +128,21 @@ struct SpMultisigInputProposalV1 final
 ///
 struct SpMultisigTxProposalV1 final
 {
-    /// normal tx outputs
+    /// normal tx outputs (NOT SORTED)
     std::vector<jamtis::JamtisPaymentProposalV1> m_normal_payment_proposals;
-    /// self-send tx outputs
+    /// self-send tx outputs (NOT SORTED)
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> m_selfsend_payment_proposals;
     /// miscellaneous memo elements to add to the tx memo
     TxExtra m_partial_memo;
     /// proposed transaction fee
     DiscretizedFee m_tx_fee;
-    /// legacy tx inputs to sign with multisig
+    /// legacy tx inputs to sign with multisig (NOT SORTED)
     std::vector<LegacyMultisigInputProposalV1> m_legacy_multisig_input_proposals;
-    /// seraphis tx inputs to sign with multisig
+    /// seraphis tx inputs to sign with multisig (NOT SORTED)
     std::vector<SpMultisigInputProposalV1> m_sp_multisig_input_proposals;
-    /// legacy ring signature proposals (CLSAGs) for each legacy input proposal
+    /// legacy ring signature proposals (CLSAGs) for each legacy input proposal (ALIGNED TO SORTED LEGACY INPUTS)
 //    std::vector<CLSAGMultisigProposal> m_legacy_input_clsag_proposals;
-    /// composition proof proposals for each seraphis input proposal
+    /// composition proof proposals for each seraphis input proposal (ALIGNED TO SORTED LEGACY INPUTS)
     std::vector<SpCompositionProofMultisigProposal> m_sp_input_proof_proposals;
     /// all multisig signers who should participate in signing this proposal
     /// - the set may be larger than 'threshold', in which case every permutation of 'threshold' signers will attempt to sign

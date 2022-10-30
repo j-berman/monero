@@ -290,7 +290,7 @@ static bool try_make_v1_sp_partial_input_v1(const SpInputProposal &input_proposa
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static bool try_make_legacy_partial_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
+static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
     const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
     const std::vector<crypto::public_key> &multisig_signers,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
@@ -502,7 +502,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 
     /// input/output checks
 
-    // 1. check the public input proposal semantics
+    // 1. check the multisig input proposal semantics
     for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal :
             multisig_tx_proposal.m_legacy_multisig_input_proposals)
         check_v1_legacy_multisig_input_proposal_semantics_v1(legacy_multisig_input_proposal);
@@ -597,14 +597,28 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::vector<ExtraFieldElement> additional_memo_elements,
     const DiscretizedFee &tx_fee,
     std::string version_string,
+    std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals,
     std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals,
     const multisig::signer_set_filter aggregate_signer_set_filter,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out)
 {
-    // 1. convert multisig seraphis public input proposals to plain input proposals
-    //todo: legacy
+    // 1. convert legacy multisig input proposals to input proposals
+    std::vector<LegacyInputProposalV1> legacy_input_proposals;
+
+    for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal : legacy_multisig_input_proposals)
+    {
+        legacy_multisig_input_proposal.get_input_proposal_v1(legacy_spend_pubkey,
+            legacy_subaddress_map,
+            legacy_view_privkey,
+            add_element(legacy_input_proposals));
+    }
+
+    // 2. convert seraphis multisig input proposals to input proposals
     std::vector<SpInputProposalV1> sp_input_proposals;
 
     for (const SpMultisigInputProposalV1 &sp_multisig_input_proposal : sp_multisig_input_proposals)
@@ -614,23 +628,24 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
             add_element(sp_input_proposals));
     }
 
-    // 2. make a temporary normal tx proposal
+    // 3. make a temporary normal tx proposal
     SpTxProposalV1 tx_proposal;
     make_v1_tx_proposal_v1(normal_payment_proposals,
         selfsend_payment_proposals,
         tx_fee,
-        {},  //todo: legacy
+        std::move(legacy_input_proposals),
         std::move(sp_input_proposals),
         additional_memo_elements,
         tx_proposal);
 
-    // 3. get proposal prefix
+    // 4. get proposal prefix
     rct::key proposal_prefix;
     tx_proposal.get_proposal_prefix(version_string, k_view_balance, proposal_prefix);
 
-    //todo: legacy proof proposals
+    // 5. legacy proof proposals
+    //todo
 
-    // 4. prepare composition proof proposals for each seraphis input (note: using the tx proposal ensures proof
+    // 6. prepare composition proof proposals for each seraphis input (note: using the tx proposal ensures proof
     //    proposals are sorted)
     proposal_out.m_sp_input_proof_proposals.clear();
     proposal_out.m_sp_input_proof_proposals.reserve(sp_multisig_input_proposals.size());
@@ -646,8 +661,8 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
             add_element(proposal_out.m_sp_input_proof_proposals));
     }
 
-    // 5. add miscellaneous components
-    //proposal_out.m_legacy_multisig_input_proposals = std::move(legacy_multisig_input_proposals);
+    // 7. add miscellaneous components
+    proposal_out.m_legacy_multisig_input_proposals = std::move(legacy_multisig_input_proposals);
     proposal_out.m_sp_multisig_input_proposals = std::move(sp_multisig_input_proposals);
     proposal_out.m_normal_payment_proposals = std::move(normal_payment_proposals);
     proposal_out.m_selfsend_payment_proposals = std::move(selfsend_payment_proposals);
@@ -668,6 +683,9 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &multisig_tx_proposal_out,
@@ -697,7 +715,10 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
     split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
     CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
 
-    // a. convert legacy inputs to legacy multisig input proposals (inputs to spend) (TODO)
+    // a. convert legacy inputs to legacy multisig input proposals (inputs to spend)
+    //todo
+    std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals;
+    legacy_multisig_input_proposals.reserve(legacy_contextual_inputs.size());
 
     // b. convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
     sp_input_ledger_mappings_out.clear();
@@ -720,12 +741,26 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
 
     // 4. get total input amount
     boost::multiprecision::uint128_t total_input_amount{0};
-    SpInputProposalV1 input_proposal_temp;
+
+    // a. legacy inputs
+    LegacyInputProposalV1 legacy_input_proposal_temp;
+
+    for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal : legacy_multisig_input_proposals)
+    {
+        legacy_multisig_input_proposal.get_input_proposal_v1(legacy_spend_pubkey,
+            legacy_subaddress_map,
+            legacy_view_privkey,
+            legacy_input_proposal_temp);
+        total_input_amount += legacy_input_proposal_temp.amount();
+    }
+
+    // b. seraphis inputs
+    SpInputProposalV1 sp_input_proposal_temp;
 
     for (const SpMultisigInputProposalV1 &sp_multisig_input_proposal : sp_multisig_input_proposals)
     {
-        sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, input_proposal_temp);
-        total_input_amount += input_proposal_temp.amount();
+        sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, sp_input_proposal_temp);
+        total_input_amount += sp_input_proposal_temp.amount();
     }
 
     // 5. finalize output set
@@ -761,8 +796,12 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
         std::move(extra_field_elements),
         reported_final_fee,
         version_string,
+        std::move(legacy_multisig_input_proposals),
         std::move(sp_multisig_input_proposals),
         aggregate_filter_of_requested_multisig_signers,
+        legacy_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
         jamtis_spend_pubkey,
         k_view_balance,
         multisig_tx_proposal_out);
@@ -811,12 +850,12 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, proposal_prefix);
 
     // 3. prepare proof keys (mapped to multisig proof base point sets)
-    // a. [ legacy Ko : {G, Hp(legacy Ko)} ]
+    // a. legacy proof keys [ legacy Ko : {G, Hp(legacy Ko)} ]
     std::vector<std::pair<rct::key, rct::keyV>> legacy_onetime_addresses_for_multisig_init_set;
     get_legacy_onetime_addresses_for_multisig_init_set(tx_proposal.m_legacy_input_proposals,
         legacy_onetime_addresses_for_multisig_init_set);
 
-    // b. [ seraphis K" : {U} ]
+    // b. seraphis proof keys [ seraphis K" : {U} ]
     std::vector<std::pair<rct::key, rct::keyV>> masked_addresses_for_multisig_init_set;
     get_masked_addresses_for_multisig_init_set(tx_proposal.m_sp_input_proposals, masked_addresses_for_multisig_init_set);
 
@@ -1017,7 +1056,7 @@ bool try_make_partial_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multi
     tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
     // 3. try to make legacy inputs
-    if (!try_make_legacy_partial_inputs_for_multisig_v1(tx_proposal_prefix,
+    if (!try_make_legacy_inputs_for_multisig_v1(tx_proposal_prefix,
             tx_proposal.m_legacy_input_proposals,
             multisig_signers,
             legacy_input_partial_sigs_per_signer,

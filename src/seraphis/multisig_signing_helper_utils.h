@@ -142,7 +142,7 @@ void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV
 * param: local_signer_filter -
 * param: all_init_sets -
 * param: available_signers_filter -
-* param: available_signers_as_filters -
+* param: available_signers_as_filters - expected to align 1:1 with signers in all_init_sets
 * param: partial_sig_maker -
 * inoutparam: nonce_record_inout -
 * outparam: partial_sig_sets_out -
