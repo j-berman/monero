@@ -90,18 +90,17 @@ struct MultisigProofInitSetV1 final
 // MultisigPartialSigVariant
 // - type-erased multisig partial signature
 ///
-struct MultisigPartialSigVariant final
+class MultisigPartialSigVariant final
 {
     using VType = boost::variant<SpCompositionProofMultisigPartial>;
 
-    /// variant of all multisig partial signature types
-    VType m_partial_sig;
-
-    /// constructors
+public:
+//constructors
     MultisigPartialSigVariant() = default;
     template <typename T>
     MultisigPartialSigVariant(const T &partial_sig) : m_partial_sig{partial_sig} {}
 
+//accessors
     /// get the partial sig's signed message
     const rct::key& message() const;
 
@@ -119,6 +118,9 @@ struct MultisigPartialSigVariant final
         return this->is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
     }
 
+    /// get the type index of the current partial signature
+    int type_index() const { return m_partial_sig.which(); }
+
     /// get the type index of a requested type (compile error for invalid types)
     template <typename T>
     static int type_index_of()
@@ -129,12 +131,17 @@ struct MultisigPartialSigVariant final
 
     /// check if two variants have the same type
     static bool same_type(const MultisigPartialSigVariant &v1, const MultisigPartialSigVariant &v2)
-    { return v1.m_partial_sig.which() == v2.m_partial_sig.which(); }
+    { return v1.type_index() == v2.type_index(); }
+
+private:
+//member variables
+    /// variant of all multisig partial signature types
+    VType m_partial_sig;
 };
 
 ////
 // MultisigPartialSigSetV1
-// - set of partially signed multisigs; combine partial signatures to complete a proof
+// - set of partially signed multisigs for different proof keys; combine partial signatures to complete a proof
 ///
 struct MultisigPartialSigSetV1 final
 {

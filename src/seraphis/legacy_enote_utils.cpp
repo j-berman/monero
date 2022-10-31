@@ -50,9 +50,7 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-void get_legacy_enote_identifier(const rct::key &onetime_address,
-    const rct::xmr_amount amount,
-    rct::key &identifier_out)
+void get_legacy_enote_identifier(const rct::key &onetime_address, const rct::xmr_amount amount, rct::key &identifier_out)
 {
     // identifier = H32(Ko, a)
     SpKDFTranscript transcript{config::HASH_KEY_LEGACY_ENOTE_IDENTIFIER, sizeof(onetime_address) + sizeof(amount)};

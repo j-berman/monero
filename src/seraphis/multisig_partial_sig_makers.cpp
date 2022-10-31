@@ -140,17 +140,16 @@ void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const r
 
     const std::size_t signature_proposal_index{m_cached_proof_keys.at(proof_key)};
 
-    partial_sig_out.m_partial_sig =
-        attempt_make_sp_composition_multisig_partial_sig(m_inv_threshold,
-            m_proof_privkeys_x.at(signature_proposal_index),
-            m_proof_privkeys_y.at(signature_proposal_index),
-            m_proof_privkeys_z_offset.at(signature_proposal_index),
-            m_proof_privkeys_z_multiplier.at(signature_proposal_index),
-            local_multisig_signing_key,
-            m_proof_proposals.at(signature_proposal_index),
-            signer_group_pub_nonces,
-            signer_group_filter,
-            nonce_record_inout);
+    partial_sig_out = attempt_make_sp_composition_multisig_partial_sig(m_inv_threshold,
+        m_proof_privkeys_x.at(signature_proposal_index),
+        m_proof_privkeys_y.at(signature_proposal_index),
+        m_proof_privkeys_z_offset.at(signature_proposal_index),
+        m_proof_privkeys_z_multiplier.at(signature_proposal_index),
+        local_multisig_signing_key,
+        m_proof_proposals.at(signature_proposal_index),
+        signer_group_pub_nonces,
+        signer_group_filter,
+        nonce_record_inout);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

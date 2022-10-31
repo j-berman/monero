@@ -551,7 +551,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                     continue;
 
                 // skip partial sigs with unexpected internal variant type
-                if (partial_sig.m_partial_sig.which() != expected_partial_sig_variant_index)
+                if (partial_sig.type_index() != expected_partial_sig_variant_index)
                     continue;
 
                 collected_sigs_per_key_per_filter_out[partial_sig_set.m_signer_set_filter][partial_sig.proof_key()]

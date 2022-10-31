@@ -280,16 +280,21 @@ struct SpContextualEnoteRecordV1 final
 //////////////////////////////////////////////// Joint /////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct ContextualBasicRecordVariant final
+////
+// ContextualBasicRecordVariant
+// - variant of all contextual basic enote record types
+///
+class ContextualBasicRecordVariant final
 {
-    /// variant of all contextual basic records
-    boost::variant<LegacyContextualBasicEnoteRecordV1, SpContextualBasicEnoteRecordV1> m_basic_record;
+    using VType = boost::variant<LegacyContextualBasicEnoteRecordV1, SpContextualBasicEnoteRecordV1>;
 
-    /// constructors
+public:
+//constructors
     ContextualBasicRecordVariant() = default;
     template <typename T>
     ContextualBasicRecordVariant(const T &basic_record) : m_basic_record{basic_record} {}
 
+//accessors
     /// get the record's origin context
     const SpEnoteOriginContextV1& origin_context() const;
 
@@ -303,18 +308,28 @@ struct ContextualBasicRecordVariant final
         static const T empty{};
         return this->is_type<T>() ? boost::get<T>(m_basic_record) : empty;
     }
+
+private:
+//member variables
+    /// variant of all contextual basic records
+    VType m_basic_record;
 };
 
-struct ContextualRecordVariant final
+////
+// ContextualRecordVariant
+// - variant of all contextual full enote record types
+///
+class ContextualRecordVariant final
 {
-    /// variant of all contextual enote records
-    boost::variant<LegacyContextualEnoteRecordV1, SpContextualEnoteRecordV1> m_record;
+    using VType = boost::variant<LegacyContextualEnoteRecordV1, SpContextualEnoteRecordV1>;
 
-    /// constructors
+public:
+//constructors
     ContextualRecordVariant() = default;
     template <typename T>
     ContextualRecordVariant(const T &record) : m_record{record} {}
 
+//accessors
     /// get the record's amount
     rct::xmr_amount amount() const;
     /// get the record's origin context
@@ -332,6 +347,11 @@ struct ContextualRecordVariant final
         static const T empty{};
         return this->is_type<T>() ? boost::get<T>(m_record) : empty;
     }
+
+private:
+//member variables
+    /// variant of all contextual enote records
+    VType m_record;
 };
 
 ////

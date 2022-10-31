@@ -60,9 +60,7 @@ namespace sp
 * param: amount - a
 * outparam: identifier_out - H32(Ko, a)
 */
-void get_legacy_enote_identifier(const rct::key &onetime_address,
-    const rct::xmr_amount amount,
-    rct::key &identifier_out);
+void get_legacy_enote_identifier(const rct::key &onetime_address, const rct::xmr_amount amount, rct::key &identifier_out);
 /**
 * brief: make_legacy_enote_v1 - make a v1 legacy enote sending to an address or subaddress
 * param: destination_spendkey - [address: K^s = k^s G] [subaddress: K^{s,i} = (Hn(k^v, i) + k^s) G]
