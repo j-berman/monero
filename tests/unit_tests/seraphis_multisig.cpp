@@ -574,7 +574,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     const std::size_t max_inputs{10000};
     rct::xmr_amount specified_fee;
     ASSERT_TRUE(try_get_fee_value(fee, specified_fee));
-    const std::size_t tx_fee_per_weight{specified_fee};
+    const std::size_t fee_per_tx_weight{specified_fee};
     const std::size_t ref_set_decomp_m{2};
     const std::size_t ref_set_decomp_n{2};
     const std::size_t bin_radius{1};
@@ -734,34 +734,51 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         seraphis_accounts[0].get_signers(),
         aggregate_filter_of_requested_multisig_signers);
 
-    //todo: select inputs
-
-    //todo: prepare for legacy input proofs
-
-    // c) make multisig tx proposal
+    // c) prepare inputs and finalize outputs
     const sp::InputSelectorMockV1 input_selector{enote_store};
     const sp::FeeCalculatorMockTrivial tx_fee_calculator;  //trivial fee calculator so we can use specified input fee
 
-    SpMultisigTxProposalV1 multisig_tx_proposal;
-    std::unordered_map<crypto::key_image, std::uint64_t> sp_input_ledger_mappings;
-    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_tx_proposal_for_transfer_v1(sp_user_address,
+    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
+    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
+    DiscretizedFee discretized_transaction_fee;
+    ASSERT_NO_THROW(ASSERT_TRUE(try_prepare_inputs_and_outputs_for_transfer_v1(sp_user_address,
         sp_user_address,
         input_selector,
         tx_fee_calculator,
-        tx_fee_per_weight,
+        fee_per_tx_weight,
         max_inputs,
+        std::move(normal_payment_proposals),
+        std::move(selfsend_payment_proposals),
+        shared_sp_keys.k_vb,
+        legacy_contextual_inputs,
+        sp_contextual_inputs,
+        normal_payment_proposals,
+        selfsend_payment_proposals,
+        discretized_transaction_fee)));
+
+    //todo: prepare for legacy input proofs
+    // note: need legacy ledger mappings here because legacy multisig proofs include ledger references (the ring signature
+    //       decoys must be taken from the chain); however, seraphis ledger mappings are NOT needed because seraphis
+    //       multisig proofs only operate on seraphis enote images, which don't require ledger references
+    std::unordered_map<crypto::key_image, std::uint64_t> legacy_input_ledger_mappings;
+    ASSERT_TRUE(try_get_membership_proof_real_reference_mappings(legacy_contextual_inputs, legacy_input_ledger_mappings));
+
+    // c) make multisig tx proposal
+    SpMultisigTxProposalV1 multisig_tx_proposal;
+    ASSERT_NO_THROW(make_v1_multisig_tx_proposal_v1(legacy_contextual_inputs,
+        sp_contextual_inputs,
         semantic_rules_version,
         aggregate_filter_of_requested_multisig_signers,
         std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         TxExtra{},
+        discretized_transaction_fee,
         rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
         legacy_subaddress_map,
         legacy_accounts[0].get_common_privkey(),
         shared_sp_keys.K_1_base,
         shared_sp_keys.k_vb,
-        multisig_tx_proposal,
-        sp_input_ledger_mappings)));
+        multisig_tx_proposal));
 
     ASSERT_TRUE(multisig_tx_proposal.m_tx_fee == fee);
 
@@ -892,7 +909,12 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         shared_sp_keys.k_vb,
         partial_tx));
 
-    // c. prepare for membership proofs
+    // c) get ledger mappings for the seraphis input membership proofs
+    // note: do this after making the partial tx to demo that seraphis inputs don't have to be on-chain until this point
+    std::unordered_map<crypto::key_image, std::uint64_t> sp_input_ledger_mappings;
+    ASSERT_TRUE(try_get_membership_proof_real_reference_mappings(sp_contextual_inputs, sp_input_ledger_mappings));
+
+    // d) prepare for membership proofs
     // note: use ring size 2^2 = 4 for speed
     std::vector<SpMembershipProofPrepV1> membership_proof_preps;
     ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(sp_input_ledger_mappings,
@@ -903,13 +925,13 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         ledger_context,
         membership_proof_preps));
 
-    // d) make membership proofs
+    // e) make membership proofs
     std::vector<SpAlignableMembershipProofV1> alignable_membership_proofs;
 
     ASSERT_NO_THROW(make_v1_membership_proofs_v1(std::move(membership_proof_preps),
         alignable_membership_proofs));
 
-    // e) complete tx
+    // f) complete tx
     SpTxSquashedV1 completed_tx;
 
     ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(semantic_rules_version,
@@ -917,15 +939,15 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         std::move(alignable_membership_proofs),
         completed_tx));
 
-    // - sanity check fee (can't do this with the trivial fee calculator)
-    //ASSERT_TRUE(completed_tx.m_fee == tx_fee_calculator.compute_fee(tx_fee_per_weight, completed_tx));
+    // - sanity check fee (should do this in production use-case, but can't do it here with the trivial fee calculator)
+    //ASSERT_TRUE(completed_tx.m_fee == tx_fee_calculator.compute_fee(fee_per_tx_weight, completed_tx));
 
-    // f) verify tx
+    // g) verify tx
     const TxValidationContextMock tx_validation_context{ledger_context};
 
     ASSERT_NO_THROW(ASSERT_TRUE(validate_tx(completed_tx, tx_validation_context)));
 
-    // g) add tx to mock ledger
+    // h) add tx to mock ledger
     ASSERT_NO_THROW(ASSERT_TRUE(try_add_tx_to_ledger(completed_tx, ledger_context)));
 
 

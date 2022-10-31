@@ -38,6 +38,7 @@
 #include "tx_input_selection.h"
 
 //third party headers
+#include "boost/multiprecision/cpp_int.hpp"
 
 //standard headers
 #include <functional>
@@ -117,6 +118,62 @@ void split_selected_input_set(const input_set_tracker_t &input_set,
                 );
         }
     }
+}
+//-------------------------------------------------------------------------------------------------------------------
+boost::multiprecision::uint128_t total_amount(const std::list<LegacyContextualEnoteRecordV1> &contextual_records)
+{
+    boost::multiprecision::uint128_t total_amount{0};
+
+    for (const LegacyContextualEnoteRecordV1 &contextual_record : contextual_records)
+        total_amount += contextual_record.amount();
+
+    return total_amount;
+}
+//-------------------------------------------------------------------------------------------------------------------
+boost::multiprecision::uint128_t total_amount(const std::list<SpContextualEnoteRecordV1> &contextual_records)
+{
+    boost::multiprecision::uint128_t total_amount{0};
+
+    for (const SpContextualEnoteRecordV1 &contextual_record : contextual_records)
+        total_amount += contextual_record.amount();
+
+    return total_amount;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool try_get_membership_proof_real_reference_mappings(const std::list<LegacyContextualEnoteRecordV1> &contextual_records,
+    std::unordered_map<crypto::key_image, std::uint64_t> &ledger_mappings_out)
+{
+    ledger_mappings_out.clear();
+
+    for (const LegacyContextualEnoteRecordV1 &contextual_record : contextual_records)
+    {
+        // only onchain enotes have ledger indices
+        if (!contextual_record.has_origin_status(SpEnoteOriginStatus::ONCHAIN))
+            return false;
+
+        // save the [ KI : enote ledger index ] entry
+        ledger_mappings_out[contextual_record.key_image()] = contextual_record.m_origin_context.m_enote_ledger_index;
+    }
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool try_get_membership_proof_real_reference_mappings(const std::list<SpContextualEnoteRecordV1> &contextual_records,
+    std::unordered_map<crypto::key_image, std::uint64_t> &ledger_mappings_out)
+{
+    ledger_mappings_out.clear();
+
+    for (const SpContextualEnoteRecordV1 &contextual_record : contextual_records)
+    {
+        // only onchain enotes have ledger indices
+        if (!contextual_record.has_origin_status(SpEnoteOriginStatus::ONCHAIN))
+            return false;
+
+        // save the [ KI : enote ledger index ] entry
+        ledger_mappings_out[contextual_record.key_image()] = contextual_record.m_origin_context.m_enote_ledger_index;
+    }
+
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_update_enote_origin_context_v1(const SpEnoteOriginContextV1 &fresh_origin_context,

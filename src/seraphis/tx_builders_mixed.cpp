@@ -107,19 +107,13 @@ static bool same_key_image(const SpPartialInputV1 &partial_input, const SpInputP
 //-------------------------------------------------------------------------------------------------------------------
 static void legacy_enote_records_to_input_proposals(
     const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_records,
-    std::vector<LegacyInputProposalV1> &legacy_input_proposals_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &legacy_input_ledger_mappings_out)
+    std::vector<LegacyInputProposalV1> &legacy_input_proposals_out)
 {
     legacy_input_proposals_out.clear();
-    legacy_input_ledger_mappings_out.clear();
     legacy_input_proposals_out.reserve(legacy_contextual_records.size());
 
     for (const LegacyContextualEnoteRecordV1 &legacy_contextual_input : legacy_contextual_records)
     {
-        // save input indices for making legacy ring signatures
-        legacy_input_ledger_mappings_out[legacy_contextual_input.m_record.m_key_image] = 
-            legacy_contextual_input.m_origin_context.m_enote_ledger_index;
-
         // convert legacy inputs to input proposals
         make_v1_legacy_input_proposal_v1(legacy_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
@@ -129,19 +123,13 @@ static void legacy_enote_records_to_input_proposals(
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static void sp_enote_records_to_input_proposals(const std::list<SpContextualEnoteRecordV1> &sp_contextual_records,
-    std::vector<SpInputProposalV1> &sp_input_proposals_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out)
+    std::vector<SpInputProposalV1> &sp_input_proposals_out)
 {
     sp_input_proposals_out.clear();
-    sp_input_ledger_mappings_out.clear();
     sp_input_proposals_out.reserve(sp_contextual_records.size());
 
     for (const SpContextualEnoteRecordV1 &sp_contextual_input : sp_contextual_records)
     {
-        // save input indices for making seraphis membership proofs
-        sp_input_ledger_mappings_out[sp_contextual_input.m_record.m_key_image] = 
-            sp_contextual_input.m_origin_context.m_enote_ledger_index;
-
         // convert seraphis inputs to input proposals
         make_v1_input_proposal_v1(sp_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
@@ -385,6 +373,79 @@ void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
     sp_hash_to_32(transcript, tx_proofs_prefix_out.bytes);
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool try_prepare_inputs_and_outputs_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
+    const jamtis::JamtisDestinationV1 &dummy_address,
+    const InputSelectorV1 &local_user_input_selector,
+    const FeeCalculator &tx_fee_calculator,
+    const rct::xmr_amount fee_per_tx_weight,
+    const std::size_t max_inputs,
+    std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
+    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
+    const crypto::secret_key &k_view_balance,
+    std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs_out,
+    std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs_out,
+    std::vector<jamtis::JamtisPaymentProposalV1> &final_normal_payment_proposals_out,
+    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &final_selfsend_payment_proposals_out,
+    DiscretizedFee &discretized_transaction_fee_out)
+{
+    legacy_contextual_inputs_out.clear();
+    sp_contextual_inputs_out.clear();
+    final_normal_payment_proposals_out.clear();
+    final_selfsend_payment_proposals_out.clear();
+
+    // 1. try to select inputs for the tx
+    const OutputSetContextForInputSelectionV1 output_set_context{
+            normal_payment_proposals,
+            selfsend_payment_proposals
+        };
+
+    rct::xmr_amount reported_final_fee;
+    input_set_tracker_t selected_input_set;
+
+    if (!try_get_input_set_v1(output_set_context,
+            max_inputs,
+            local_user_input_selector,
+            fee_per_tx_weight,
+            tx_fee_calculator,
+            reported_final_fee,
+            selected_input_set))
+        return false;
+
+    // 2. set transaction fee
+    discretized_transaction_fee_out = DiscretizedFee{reported_final_fee};
+    CHECK_AND_ASSERT_THROW_MES(discretized_transaction_fee_out == reported_final_fee,
+        "prepare inputs and outputs for transfer (v1): the input selector fee was not properly discretized (bug).");
+
+    // 3. separate into legacy and seraphis inputs
+    split_selected_input_set(selected_input_set, legacy_contextual_inputs_out, sp_contextual_inputs_out);
+
+    // 4.  get total input amount
+    const boost::multiprecision::uint128_t total_input_amount{
+            total_amount(legacy_contextual_inputs_out) +
+            total_amount(sp_contextual_inputs_out)
+        };
+
+    // 5. finalize output set
+    finalize_v1_output_proposal_set_v1(total_input_amount,
+        reported_final_fee,
+        change_address,
+        dummy_address,
+        k_view_balance,
+        normal_payment_proposals,
+        selfsend_payment_proposals);
+
+    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.compute_fee(fee_per_tx_weight,
+                legacy_contextual_inputs_out.size(), sp_contextual_inputs_out.size(),
+                normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
+            reported_final_fee,
+        "prepare inputs and outputs for transfer (v1): final fee is not consistent with input selector fee (bug).");
+
+    final_normal_payment_proposals_out = normal_payment_proposals;
+    final_selfsend_payment_proposals_out = selfsend_payment_proposals;
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
 void check_v1_tx_proposal_semantics_v1(const SpTxProposalV1 &tx_proposal,
     const rct::key &legacy_spend_pubkey,
     const rct::key &jamtis_spend_pubkey,
@@ -541,93 +602,28 @@ void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_
     make_tx_extra(std::move(additional_memo_elements), tx_proposal_out.m_partial_memo);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
-    const jamtis::JamtisDestinationV1 &dummy_address,
-    const InputSelectorV1 &local_user_input_selector,
-    const FeeCalculator &tx_fee_calculator,
-    const rct::xmr_amount fee_per_tx_weight,
-    const std::size_t max_inputs,
+void make_v1_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
+    const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
-    TxExtra partial_memo_for_tx,
-    const crypto::secret_key &k_view_balance,
-    SpTxProposalV1 &tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &legacy_input_ledger_mappings_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out)
+    const DiscretizedFee &discretized_transaction_fee,
+    const TxExtra &partial_memo_for_tx,
+    SpTxProposalV1 &tx_proposal_out)
 {
-    legacy_input_ledger_mappings_out.clear();
-    sp_input_ledger_mappings_out.clear();
-
-    // 1. try to select inputs for the tx
-    const OutputSetContextForInputSelectionV1 output_set_context{
-            normal_payment_proposals,
-            selfsend_payment_proposals
-        };
-
-    rct::xmr_amount reported_final_fee;
-    input_set_tracker_t selected_input_set;
-
-    if (!try_get_input_set_v1(output_set_context,
-            max_inputs,
-            local_user_input_selector,
-            fee_per_tx_weight,
-            tx_fee_calculator,
-            reported_final_fee,
-            selected_input_set))
-        return false;
-
-    // 2. separate into legacy and seraphis inputs
-    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
-    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
-
-    split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
-
-    // a. handle legacy inputs
+    // 1. legacy input proposals
     std::vector<LegacyInputProposalV1> legacy_input_proposals;
-    legacy_enote_records_to_input_proposals(legacy_contextual_inputs,
-        legacy_input_proposals,
-        legacy_input_ledger_mappings_out);
+    legacy_enote_records_to_input_proposals(legacy_contextual_inputs, legacy_input_proposals);
 
-    // b. handle seraphis inputs
+    // 2. seraphis input proposals
     std::vector<SpInputProposalV1> sp_input_proposals;
-    sp_enote_records_to_input_proposals(sp_contextual_inputs,
-        sp_input_proposals,
-        sp_input_ledger_mappings_out);
+    sp_enote_records_to_input_proposals(sp_contextual_inputs, sp_input_proposals);
 
-    // 3.  get total input amount
-    boost::multiprecision::uint128_t total_input_amount{0};
-
-    for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
-        total_input_amount += legacy_input_proposal.m_amount;
-
-    for (const SpInputProposalV1 &input_proposal : sp_input_proposals)
-        total_input_amount += input_proposal.m_core.m_amount;
-
-    // 4. finalize output set
-    const DiscretizedFee discretized_transaction_fee{reported_final_fee};
-    CHECK_AND_ASSERT_THROW_MES(discretized_transaction_fee == reported_final_fee,
-        "make tx proposal for transfer (v1): the input selector fee was not properly discretized (bug).");
-
-    finalize_v1_output_proposal_set_v1(total_input_amount,
-        reported_final_fee,
-        change_address,
-        dummy_address,
-        k_view_balance,
-        normal_payment_proposals,
-        selfsend_payment_proposals);
-
-    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.compute_fee(fee_per_tx_weight,
-                legacy_contextual_inputs.size(), sp_contextual_inputs.size(),
-                normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
-            reported_final_fee,
-        "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");
-
-    // 5. get memo elements
+    // 3. get memo elements
     std::vector<ExtraFieldElement> extra_field_elements;
     CHECK_AND_ASSERT_THROW_MES(try_get_extra_field_elements(partial_memo_for_tx, extra_field_elements),
         "make tx proposal for transfer (v1): unable to extract memo field elements for tx proposal.");
 
-    // 6. assemble into tx proposal
+    // 4. assemble into tx proposal
     make_v1_tx_proposal_v1(std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         discretized_transaction_fee,
@@ -635,8 +631,6 @@ bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &
         std::move(sp_input_proposals),
         std::move(extra_field_elements),
         tx_proposal_out);
-
-    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_balance_proof_v1(const std::vector<rct::xmr_amount> &legacy_input_amounts,

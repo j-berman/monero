@@ -185,46 +185,20 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out);
-/**
-* brief: try_make_v1_multisig_tx_proposal_for_transfer_v1 - try to select inputs then make a v1 multisig tx proposal for
-*      specified outlays
-* param: change_address -
-* param: dummy_address -
-* param: local_user_input_selector -
-* param: tx_fee_calculator -
-* param: fee_per_tx_weight -
-* param: max_inputs -
-* param: semantic_rules_version -
-* param: aggregate_filter_of_requested_multisig_signers -
-* param: normal_payment_proposals -
-* param: selfsend_payment_proposals -
-* param: partial_memo_for_tx -
-* param: legacy_spend_pubkey -
-* param: legacy_subaddress_map -
-* param: legacy_view_privkey -
-* param: jamtis_spend_pubkey -
-* param: k_view_balance -
-* outparam: multisig_tx_proposal_out -
-* outparam: sp_input_ledger_mappings_out -
-*/
-bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
-    const jamtis::JamtisDestinationV1 &dummy_address,
-    const InputSelectorV1 &local_user_input_selector,
-    const FeeCalculator &tx_fee_calculator,
-    const rct::xmr_amount fee_per_tx_weight,
-    const std::size_t max_inputs,
+void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
+    const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
+    const DiscretizedFee &tx_fee,
     const rct::key &legacy_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    SpMultisigTxProposalV1 &multisig_tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out);
+    SpMultisigTxProposalV1 &multisig_tx_proposal_out);
 /**
 * brief: make_v1_multisig_init_sets_for_inputs_v1 - make init sets for seraphis and legacy multisig tx input proofs
 * param: signer_id -

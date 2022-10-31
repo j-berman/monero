@@ -638,14 +638,17 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
         additional_memo_elements,
         tx_proposal);
 
-    // 4. get proposal prefix
+    // 4. sanity check the normal tx proposal
+    check_v1_tx_proposal_semantics_v1(tx_proposal, legacy_spend_pubkey, jamtis_spend_pubkey, k_view_balance);
+
+    // 5. get proposal prefix
     rct::key proposal_prefix;
     tx_proposal.get_proposal_prefix(version_string, k_view_balance, proposal_prefix);
 
-    // 5. legacy proof proposals
+    // 6. legacy proof proposals
     //todo
 
-    // 6. prepare composition proof proposals for each seraphis input (note: using the tx proposal ensures proof
+    // 7. prepare composition proof proposals for each seraphis input (note: using the tx proposal ensures proof
     //    proposals are sorted)
     proposal_out.m_sp_input_proof_proposals.clear();
     proposal_out.m_sp_input_proof_proposals.reserve(sp_multisig_input_proposals.size());
@@ -661,7 +664,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
             add_element(proposal_out.m_sp_input_proof_proposals));
     }
 
-    // 7. add miscellaneous components
+    // 8. add miscellaneous components
     proposal_out.m_legacy_multisig_input_proposals = std::move(legacy_multisig_input_proposals);
     proposal_out.m_sp_multisig_input_proposals = std::move(sp_multisig_input_proposals);
     proposal_out.m_normal_payment_proposals = std::move(normal_payment_proposals);
@@ -672,66 +675,32 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     proposal_out.m_version_string = std::move(version_string);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
-    const jamtis::JamtisDestinationV1 &dummy_address,
-    const InputSelectorV1 &local_user_input_selector,
-    const FeeCalculator &tx_fee_calculator,
-    const rct::xmr_amount fee_per_tx_weight,
-    const std::size_t max_inputs,
+void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
+    const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
     TxExtra partial_memo_for_tx,
+    const DiscretizedFee &tx_fee,
     const rct::key &legacy_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    SpMultisigTxProposalV1 &multisig_tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out)
+    SpMultisigTxProposalV1 &multisig_tx_proposal_out)
 {
-    // 1. try to select inputs for the tx
-    const OutputSetContextForInputSelectionV1 output_set_context{
-            normal_payment_proposals,
-            selfsend_payment_proposals
-        };
-
-    rct::xmr_amount reported_final_fee;
-    input_set_tracker_t selected_input_set;
-    if (!try_get_input_set_v1(output_set_context,
-            max_inputs,
-            local_user_input_selector,
-            fee_per_tx_weight,
-            tx_fee_calculator,
-            reported_final_fee,
-            selected_input_set))
-        return false;
-
-    // 2. separate into legacy and seraphis inputs
-    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
-    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
-
-    split_selected_input_set(selected_input_set, legacy_contextual_inputs, sp_contextual_inputs);
-    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == 0, "for now, legacy inputs aren't fully supported.");
-
-    // a. convert legacy inputs to legacy multisig input proposals (inputs to spend)
-    //todo
+    // 1. convert legacy inputs to legacy multisig input proposals (inputs to spend)
+    //todo (need to store legacy ring signature preps in legacy multisig input proposals)
     std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals;
     legacy_multisig_input_proposals.reserve(legacy_contextual_inputs.size());
 
-    // b. convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
-    sp_input_ledger_mappings_out.clear();
-
+    // 2. convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
     std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals;
     sp_multisig_input_proposals.reserve(sp_contextual_inputs.size());
 
     for (const SpContextualEnoteRecordV1 &contextual_input : sp_contextual_inputs)
     {
-        // save input indices for making membership proofs
-        sp_input_ledger_mappings_out[contextual_input.m_record.m_key_image] = 
-            contextual_input.m_origin_context.m_enote_ledger_index;
-
         // convert inputs to input proposals
         make_v1_sp_multisig_input_proposal_v1(contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
@@ -739,62 +708,19 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
             add_element(sp_multisig_input_proposals));
     }
 
-    // 4. get total input amount
-    boost::multiprecision::uint128_t total_input_amount{0};
-
-    // a. legacy inputs
-    LegacyInputProposalV1 legacy_input_proposal_temp;
-
-    for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal : legacy_multisig_input_proposals)
-    {
-        legacy_multisig_input_proposal.get_input_proposal_v1(legacy_spend_pubkey,
-            legacy_subaddress_map,
-            legacy_view_privkey,
-            legacy_input_proposal_temp);
-        total_input_amount += legacy_input_proposal_temp.amount();
-    }
-
-    // b. seraphis inputs
-    SpInputProposalV1 sp_input_proposal_temp;
-
-    for (const SpMultisigInputProposalV1 &sp_multisig_input_proposal : sp_multisig_input_proposals)
-    {
-        sp_multisig_input_proposal.get_input_proposal_v1(jamtis_spend_pubkey, k_view_balance, sp_input_proposal_temp);
-        total_input_amount += sp_input_proposal_temp.amount();
-    }
-
-    // 5. finalize output set
-    const DiscretizedFee discretized_transaction_fee{reported_final_fee};
-    CHECK_AND_ASSERT_THROW_MES(discretized_transaction_fee == reported_final_fee,
-        "make tx proposal for transfer (v1): the input selector fee was not properly discretized (bug).");
-
-    finalize_v1_output_proposal_set_v1(total_input_amount,
-        reported_final_fee,
-        change_address,
-        dummy_address,
-        k_view_balance,
-        normal_payment_proposals,
-        selfsend_payment_proposals);
-
-    CHECK_AND_ASSERT_THROW_MES(tx_fee_calculator.compute_fee(fee_per_tx_weight,
-                legacy_contextual_inputs.size(), sp_contextual_inputs.size(),
-                normal_payment_proposals.size() + selfsend_payment_proposals.size()) ==
-            reported_final_fee,
-        "make tx proposal for transfer (v1): final fee is not consistent with input selector fee (bug).");
-
-    // 6. get memo elements
+    // 3. get memo elements
     std::vector<ExtraFieldElement> extra_field_elements;
     CHECK_AND_ASSERT_THROW_MES(try_get_extra_field_elements(partial_memo_for_tx, extra_field_elements),
         "make tx proposal for transfer (v1): unable to extract memo field elements for tx proposal.");
 
-    // 7. assemble into tx proposal
+    // 4. assemble into tx proposal
     std::string version_string;
     make_versioning_string(semantic_rules_version, version_string);
 
     make_v1_multisig_tx_proposal_v1(std::move(normal_payment_proposals),
         std::move(selfsend_payment_proposals),
         std::move(extra_field_elements),
-        reported_final_fee,
+        tx_fee,
         version_string,
         std::move(legacy_multisig_input_proposals),
         std::move(sp_multisig_input_proposals),
@@ -805,8 +731,6 @@ bool try_make_v1_multisig_tx_proposal_for_transfer_v1(const jamtis::JamtisDestin
         jamtis_spend_pubkey,
         k_view_balance,
         multisig_tx_proposal_out);
-
-    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_id,

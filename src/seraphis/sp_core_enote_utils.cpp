@@ -153,10 +153,10 @@ void reduce_seraphis_spendkey_u(const crypto::secret_key &k_reducer_u, rct::key 
 void make_seraphis_spendkey(const crypto::secret_key &k_a, const crypto::secret_key &k_b, rct::key &spendkey_out)
 {
     // K = k_a X + k_b U
-    make_seraphis_spendbase(k_b, spendkey_out);
+    make_seraphis_spendbase(k_b, spendkey_out);  //k_b U
 
     // finish address
-    extend_seraphis_spendkey_x(k_a, spendkey_out);
+    extend_seraphis_spendkey_x(k_a, spendkey_out);  //k_a X + k_b U
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_seraphis_squash_prefix(const rct::key &onetime_address,

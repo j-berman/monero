@@ -43,6 +43,7 @@
 #include "seraphis/legacy_enote_utils.h"
 #include "seraphis/mock_ledger_context.h"
 #include "seraphis/sp_composition_proof.h"
+#include "seraphis/tx_contextual_enote_record_utils.h"
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/sp_core_types.h"
 #include "seraphis/sp_crypto_utils.h"
@@ -285,25 +286,37 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
             add_element(normal_payment_proposals));
     }
 
-    // 2. tx proposal
-    SpTxProposalV1 tx_proposal;
-    std::unordered_map<crypto::key_image, std::uint64_t> legacy_input_ledger_mappings;
-    std::unordered_map<crypto::key_image, std::uint64_t> sp_input_ledger_mappings;
-    ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_tx_proposal_for_transfer_v1(change_address,
+    // 3. prepare inputs and finalize outputs
+    std::list<LegacyContextualEnoteRecordV1> legacy_contextual_inputs;
+    std::list<SpContextualEnoteRecordV1> sp_contextual_inputs;
+    std::vector<JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals;  //note: no user-defined selfsends
+    DiscretizedFee discretized_transaction_fee;
+    ASSERT_NO_THROW(ASSERT_TRUE(try_prepare_inputs_and_outputs_for_transfer_v1(change_address,
         dummy_address,
         local_user_input_selector,
         tx_fee_calculator,
         fee_per_tx_weight,
         max_inputs,
         std::move(normal_payment_proposals),
-        std::vector<JamtisPaymentProposalSelfSendV1>{},
-        TxExtra{},
+        std::move(selfsend_payment_proposals),
         local_user_sp_keys.k_vb,
-        tx_proposal,
-        legacy_input_ledger_mappings,
-        sp_input_ledger_mappings)));
+        legacy_contextual_inputs,
+        sp_contextual_inputs,
+        normal_payment_proposals,
+        selfsend_payment_proposals,
+        discretized_transaction_fee)));
 
-    // 3. tx proposal prefix
+    // 4. tx proposal
+    SpTxProposalV1 tx_proposal;
+    ASSERT_NO_THROW(make_v1_tx_proposal_v1(legacy_contextual_inputs,
+        sp_contextual_inputs,
+        std::move(normal_payment_proposals),
+        std::move(selfsend_payment_proposals),
+        discretized_transaction_fee,
+        TxExtra{},
+        tx_proposal));
+
+    // 5. tx proposal prefix
     std::string version_string;
     version_string.reserve(3);
     make_versioning_string(SpTxSquashedV1::SemanticRulesVersion::MOCK, version_string);
@@ -311,7 +324,14 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
     rct::key tx_proposal_prefix;
     tx_proposal.get_proposal_prefix(version_string, local_user_sp_keys.k_vb, tx_proposal_prefix);
 
-    // 4. prepare for legacy ring signatures
+    // 6. get ledger mappings for the input membership proofs
+    // note: do this after making the tx proposal to demo that inputs don't have to be on-chain when proposing a tx
+    std::unordered_map<crypto::key_image, std::uint64_t> legacy_input_ledger_mappings;
+    std::unordered_map<crypto::key_image, std::uint64_t> sp_input_ledger_mappings;
+    ASSERT_TRUE(try_get_membership_proof_real_reference_mappings(legacy_contextual_inputs, legacy_input_ledger_mappings));
+    ASSERT_TRUE(try_get_membership_proof_real_reference_mappings(sp_contextual_inputs, sp_input_ledger_mappings));
+
+    // 7. prepare for legacy ring signatures
     std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps;
     ASSERT_NO_THROW(make_mock_legacy_ring_signature_preps_for_inputs_v1(tx_proposal_prefix,
         legacy_input_ledger_mappings,
@@ -320,7 +340,7 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
         ledger_context_inout,
         legacy_ring_signature_preps));
 
-    // 5. prepare for seraphis membership proofs
+    // 8. prepare for seraphis membership proofs
     std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps;
     ASSERT_NO_THROW(make_mock_sp_membership_proof_preps_for_inputs_v1(sp_input_ledger_mappings,
         tx_proposal.m_sp_input_proposals,
@@ -330,7 +350,7 @@ static void construct_tx_for_mock_ledger_v1(const sp::legacy_mock_keys &local_us
         ledger_context_inout,
         sp_membership_proof_preps));
 
-    // 6. complete tx
+    // 9. complete tx
     ASSERT_NO_THROW(make_seraphis_tx_squashed_v1(SpTxSquashedV1::SemanticRulesVersion::MOCK,
         tx_proposal,
         std::move(legacy_ring_signature_preps),

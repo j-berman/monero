@@ -126,6 +126,37 @@ void make_tx_proofs_prefix_v1(const SpBalanceProofV1 &balance_proof,
     const std::vector<SpMembershipProofV1> &sp_membership_proofs,
     rct::key &tx_proofs_prefix_out);
 /**
+* brief: try_prepare_inputs_and_outputs_for_transfer_v1 - try to select inputs then finalize outputs for a tx
+* param: change_address -
+* param: dummy_address -
+* param: local_user_input_selector -
+* param: tx_fee_calculator -
+* param: fee_per_tx_weight -
+* param: max_inputs -
+* param: normal_payment_proposals -
+* param: selfsend_payment_proposals -
+* param: k_view_balance -
+* outparam: legacy_contextual_inputs_out -
+* outparam: sp_contextual_inputs_out -
+* outparam: final_normal_payment_proposals_out -
+* outparam: final_selfsend_payment_proposals_out -
+* outparam: discretized_transaction_fee_out -
+*/
+bool try_prepare_inputs_and_outputs_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
+    const jamtis::JamtisDestinationV1 &dummy_address,
+    const InputSelectorV1 &local_user_input_selector,
+    const FeeCalculator &tx_fee_calculator,
+    const rct::xmr_amount fee_per_tx_weight,
+    const std::size_t max_inputs,
+    std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
+    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
+    const crypto::secret_key &k_view_balance,
+    std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs_out,
+    std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs_out,
+    std::vector<jamtis::JamtisPaymentProposalV1> &final_normal_payment_proposals_out,
+    std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &final_selfsend_payment_proposals_out,
+    DiscretizedFee &discretized_transaction_fee_out);
+/**
 * brief: check_v1_tx_proposal_semantics_v1 - check semantics of a tx proposal
 *   - throws if a check fails
 *   - outputs should have unique and canonical onetime addresses
@@ -159,35 +190,13 @@ void make_v1_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1> normal_
     std::vector<SpInputProposalV1> sp_input_proposals,
     std::vector<ExtraFieldElement> additional_memo_elements,
     SpTxProposalV1 &tx_proposal_out);
-/**
-* brief: try_make_v1_tx_proposal_for_transfer_v1 - try to select inputs then make a v1 tx proposal for specified outlays
-* param: change_address -
-* param: dummy_address -
-* param: local_user_input_selector -
-* param: tx_fee_calculator -
-* param: fee_per_tx_weight -
-* param: max_inputs -
-* param: normal_payment_proposals -
-* param: selfsend_payment_proposals -
-* param: partial_memo_for_tx -
-* param: k_view_balance -
-* outparam: tx_proposal_out -
-* outparam: legacy_input_ledger_mappings_out -
-* outparam: sp_input_ledger_mappings_out -
-*/
-bool try_make_v1_tx_proposal_for_transfer_v1(const jamtis::JamtisDestinationV1 &change_address,
-    const jamtis::JamtisDestinationV1 &dummy_address,
-    const InputSelectorV1 &local_user_input_selector,
-    const FeeCalculator &tx_fee_calculator,
-    const rct::xmr_amount fee_per_tx_weight,
-    const std::size_t max_inputs,
+void make_v1_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
+    const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> selfsend_payment_proposals,
-    TxExtra partial_memo_for_tx,
-    const crypto::secret_key &k_view_balance,
-    SpTxProposalV1 &tx_proposal_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &legacy_input_ledger_mappings_out,
-    std::unordered_map<crypto::key_image, std::uint64_t> &sp_input_ledger_mappings_out);
+    const DiscretizedFee &discretized_transaction_fee,
+    const TxExtra &partial_memo_for_tx,
+    SpTxProposalV1 &tx_proposal_out);
 /**
 * brief: make_v1_balance_proof_v1 - make v1 tx balance proof (BP+ for range proofs; balance check is sum-to-zero)
 *   - range proofs: for seraphis input image amount commitments and output commitments (squashed enote model)
