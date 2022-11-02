@@ -95,13 +95,11 @@
 #include "ringct/rctTypes.h"
 
 //third party headers
-#include <boost/utility/string_ref.hpp>
 
 //standard headers
 #include <vector>
 
 //forward declarations
-namespace sp { class SpTranscriptBuilder; }
 
 
 namespace sp
@@ -112,166 +110,156 @@ namespace sp
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////
-// Seraphis composition proof
+// CLSAG (see src/ringct/rctTypes.h)
 ///
-struct SpCompositionProof final
+/*
+struct clsag
 {
-    // challenge
-    rct::key c;
-    // responses
-    rct::key r_t1, r_t2, r_ki;
-    // intermediate proof key (stored as (1/8)*K_t1)
-    rct::key K_t1;
-    // key image KI: not stored with proof
-    // main proof key K: not stored with proof
-    // message m: not stored with proof
+    keyV s; // scalars/responses
+    key c1; // challenge
 
-    static std::size_t size_bytes() { return 32*5; }
-};
-inline const boost::string_ref container_name(const SpCompositionProof&) { return "SpCompositionProof"; }
-void append_to_transcript(const SpCompositionProof &container, SpTranscriptBuilder &transcript_inout);
+    key I; // signing key image
+    key D; // commitment key image
+}
+*/
 
 ////
-// Multisig signature proposal for seraphis composition proofs
+// Multisig signature proposal for CLSAG proofs
 //
 // WARNING: must only use a 'proposal' to make ONE 'signature' (or signature attempt),
 //          after that the opening privkeys should be deleted immediately
 ///
-struct SpCompositionProofMultisigProposal final
+struct CLSAGMultisigProposal final
 {
-    // message
+    // message to be signed
     rct::key message;
-    // main proof key K
-    rct::key K;
-    // key image KI
+    // ring of nominal proof keys
+    rct::keyV nominal_proof_Ks;
+    // ring of nominal ancillary proof keys (Pedersen commitments)
+    rct::keyV nominal_pedersen_Cs;
+    // masked Pedersen commitment at index l (commitment to zero: nominal_pedersen_Cs[l] - masked_C = z G)
+    rct::key masked_C;
+    // main key image KI
     crypto::key_image KI;
+    // ancillary key image D (note: D is stored as '1/8 * D' in the rct::clsag struct, but is stored unmultiplied here)
+    // note: D = z * Hp(nominal_proof_Ks[l])
+    crypto::key_image D;
+    // decoy responses for each nominal {proof key, ancillary proof key} pair (the decoy at index l will be replaced by
+    //    the real multisig aggregate response in the final proof)
+    rct::keyV decoy_responses;
 
-    // signature nonce (shared component): alpha_t1
-    crypto::secret_key signature_nonce_K_t1;
-    // signature nonce (shared component): alpha_t2
-    crypto::secret_key signature_nonce_K_t2;
+    // real proof key's index in nominal proof keys
+    std::uint32_t l;
+
+    // range-checked access to the real proof key
+    const rct::key& main_proof_key() const;
 };
 
 ////
-// Multisig partially signed composition proof (from one multisig participant)
-// - multisig assumes only proof component KI is subject to multisig signing (key z is split between signers)
-// - store signature opening for KI component (response r_ki)
+// Multisig partially signed CLSAG (from one multisig participant)
+// - stores multisig partial response for proof position at index l
+// note: does not store ring members because those are not included in the final rct::clsag; note that the ring members
+//       are hashed into c_0, so checking that c_0 is consistent between partial sigs is sufficient to ensure partial sigs
+//       are combinable
 ///
-struct SpCompositionProofMultisigPartial final
+struct CLSAGMultisigPartial final
 {
     // message
     rct::key message;
     // main proof key K
-    rct::key K;
+    rct::key main_proof_key_K;
+    // real proof key's index in nominal proof keys
+    std::uint32_t l;
+
+    // responses for each nominal {proof key, ancillary proof key} pair 
+    // - the response at index l is this multisig partial signature's partial response
+    rct::keyV responses;
+    // challenge
+    rct::key c_0;
     // key image KI
     crypto::key_image KI;
-
-    // challenge
-    rct::key c;
-    // responses r_t1, r_t2
-    rct::key r_t1, r_t2;
-    // intermediate proof key K_t1
-    rct::key K_t1;
-
-    // partial response for r_ki (from one multisig participant)
-    rct::key r_ki_partial;
+    // ancillary key image D
+    crypto::key_image D;
 };
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////// Main /////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/**
-* brief: make_sp_composition_proof - create a Seraphis composition proof
-* param: message - message to insert in Fiat-Shamir transform hash
-* param: K - main proof key = x G + y X + z U
-* param: x - secret key
-* param: y - secret key
-* param: z - secret key
-* outparam: proof_out - Seraphis composition proof
-*/
-void make_sp_composition_proof(const rct::key &message,
-    const rct::key &K,
-    const crypto::secret_key &x,
-    const crypto::secret_key &y,
-    const crypto::secret_key &z,
-    SpCompositionProof &proof_out);
-/**
-* brief: verify_sp_composition_proof - verify a Seraphis composition proof
-* param: proof - proof to verify
-* param: message - message to insert in Fiat-Shamir transform hash
-* param: K - main proof key = x G + y X + z U
-* param: KI - proof key image = (z/y) U
-* return: true/false on verification result
-*/
-bool verify_sp_composition_proof(const SpCompositionProof &proof,
-    const rct::key &message,
-    const rct::key &K,
-    const crypto::key_image &KI);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////// Multisig ///////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
-* brief: make_sp_composition_multisig_proposal - propose to make a multisig Seraphis composition proof
+* brief: make_clsag_multisig_proposal - propose to make a multisig CLSAG proof
 * param: message - message to insert in the proof's Fiat-Shamir transform hash
-* param: K - main proof key
-* param: KI - key image
-* outparam: proposal_out - Seraphis composition proof multisig proposal
+* param: nominal_proof_Ks - ring of main proof keys
+* param: nominal_pedersen_Cs - ring of auxilliary proof keys (Pedersen commitments)
+* param: masked_C - masked auxilliary proof key at index l (commitment to zero: nominal_pedersen_Cs[l] - masked_C = z G)
+* param: KI - main key image
+* param: D - auxilliary key image
+* param: l - index of the real signing keys in the key rings
+* outparam: proposal_out - CLSAG multisig proposal
 */
-void make_sp_composition_multisig_proposal(const rct::key &message,
-    const rct::key &K,
+void make_clsag_multisig_proposal(const rct::key &message,
+    rct::keyV nominal_proof_Ks,
+    rct::keyV nominal_pedersen_Cs,
+    const rct::key &masked_C,
     const crypto::key_image &KI,
-    SpCompositionProofMultisigProposal &proposal_out);
+    const crypto::key_image &D,
+    const std::uint32_t l,
+    CLSAGMultisigProposal &proposal_out);
 /**
-* brief: make_sp_composition_multisig_partial_sig - make local multisig signer's partial signature for a Seraphis composition
-*        proof
-*   - caller must validate the multisig proposal
-*       - is the key image well-made?
-*       - is the main key legitimate?
+* brief: make_clsag_multisig_partial_sig - make local multisig signer's partial signature for a CLSAG proof
+*   - caller must validate the CLSAG multisig proposal
+*       - are the key images well-made?
+*       - are the main key, ancillary key, and masked key legitimate?
 *       - is the message correct?
+*       - are all the decoy ring members valid?
 * param: proposal - proof proposal to construct proof partial signature from
-* param: x - secret key
-* param: y - secret key
-* param: z_e - secret key of multisig signer e
-* param: signer_pub_nonces - signature nonce pubkeys (1/8) * {alpha_{ki,1,e}*U,  alpha_{ki,2,e}*U} from all signers
-*                            (including local signer)
-* param: local_nonce_1_priv - alpha_{ki,1,e} for local signer
-* param: local_nonce_2_priv - alpha_{ki,2,e} for local signer
+* param: k_e - secret key of multisig signer e for main proof key at position l
+* param: z_e - secret key of multisig signer e for commitment to zero at position l (for the auxilliary component)
+* param: signer_pub_nonces_G - signature nonce pubkeys (1/8) * {alpha_{1,e}*G,  alpha_{2,e}*G} from all signers
+*                              (including local signer)
+* param: signer_pub_nonces_Hp - signature nonce pubkeys (1/8) * {alpha_{1,e}*Hp(K[l]),  alpha_{2,e}*Hp(K[l])} from all
+*                              signers (including local signer)
+* param: local_nonce_1_priv - alpha_{1,e} for local signer
+* param: local_nonce_2_priv - alpha_{2,e} for local signer
 * outparam: partial_sig_out - partially signed Seraphis composition proof
 */
-void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigProposal &proposal,
-    const crypto::secret_key &x,
-    const crypto::secret_key &y,
+void make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
+    const crypto::secret_key &k_e,
     const crypto::secret_key &z_e,
-    const std::vector<MultisigPubNonces> &signer_pub_nonces,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces_G,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces_Hp,
     const crypto::secret_key &local_nonce_1_priv,
     const crypto::secret_key &local_nonce_2_priv,
-    SpCompositionProofMultisigPartial &partial_sig_out);
+    CLSAGMultisigPartial &partial_sig_out);
 /**
-* brief: try_make_sp_composition_multisig_partial_sig - make a partial signature using a nonce record (nonce safety guarantee)
-*   - caller must validate the multisig proposal
-* param: ...(see make_sp_composition_multisig_partial_sig())
+* brief: try_make_clsag_multisig_partial_sig - make a partial signature using a nonce record (nonce safety guarantee)
+*   - caller must validate the CLSAG multisig proposal
+* param: ...(see make_clsag_multisig_partial_sig())
 * param: filter - filter representing the multisig signer group that is supposedly working on this signature
 * inoutparam: nonce_record_inout - a record of nonces for makeing partial signatures; used nonces will be cleared
 * outparam: partial_sig_out - the partial signature
 * return: true if creating the partial signature succeeded
 */
-bool try_make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigProposal &proposal,
-    const crypto::secret_key &x,
-    const crypto::secret_key &y,
+bool try_make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
+    const crypto::secret_key &k_e,
     const crypto::secret_key &z_e,
-    const std::vector<MultisigPubNonces> &signer_pub_nonces,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces_G,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces_Hp,
     const multisig::signer_set_filter filter,
     MultisigNonceRecord &nonce_record_inout,
-    SpCompositionProofMultisigPartial &partial_sig_out);
+    CLSAGMultisigPartial &partial_sig_out);
 /**
-* brief: finalize_sp_composition_multisig_proof - create a Seraphis composition proof from multisig partial signatures
+* brief: finalize_clsag_multisig_proof - create a CLSAG proof from multisig partial signatures
 * param: partial_sigs - partial signatures from enough multisig participants to complete a full proof
-* outparam: proof_out - Seraphis composition proof
+* param: nominal_proof_Ks - main proof ring member keys used by the proof (for validating the assembled proof)
+* param: nominal_pedersen_Cs - main proof ring member keys used by the proof (for validating the assembled proof)
+* param: masked_commitment - masked commitment used by the proof (for validating the assembled proof)
+* outparam: proof_out - CLSAG
 */
-void finalize_sp_composition_multisig_proof(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
-    SpCompositionProof &proof_out);
+void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
+    const rct::keyV &nominal_proof_Ks,
+    const rct::keyV &nominal_pedersen_Cs,
+    const rct::key &masked_commitment,
+    rct::clsag &proof_out);
 
 } //namespace sp

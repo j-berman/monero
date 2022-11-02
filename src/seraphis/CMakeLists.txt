@@ -28,6 +28,7 @@
 
 set(seraphis_sources
   bulletproofs_plus2.cpp
+  clsag_multisig.cpp
   grootle.cpp
   jamtis_address_tag_utils.cpp
   jamtis_address_utils.cpp
