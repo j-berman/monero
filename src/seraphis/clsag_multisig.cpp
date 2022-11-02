@@ -124,7 +124,7 @@ void make_clsag_multisig_proposal(const rct::key &message,
     // checks
     const std::size_t num_ring_members{nominal_proof_Ks.size()};
 
-    CHECK_AND_ASSERT_THROW_MES(nominal_pedersen_Cs.size() < num_ring_members,
+    CHECK_AND_ASSERT_THROW_MES(nominal_pedersen_Cs.size() == num_ring_members,
         "make CLSAG multisig proposal: pedersen Cs don't line up with proof Ks.");
     CHECK_AND_ASSERT_THROW_MES(l < num_ring_members, "make CLSAG multisig proposal: l is out of range.");
 
@@ -368,14 +368,14 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
         CHECK_AND_ASSERT_THROW_MES(num_ring_members == partial_sig.responses.size(),
             "finalize clsag multisig proof: input partial sigs don't match!");;
 
-        for (std::size_t i{0}; i < num_ring_members; ++i)
+        for (std::size_t ring_index{0}; ring_index < num_ring_members; ++ring_index)
         {
             // the response at the real signing index is a partial signature, which is unique per signer, so it isn't
             //    checked here
-            if (i == real_signing_index)
+            if (ring_index == real_signing_index)
                 continue;
 
-            CHECK_AND_ASSERT_THROW_MES(partial_sig.responses[i] == partial_sigs[0].responses[i],
+            CHECK_AND_ASSERT_THROW_MES(partial_sig.responses[ring_index] == partial_sigs[0].responses[ring_index],
                 "finalize clsag multisig proof: input partial sigs don't match!");
         }
 
@@ -400,7 +400,7 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
     proof_out.s  = partial_sigs[0].responses;
     proof_out.c1 = partial_sigs[0].c_0;  //note: c_0 is correct notation according to the paper, c1 is a typo
     proof_out.I  = rct::ki2rct(partial_sigs[0].KI);
-    proof_out.D  = rct::ki2rct(partial_sigs[0].D);
+    proof_out.D  = rct::scalarmultKey(rct::ki2rct(partial_sigs[0].D), rct::INV_EIGHT);
 
     proof_out.s[real_signing_index] = rct::zero();
     for (const CLSAGMultisigPartial &partial_sig : partial_sigs)
@@ -416,8 +416,8 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
     rct::ctkeyV ring_members;
     ring_members.reserve(num_ring_members);
 
-    for (std::size_t i{0}; i < num_ring_members; ++i)
-        ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[i], nominal_pedersen_Cs[i]});
+    for (std::size_t ring_index{0}; ring_index < num_ring_members; ++ring_index)
+        ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[ring_index], nominal_pedersen_Cs[ring_index]});
 
     CHECK_AND_ASSERT_THROW_MES(rct::verRctCLSAGSimple(partial_sigs[0].message,
             proof_out,

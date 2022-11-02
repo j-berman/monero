@@ -37,7 +37,9 @@
 #include "multisig/multisig_partial_cn_key_image_msg.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctOps.h"
+#include "ringct/rctSigs.h"
 #include "ringct/rctTypes.h"
+#include "seraphis/clsag_multisig.h"
 #include "seraphis/jamtis_core_utils.h"
 #include "seraphis/jamtis_destination.h"
 #include "seraphis/jamtis_payment_proposal.h"
@@ -175,6 +177,265 @@ static void convert_multisig_accounts(const cryptonote::account_generator_era ne
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void multisig_cn_key_image_recovery(const std::vector<multisig::multisig_account> &accounts,
+    //[base key for key image : shared offset privkey material in base key]
+    const std::unordered_map<crypto::public_key, crypto::secret_key> &saved_key_components,
+    std::unordered_map<crypto::public_key, crypto::key_image> &recovered_key_images_out)
+{
+    // 1. prepare partial key image messages for the key image base keys from all multisig group members
+    std::unordered_map<crypto::public_key,
+        std::unordered_map<crypto::public_key, multisig::multisig_partial_cn_key_image_msg>> partial_ki_msgs;
+
+    for (const multisig::multisig_account &account : accounts)
+    {
+        ASSERT_TRUE(account.get_era() == cryptonote::account_generator_era::cryptonote);
+
+        for (const auto &saved_keys : saved_key_components)
+        {
+            EXPECT_NO_THROW((partial_ki_msgs[saved_keys.first][account.get_base_pubkey()] =
+                    multisig::multisig_partial_cn_key_image_msg{
+                            account.get_base_privkey(),
+                            saved_keys.first,
+                            account.get_multisig_privkeys()
+                        }
+                ));
+        }
+    }
+
+    // 2. process the messages
+    std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_bases;
+    std::unordered_set<crypto::public_key> onetime_addresses_with_insufficient_partial_kis;
+    std::unordered_set<crypto::public_key> onetime_addresses_with_invalid_partial_kis;
+
+    EXPECT_NO_THROW(multisig::multisig_recover_cn_keyimage_bases(accounts[0].get_signers(),
+        accounts[0].get_threshold(),
+        accounts[0].get_multisig_pubkey(),
+        partial_ki_msgs,
+        recovered_key_image_bases,
+        onetime_addresses_with_insufficient_partial_kis,
+        onetime_addresses_with_invalid_partial_kis));
+
+    EXPECT_TRUE(onetime_addresses_with_insufficient_partial_kis.size() == 0);
+    EXPECT_TRUE(onetime_addresses_with_invalid_partial_kis.size() == 0);
+
+    // 3. add the shared offset component to each key image base
+    for (const auto &recovered_key_image_base : recovered_key_image_bases)
+    {
+        EXPECT_TRUE(saved_key_components.find(recovered_key_image_base.first) != saved_key_components.end());
+
+        // KI_shared_piece = shared_offset * Hp(base key)
+        crypto::key_image KI_shared_piece;
+        crypto::generate_key_image(recovered_key_image_base.first,
+            saved_key_components.at(recovered_key_image_base.first),
+            KI_shared_piece);
+
+        // KI = shared_offset * Hp(base key) + k_multisig * Hp(base key)
+        recovered_key_images_out[recovered_key_image_base.first] =
+            rct::rct2ki(rct::addKeys(rct::ki2rct(KI_shared_piece), rct::pk2rct(recovered_key_image_base.second)));
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static bool clsag_multisig_test(const std::uint32_t threshold,
+    const std::uint32_t num_signers,
+    const std::uint32_t ring_size)
+{
+    try
+    {
+        // we will make a CLSAG on the multisig pubkey plus multisig common key: (k_common + k_multisig) G
+
+        // prepare cryptonote multisig accounts
+        std::vector<multisig::multisig_account> accounts;
+        make_multisig_accounts(cryptonote::account_generator_era::cryptonote, threshold, num_signers, accounts);
+        if (accounts.size() == 0)
+            return false;
+
+        // K = (k_common + k_multisig) G
+        const rct::key K{
+                rct::addKeys(
+                        rct::scalarmultBase(rct::sk2rct(accounts[0].get_common_privkey())),
+                        rct::pk2rct(accounts[0].get_multisig_pubkey())
+                    )
+            };
+
+        // obtain the corresponding key image: KI = (k_common + k_multisig) Hp(K)
+        std::unordered_map<crypto::public_key, crypto::secret_key> saved_key_components;
+        std::unordered_map<crypto::public_key, crypto::key_image> recovered_key_images_out;
+        saved_key_components[rct::rct2pk(K)] = accounts[0].get_common_privkey();
+
+        multisig_cn_key_image_recovery(accounts, saved_key_components, recovered_key_images_out);  //multisig KI ceremony
+
+        EXPECT_TRUE(recovered_key_images_out.find(rct::rct2pk(K)) != recovered_key_images_out.end());
+        const crypto::key_image KI{recovered_key_images_out.at(rct::rct2pk(K))};
+
+        // C = x G + 1 H
+        // C" = -z G + C
+        // auxilliary CLSAG key: C - C" = z G
+        const rct::key x{rct::skGen()};
+        const rct::key z{rct::skGen()};
+        const rct::key C{rct::commit(1, x)};
+        rct::key masked_C;  //C" = C - z G
+        rct::subKeys(masked_C, C, rct::scalarmultBase(z));
+
+        // (1/threshold) * k_common
+        // (1/threshold) * z
+        const rct::key inv_threshold{sp::invert(rct::d2h(threshold))};
+        rct::key k_common_chunk{rct::sk2rct(accounts[0].get_common_privkey())};
+        rct::key z_chunk{z};
+        sc_mul(k_common_chunk.bytes, inv_threshold.bytes, k_common_chunk.bytes);
+        sc_mul(z_chunk.bytes, inv_threshold.bytes, z_chunk.bytes);
+
+        // auxilliary key image: D = z Hp(K)
+        crypto::key_image D;
+        crypto::generate_key_image(rct::rct2pk(K), rct::rct2sk(z), D);
+
+        // key image base: Hp(K)
+        crypto::key_image KI_base;
+        crypto::generate_key_image(rct::rct2pk(K), rct::rct2sk(rct::I), KI_base);
+
+        // make random rings of size ring_size
+        rct::keyV nominal_proof_Ks;
+        rct::keyV nominal_pedersen_Cs;
+
+        for (std::size_t ring_index{0}; ring_index < ring_size; ++ring_index)
+        {
+            nominal_proof_Ks.emplace_back(rct::pkGen());
+            nominal_pedersen_Cs.emplace_back(rct::pkGen());
+        }
+
+        // get random real signing index
+        const std::uint32_t l{crypto::rand_idx<std::uint32_t>(ring_size)};
+
+        // set real keys to sign in the rings
+        nominal_proof_Ks[l] = K;
+        nominal_pedersen_Cs[l] = C;
+
+        // combined ring members for convenience when validating the CLSAG produced
+        rct::ctkeyV ring_members;
+
+        for (std::size_t ring_index{0}; ring_index < ring_size; ++ring_index)
+            ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[ring_index], nominal_pedersen_Cs[ring_index]});
+
+        // tx proposer: make proposal and specify which other signers should try to co-sign (all of them)
+        const rct::key message{rct::zero()};
+        sp::CLSAGMultisigProposal proposal;
+        sp::make_clsag_multisig_proposal(message,
+            nominal_proof_Ks,
+            nominal_pedersen_Cs,
+            masked_C,
+            KI,
+            D,
+            l,
+            proposal);
+        multisig::signer_set_filter aggregate_filter;
+        multisig::multisig_signers_to_filter(accounts[0].get_signers(), accounts[0].get_signers(), aggregate_filter);
+
+        // get signer group permutations (all signer groups that can complete a signature)
+        std::vector<multisig::signer_set_filter> filter_permutations;
+        multisig::aggregate_multisig_signer_set_filter_to_permutations(threshold,
+            num_signers,
+            aggregate_filter,
+            filter_permutations);
+
+        // each signer prepares for each signer group it is a member of
+        std::vector<sp::MultisigNonceRecord> signer_nonce_records(num_signers);
+
+        for (std::size_t signer_index{0}; signer_index < num_signers; ++signer_index)
+        {
+            for (std::size_t filter_index{0}; filter_index < filter_permutations.size(); ++filter_index)
+            {
+                if (!multisig::signer_is_in_filter(accounts[signer_index].get_base_pubkey(),
+                        accounts[signer_index].get_signers(),
+                        filter_permutations[filter_index]))
+                    continue;
+
+                EXPECT_TRUE(signer_nonce_records[signer_index].try_add_nonces(proposal.message,
+                    proposal.main_proof_key(),
+                    filter_permutations[filter_index]));
+            }
+        }
+
+        // complete and validate each signature attempt
+        std::vector<sp::CLSAGMultisigPartial> partial_sigs;
+        std::vector<sp::MultisigPubNonces> signer_pub_nonces_G;  //stored with *(1/8)
+        std::vector<sp::MultisigPubNonces> signer_pub_nonces_Hp;  //stored with *(1/8)
+        crypto::secret_key k_e_temp;
+        rct::clsag proof;
+
+        for (const multisig::signer_set_filter filter : filter_permutations)
+        {
+            partial_sigs.clear();
+            signer_pub_nonces_G.clear();
+            signer_pub_nonces_Hp.clear();
+            partial_sigs.reserve(threshold);
+            signer_pub_nonces_G.reserve(threshold);
+            signer_pub_nonces_Hp.reserve(threshold);
+
+            // assemble nonce pubkeys for this signing attempt
+            for (std::size_t signer_index{0}; signer_index < num_signers; ++signer_index)
+            {
+                if (!multisig::signer_is_in_filter(accounts[signer_index].get_base_pubkey(),
+                        accounts[signer_index].get_signers(),
+                        filter))
+                    continue;
+
+                EXPECT_TRUE(signer_nonce_records[signer_index].try_get_nonce_pubkeys_for_base(proposal.message,
+                    proposal.main_proof_key(),
+                    filter,
+                    rct::G,
+                    add_element(signer_pub_nonces_G)));
+                EXPECT_TRUE(signer_nonce_records[signer_index].try_get_nonce_pubkeys_for_base(proposal.message,
+                    proposal.main_proof_key(),
+                    filter,
+                    rct::ki2rct(KI_base),
+                    add_element(signer_pub_nonces_Hp)));
+            }
+
+            // each signer partially signs for this attempt
+            for (std::size_t signer_index{0}; signer_index < num_signers; ++signer_index)
+            {
+                // get signing privkey
+                if (!accounts[signer_index].try_get_aggregate_signing_key(filter, k_e_temp))
+                    continue;
+
+                // include shared offset
+                sc_add(to_bytes(k_e_temp), k_common_chunk.bytes, to_bytes(k_e_temp));
+
+                // make partial signature
+                EXPECT_TRUE(try_make_clsag_multisig_partial_sig(
+                    proposal,
+                    k_e_temp,
+                    rct::rct2sk(z_chunk),
+                    signer_pub_nonces_G,
+                    signer_pub_nonces_Hp,
+                    filter,
+                    signer_nonce_records[signer_index],
+                    add_element(partial_sigs)));
+            }
+
+            // sanity checks
+            EXPECT_TRUE(signer_pub_nonces_G.size() == threshold);
+            EXPECT_TRUE(signer_pub_nonces_Hp.size() == threshold);
+            EXPECT_TRUE(partial_sigs.size() == threshold);
+
+            // make proof
+            sp::finalize_clsag_multisig_proof(partial_sigs,
+                nominal_proof_Ks,
+                nominal_pedersen_Cs,
+                masked_C,
+                proof);
+
+            // verify proof
+            if (!rct::verRctCLSAGSimple(message, proof, ring_members, masked_C))
+                return false;
+        }
+    }
+    catch (...) { return false; }
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static bool composition_proof_multisig_test(const std::uint32_t threshold,
     const std::uint32_t num_signers,
     const crypto::secret_key &x)
@@ -232,15 +493,15 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
 
         // complete and validate each signature attempt
         std::vector<sp::SpCompositionProofMultisigPartial> partial_sigs;
-        std::vector<sp::MultisigPubNonces> signer_nonces_pubs;  //stored with *(1/8)
+        std::vector<sp::MultisigPubNonces> signer_pub_nonces;  //stored with *(1/8)
         crypto::secret_key z_temp;
         sp::SpCompositionProof proof;
 
         for (const multisig::signer_set_filter filter : filter_permutations)
         {
-            signer_nonces_pubs.clear();
+            signer_pub_nonces.clear();
             partial_sigs.clear();
-            signer_nonces_pubs.reserve(threshold);
+            signer_pub_nonces.reserve(threshold);
             partial_sigs.reserve(threshold);
 
             // assemble nonce pubkeys for this signing attempt
@@ -255,7 +516,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                     proposal.K,
                     filter,
                     rct::pk2rct(crypto::get_U()),
-                    add_element(signer_nonces_pubs)));
+                    add_element(signer_pub_nonces)));
             }
 
             // each signer partially signs for this attempt
@@ -269,14 +530,14 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                     x,
                     accounts[signer_index].get_common_privkey(),
                     z_temp,
-                    signer_nonces_pubs,
+                    signer_pub_nonces,
                     filter,
                     signer_nonce_records[signer_index],
                     add_element(partial_sigs)));
             }
 
             // sanity checks
-            EXPECT_TRUE(signer_nonces_pubs.size() == threshold);
+            EXPECT_TRUE(signer_pub_nonces.size() == threshold);
             EXPECT_TRUE(partial_sigs.size() == threshold);
 
             // make proof
@@ -451,74 +712,29 @@ static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig:
     // 3. export intermediate onetime addresses that need key images
     const auto &legacy_intermediate_records = enote_store_inout.legacy_intermediate_records();
 
-    // 4. get partial key image messages for the intermediate records' onetime addresses from all multisig group members
-    std::unordered_map<crypto::public_key,
-        std::unordered_map<crypto::public_key, multisig::multisig_partial_cn_key_image_msg>> partial_ki_msgs;
-    std::unordered_map<crypto::public_key, crypto::secret_key> saved_view_key_components;
+    std::unordered_map<crypto::public_key, crypto::secret_key> saved_key_components;
 
-    for (const multisig::multisig_account &account : accounts)
+    for (const auto &intermediate_record : legacy_intermediate_records)
     {
-        for (const auto &intermediate_record : legacy_intermediate_records)
-        {
-            rct::key onetime_address_temp;
-            intermediate_record.second.get_onetime_address(onetime_address_temp);
+        rct::key onetime_address_temp;
+        intermediate_record.second.get_onetime_address(onetime_address_temp);
 
-            EXPECT_NO_THROW((partial_ki_msgs[rct::rct2pk(onetime_address_temp)][account.get_base_pubkey()] =
-                    multisig::multisig_partial_cn_key_image_msg{
-                            account.get_base_privkey(),
-                            rct::rct2pk(onetime_address_temp),
-                            account.get_multisig_privkeys()
-                        }
-                ));
-
-            saved_view_key_components[rct::rct2pk(onetime_address_temp)] =
-                intermediate_record.second.m_record.m_enote_view_privkey;
-        }
+        saved_key_components[rct::rct2pk(onetime_address_temp)] =
+            intermediate_record.second.m_record.m_enote_view_privkey;
     }
 
-    // 5. process the messages
-    std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_bases;
-    std::unordered_set<crypto::public_key> onetime_addresses_with_insufficient_partial_kis;
-    std::unordered_set<crypto::public_key> onetime_addresses_with_invalid_partial_kis;
-
-    EXPECT_NO_THROW(multisig::multisig_recover_cn_keyimage_bases(accounts[0].get_signers(),
-        accounts[0].get_threshold(),
-        accounts[0].get_multisig_pubkey(),
-        partial_ki_msgs,
-        recovered_key_image_bases,
-        onetime_addresses_with_insufficient_partial_kis,
-        onetime_addresses_with_invalid_partial_kis));
-
-    EXPECT_TRUE(onetime_addresses_with_insufficient_partial_kis.size() == 0);
-    EXPECT_TRUE(onetime_addresses_with_invalid_partial_kis.size() == 0);
-
-    // 6. add the view-key component to each key image base
+    // 4. recover key images
     std::unordered_map<crypto::public_key, crypto::key_image> recovered_key_images;
+    multisig_cn_key_image_recovery(accounts, saved_key_components, recovered_key_images);  //multisig KI ceremony
 
-    for (const auto &recovered_key_image_base : recovered_key_image_bases)
-    {
-        EXPECT_TRUE(saved_view_key_components.find(recovered_key_image_base.first) != saved_view_key_components.end());
-
-        // enote view privkey = [address: Hn(r K^v, t)] [subaddress: Hn(r K^{v,i}, t) + Hn(k^v, i)]
-        // KI_view_key_component = enote_view_privkey * Hp(Ko)
-        crypto::key_image KI_view_key_component;
-        crypto::generate_key_image(recovered_key_image_base.first,
-            saved_view_key_components.at(recovered_key_image_base.first),
-            KI_view_key_component);
-
-        // KI = enote_view_privkey * Hp(Ko) + k^s * Hp(Ko)
-        recovered_key_images[recovered_key_image_base.first] =
-            rct::rct2ki(rct::addKeys(rct::ki2rct(KI_view_key_component), rct::pk2rct(recovered_key_image_base.second)));
-    }
-
-    // 7. import acquired key images (will fail if the onetime addresses and key images don't line up)
+    // 5. import acquired key images (will fail if the onetime addresses and key images don't line up)
     for (const auto &recovered_key_image : recovered_key_images)
     {
         ASSERT_NO_THROW(enote_store_inout.import_legacy_key_image(recovered_key_image.second,
             rct::pk2rct(recovered_key_image.first)));
     }
 
-    // 8. legacy key-image-refresh scan
+    // 6. legacy key-image-refresh scan
     refresh_user_enote_store_legacy_intermediate(rct::pk2rct(accounts[0].get_multisig_pubkey()),
         legacy_subaddress_map,
         accounts[0].get_common_privkey(),
@@ -527,10 +743,10 @@ static void refresh_user_enote_store_legacy_multisig(const std::vector<multisig:
         ledger_context,
         enote_store_inout);
 
-    // 9. check results of key image refresh scan
+    // 7. check results of key image refresh scan
     ASSERT_TRUE(enote_store_inout.legacy_intermediate_records().size() == 0);
 
-    // 10. update the legacy fullscan height to account for a complete view-only scan cycle with key image recovery
+    // 8. update the legacy fullscan height to account for a complete view-only scan cycle with key image recovery
     ASSERT_NO_THROW(enote_store_inout.set_last_legacy_fullscan_height(intermediate_height_pre_import_cycle));
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -972,6 +1188,18 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         {SpEnoteSpentStatus::SPENT_ONCHAIN}) == total_input_amount - total_spent_amount - specified_fee);
 }
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+TEST(seraphis_multisig, CLSAG_multisig)
+{
+    // test various account combinations
+    EXPECT_TRUE(clsag_multisig_test(1, 2, 2));
+    EXPECT_TRUE(clsag_multisig_test(1, 2, 3));
+    EXPECT_TRUE(clsag_multisig_test(2, 2, 2));
+    EXPECT_TRUE(clsag_multisig_test(1, 3, 2));
+    EXPECT_TRUE(clsag_multisig_test(2, 3, 2));
+    EXPECT_TRUE(clsag_multisig_test(3, 3, 2));
+    EXPECT_TRUE(clsag_multisig_test(2, 4, 2));
+}
 //-------------------------------------------------------------------------------------------------------------------
 TEST(seraphis_multisig, composition_proof_multisig)
 {
