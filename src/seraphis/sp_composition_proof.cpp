@@ -207,14 +207,14 @@ void make_sp_composition_proof(const rct::key &message,
     SpCompositionProof &proof_out)
 {
     /// input checks and initialization
-    CHECK_AND_ASSERT_THROW_MES(!(K == rct::identity()), "Bad proof key (K identity)!");
+    CHECK_AND_ASSERT_THROW_MES(!(K == rct::identity()), "make sp composition proof: bad proof key (K identity)!");
 
     // x == 0 is allowed
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(x)) == 0, "Bad private key (x)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(y)), "Bad private key (y zero)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(y)) == 0, "Bad private key (y)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(z)), "Bad private key (z zero)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(z)) == 0, "Bad private key (z)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(x)) == 0, "make sp composition proof: bad private key (x)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(y)), "make sp composition proof: bad private key (y zero)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(y)) == 0, "make sp composition proof: bad private key (y)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(z)), "make sp composition proof: bad private key (z zero)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(z)) == 0, "make sp composition proof: bad private key (z)!");
 
     // verify the input key matches the input private keys: K = x G + y X + z U
     rct::key temp_K;
@@ -222,7 +222,7 @@ void make_sp_composition_proof(const rct::key &message,
     extend_seraphis_spendkey_x(y, temp_K);
     mask_key(x, temp_K, temp_K);
 
-    CHECK_AND_ASSERT_THROW_MES(K == temp_K, "Bad proof key (K doesn't match privkeys)!");
+    CHECK_AND_ASSERT_THROW_MES(K == temp_K, "make sp composition proof: bad proof key (K doesn't match privkeys)!");
 
     const rct::key U_gen{rct::pk2rct(crypto::get_U())};
 
@@ -280,11 +280,11 @@ bool verify_sp_composition_proof(const SpCompositionProof &proof,
     const crypto::key_image &KI)
 {
     /// input checks and initialization
-    CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r_t1.bytes) == 0, "Bad response (r_t1)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r_t2.bytes) == 0, "Bad response (r_t2)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r_ki.bytes) == 0, "Bad response (r_ki)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r_t1.bytes) == 0, "verify sp composition proof: bad response (r_t1)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r_t2.bytes) == 0, "verify sp composition proof: bad response (r_t2)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r_ki.bytes) == 0, "verify sp composition proof: bad response (r_ki)!");
 
-    CHECK_AND_ASSERT_THROW_MES(!(rct::ki2rct(KI) == rct::identity()), "Invalid key image!");
+    CHECK_AND_ASSERT_THROW_MES(!(rct::ki2rct(KI) == rct::identity()), "verify sp composition proof: invalid key image!");
 
 
     /// challenge message
@@ -308,7 +308,8 @@ bool verify_sp_composition_proof(const SpCompositionProof &proof,
 
     // get K_t1
     rct::scalarmult8(K_t1_p3, proof.K_t1);
-    CHECK_AND_ASSERT_THROW_MES(!(ge_p3_is_point_at_infinity_vartime(&K_t1_p3)), "Invalid proof element K_t1!");
+    CHECK_AND_ASSERT_THROW_MES(!(ge_p3_is_point_at_infinity_vartime(&K_t1_p3)),
+         "verify sp composition proof: invalid proof element K_t1!");
 
     // get KI
     CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&KI_p3, rct::ki2rct(KI).bytes) == 0, "ge_frombytes_vartime failed!");
@@ -376,28 +377,39 @@ void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigPr
     /// input checks and initialization
     const std::size_t num_signers{signer_pub_nonces.size()};
 
-    CHECK_AND_ASSERT_THROW_MES(!(proposal.K == rct::identity()), "Bad proof key (K identity)!");
-    CHECK_AND_ASSERT_THROW_MES(!(rct::ki2rct(proposal.KI) == rct::identity()), "Bad proof key (KI identity)!");
+    CHECK_AND_ASSERT_THROW_MES(!(proposal.K == rct::identity()),
+         "make sp composition multisig partial sig: bad proof key (K identity)!");
+    CHECK_AND_ASSERT_THROW_MES(!(rct::ki2rct(proposal.KI) == rct::identity()),
+        "make sp composition multisig partial sig: bad proof key (KI identity)!");
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(proposal.signature_nonce_K_t1)),
-        "Bad private key (proposal nonce K_t1 zero)!");
+        "make sp composition multisig partial sig: bad private key (proposal nonce K_t1 zero)!");
     CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(proposal.signature_nonce_K_t1)) == 0,
-        "Bad private key (proposal nonce K_t1)!");
+        "make sp composition multisig partial sig: bad private key (proposal nonce K_t1)!");
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(proposal.signature_nonce_K_t2)),
-        "Bad private key (proposal nonce K_t2 zero)!");
+        "make sp composition multisig partial sig: bad private key (proposal nonce K_t2 zero)!");
     CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(proposal.signature_nonce_K_t2)) == 0,
-        "Bad private key (proposal nonce K_t2)!");
+        "make sp composition multisig partial sig: bad private key (proposal nonce K_t2)!");
 
     // x == 0 is allowed
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(x)) == 0, "Bad private key (x)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(y)), "Bad private key (y zero)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(y)) == 0, "Bad private key (y)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(z_e)), "Bad private key (z_e zero)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(z_e)) == 0, "Bad private key (z)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(x)) == 0,
+        "make sp composition multisig partial sig: bad private key (x)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(y)),
+    "make sp composition multisig partial sig: bad private key (y zero)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(y)) == 0,
+        "make sp composition multisig partial sig: bad private key (y)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(z_e)),
+    "make sp composition multisig partial sig: bad private key (z_e zero)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(z_e)) == 0,
+        "make sp composition multisig partial sig: bad private key (z)!");
 
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(local_nonce_1_priv)) == 0, "Bad private key (local_nonce_1_priv)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(local_nonce_1_priv)), "Bad private key (local_nonce_1_priv zero)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(local_nonce_2_priv)) == 0, "Bad private key (local_nonce_2_priv)!");
-    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(local_nonce_2_priv)), "Bad private key (local_nonce_2_priv zero)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(local_nonce_1_priv)) == 0,
+        "make sp composition multisig partial sig: bad private key (local_nonce_1_priv)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(local_nonce_1_priv)),
+        "make sp composition multisig partial sig: bad private key (local_nonce_1_priv zero)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(local_nonce_2_priv)) == 0,
+        "make sp composition multisig partial sig: bad private key (local_nonce_2_priv)!");
+    CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(local_nonce_2_priv)),
+        "make sp composition multisig partial sig: bad private key (local_nonce_2_priv zero)!");
 
     // prepare participant nonces
     std::vector<MultisigPubNonces> signer_pub_nonces_mul8;
@@ -417,7 +429,7 @@ void make_sp_composition_multisig_partial_sig(const SpCompositionProofMultisigPr
 
     CHECK_AND_ASSERT_THROW_MES(std::find(signer_pub_nonces_mul8.begin(), signer_pub_nonces_mul8.end(), local_nonce_pubs) !=
             signer_pub_nonces_mul8.end(),
-        "Local signer's opening nonces not in input set!");
+        "make sp composition multisig partial sig: local signer's opening nonces not in input set!");
 
 
     /// prepare partial signature
@@ -530,7 +542,8 @@ bool try_make_sp_composition_multisig_partial_sig(const SpCompositionProofMultis
 
     // clear the used nonces
     CHECK_AND_ASSERT_THROW_MES(nonce_record_inout.try_remove_record(proposal.message, proposal.K, filter),
-        "Sp composition proof: failed to clear nonces from nonce record (aborting partial signature)!");
+        "try make sp composition proof multisig partial sig: failed to clear nonces from nonce record (aborting partial "
+        "signature)!");
 
     // set the output partial sig AFTER used nonces are cleared, in case of exception
     partial_sig_out = std::move(partial_sig_temp);
@@ -542,19 +555,27 @@ void finalize_sp_composition_multisig_proof(const std::vector<SpCompositionProof
     SpCompositionProof &proof_out)
 {
     /// input checks
-    CHECK_AND_ASSERT_THROW_MES(partial_sigs.size() > 0, "No partial signatures to make proof out of!");
+    CHECK_AND_ASSERT_THROW_MES(partial_sigs.size() > 0,
+        "finalize sp composition multisig proof: no partial signatures to make proof out of!");
 
     // common parts between partial signatures should match
     for (const SpCompositionProofMultisigPartial &partial_sig : partial_sigs)
     {
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].c == partial_sig.c, "Input partial sigs don't match!");
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].r_t1 == partial_sig.r_t1, "Input partial sigs don't match!");
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].r_t2 == partial_sig.r_t2, "Input partial sigs don't match!");
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].K_t1 == partial_sig.K_t1, "Input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].c == partial_sig.c,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].r_t1 == partial_sig.r_t1,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].r_t2 == partial_sig.r_t2,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].K_t1 == partial_sig.K_t1,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
 
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].K == partial_sig.K, "Input partial sigs don't match!");
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].KI == partial_sig.KI, "Input partial sigs don't match!");
-        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].message == partial_sig.message, "Input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].K == partial_sig.K,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].KI == partial_sig.KI,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
+        CHECK_AND_ASSERT_THROW_MES(partial_sigs[0].message == partial_sig.message,
+            "finalize sp composition multisig proof: input partial sigs don't match!");
     }
 
 
