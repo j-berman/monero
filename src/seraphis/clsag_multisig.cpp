@@ -340,8 +340,7 @@ bool try_make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
 }
 //-------------------------------------------------------------------------------------------------------------------
 void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
-    const rct::keyV &nominal_proof_Ks,
-    const rct::keyV &nominal_pedersen_Cs,
+    const rct::ctkeyV &ring_members,
     const rct::key &masked_commitment,
     rct::clsag &proof_out)
 {
@@ -388,11 +387,9 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
     }
 
     // ring members should line up with with partial sigs
-    CHECK_AND_ASSERT_THROW_MES(nominal_proof_Ks.size() == num_ring_members,
+    CHECK_AND_ASSERT_THROW_MES(ring_members.size() == num_ring_members,
         "finalize clsag multisig proof: ring members are inconsistent with the partial sigs!");
-    CHECK_AND_ASSERT_THROW_MES(nominal_pedersen_Cs.size() == num_ring_members,
-        "finalize clsag multisig proof: ring members are inconsistent with the partial sigs!");
-    CHECK_AND_ASSERT_THROW_MES(nominal_proof_Ks[real_signing_index] == partial_sigs[0].main_proof_key_K,
+    CHECK_AND_ASSERT_THROW_MES(ring_members[real_signing_index].dest == partial_sigs[0].main_proof_key_K,
         "finalize clsag multisig proof: ring members are inconsistent with the partial sigs!");
 
 
@@ -413,17 +410,31 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
 
 
     /// verify that proof assembly succeeded
-    rct::ctkeyV ring_members;
-    ring_members.reserve(num_ring_members);
-
-    for (std::size_t ring_index{0}; ring_index < num_ring_members; ++ring_index)
-        ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[ring_index], nominal_pedersen_Cs[ring_index]});
-
     CHECK_AND_ASSERT_THROW_MES(rct::verRctCLSAGSimple(partial_sigs[0].message,
             proof_out,
             ring_members,
             masked_commitment),
         "Multisig CLSAG failed to verify on assembly!");
+}
+//-------------------------------------------------------------------------------------------------------------------
+void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
+    const rct::keyV &nominal_proof_Ks,
+    const rct::keyV &nominal_pedersen_Cs,
+    const rct::key &masked_commitment,
+    rct::clsag &proof_out)
+{
+    // merge nominal proof keys and pedersen commitments
+    CHECK_AND_ASSERT_THROW_MES(nominal_proof_Ks.size() == nominal_pedersen_Cs.size(),
+        "finalize clsag multisig proof: ring member keys are inconsistent!");
+
+    rct::ctkeyV ring_members;
+    ring_members.reserve(nominal_proof_Ks.size());
+
+    for (std::size_t ring_index{0}; ring_index < nominal_proof_Ks.size(); ++ring_index)
+        ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[ring_index], nominal_pedersen_Cs[ring_index]});
+
+    // finish finalizing the proof
+    finalize_clsag_multisig_proof(partial_sigs, ring_members, masked_commitment, proof_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

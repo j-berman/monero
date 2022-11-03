@@ -257,6 +257,10 @@ bool try_make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
 * outparam: proof_out - CLSAG
 */
 void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
+    const rct::ctkeyV &ring_members,
+    const rct::key &masked_commitment,
+    rct::clsag &proof_out);
+void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
     const rct::keyV &nominal_proof_Ks,
     const rct::keyV &nominal_pedersen_Cs,
     const rct::key &masked_commitment,
