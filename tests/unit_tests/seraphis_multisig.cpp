@@ -294,39 +294,22 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
         crypto::generate_key_image(rct::rct2pk(K), rct::rct2sk(rct::I), KI_base);
 
         // make random rings of size ring_size
-        rct::keyV nominal_proof_Ks;
-        rct::keyV nominal_pedersen_Cs;
+        rct::ctkeyV ring_members;
 
         for (std::size_t ring_index{0}; ring_index < ring_size; ++ring_index)
-        {
-            nominal_proof_Ks.emplace_back(rct::pkGen());
-            nominal_pedersen_Cs.emplace_back(rct::pkGen());
-        }
+            ring_members.emplace_back(rct::ctkey{rct::pkGen(), rct::pkGen()});
 
         // get random real signing index
         const std::uint32_t l{crypto::rand_idx<std::uint32_t>(ring_size)};
 
         // set real keys to sign in the rings
-        nominal_proof_Ks[l] = K;
-        nominal_pedersen_Cs[l] = C;
-
-        // combined ring members for convenience when validating the CLSAG produced
-        rct::ctkeyV ring_members;
-
-        for (std::size_t ring_index{0}; ring_index < ring_size; ++ring_index)
-            ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[ring_index], nominal_pedersen_Cs[ring_index]});
+        ring_members[l] = rct::ctkey{.dest = K, .mask = C};
 
         // tx proposer: make proposal and specify which other signers should try to co-sign (all of them)
         const rct::key message{rct::zero()};
         sp::CLSAGMultisigProposal proposal;
-        sp::make_clsag_multisig_proposal(message,
-            nominal_proof_Ks,
-            nominal_pedersen_Cs,
-            masked_C,
-            KI,
-            D,
-            l,
-            proposal);
+        sp::make_clsag_multisig_proposal(message, ring_members, masked_C, KI, D, l, proposal);
+
         multisig::signer_set_filter aggregate_filter;
         multisig::multisig_signers_to_filter(accounts[0].get_signers(), accounts[0].get_signers(), aggregate_filter);
 
@@ -419,11 +402,7 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
             EXPECT_TRUE(partial_sigs.size() == threshold);
 
             // make proof
-            sp::finalize_clsag_multisig_proof(partial_sigs,
-                nominal_proof_Ks,
-                nominal_pedersen_Cs,
-                masked_C,
-                proof);
+            sp::finalize_clsag_multisig_proof(partial_sigs, ring_members, masked_C, proof);
 
             // verify proof
             if (!rct::verRctCLSAGSimple(message, proof, ring_members, masked_C))
@@ -983,6 +962,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     SpMultisigTxProposalV1 multisig_tx_proposal;
     ASSERT_NO_THROW(make_v1_multisig_tx_proposal_v1(legacy_contextual_inputs,
         sp_contextual_inputs,
+        {}, //todo: legacy ring signature preps (maybe use map of preps instead of vector for easier alignment with legacy inputs)
         semantic_rules_version,
         aggregate_filter_of_requested_multisig_signers,
         std::move(normal_payment_proposals),

@@ -81,7 +81,7 @@ struct LegacyMultisigInputProposalV1 final
     /// z
     crypto::secret_key m_commitment_mask;
 
-    /// cached legacy enote indices of a legacy ring signature (should include a reference to this input proposal's enote)
+    /// cached legacy enote indices for a legacy ring signature (should include a reference to this input proposal's enote)
     std::vector<std::uint64_t> m_reference_set;
 
     /**

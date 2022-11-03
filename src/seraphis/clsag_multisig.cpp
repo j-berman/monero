@@ -106,15 +106,22 @@ static rct::keyV sum_together_multisig_pub_nonces(const std::vector<MultisigPubN
 //-------------------------------------------------------------------------------------------------------------------
 const rct::key &CLSAGMultisigProposal::main_proof_key() const
 {
-    CHECK_AND_ASSERT_THROW_MES(l < nominal_proof_Ks.size(),
+    CHECK_AND_ASSERT_THROW_MES(l < ring_members.size(),
         "CLSAGMultisigProposal (get main proof key): l is out of range.");
 
-    return nominal_proof_Ks[l];
+    return ring_members[l].dest;
+}
+//-------------------------------------------------------------------------------------------------------------------
+const rct::key &CLSAGMultisigProposal::auxilliary_proof_key() const
+{
+    CHECK_AND_ASSERT_THROW_MES(l < ring_members.size(),
+        "CLSAGMultisigProposal (get auxilliary proof key): l is out of range.");
+
+    return ring_members[l].mask;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_clsag_multisig_proposal(const rct::key &message,
-    rct::keyV nominal_proof_Ks,
-    rct::keyV nominal_pedersen_Cs,
+    rct::ctkeyV ring_members,
     const rct::key &masked_C,
     const crypto::key_image &KI,
     const crypto::key_image &D,
@@ -122,21 +129,17 @@ void make_clsag_multisig_proposal(const rct::key &message,
     CLSAGMultisigProposal &proposal_out)
 {
     // checks
-    const std::size_t num_ring_members{nominal_proof_Ks.size()};
-
-    CHECK_AND_ASSERT_THROW_MES(nominal_pedersen_Cs.size() == num_ring_members,
-        "make CLSAG multisig proposal: pedersen Cs don't line up with proof Ks.");
+    const std::size_t num_ring_members{ring_members.size()};
     CHECK_AND_ASSERT_THROW_MES(l < num_ring_members, "make CLSAG multisig proposal: l is out of range.");
 
     // assemble proposal
-    proposal_out.message             = message;
-    proposal_out.nominal_proof_Ks    = std::move(nominal_proof_Ks);
-    proposal_out.nominal_pedersen_Cs = std::move(nominal_pedersen_Cs);
-    proposal_out.masked_C            = masked_C;
-    proposal_out.KI                  = KI;
-    proposal_out.D                   = D;
-    proposal_out.decoy_responses     = rct::skvGen(num_ring_members);
-    proposal_out.l                   = l;
+    proposal_out.message          = message;
+    proposal_out.ring_members     = std::move(ring_members);
+    proposal_out.masked_C         = masked_C;
+    proposal_out.KI               = KI;
+    proposal_out.D                = D;
+    proposal_out.decoy_responses  = rct::skvGen(num_ring_members);
+    proposal_out.l                = l;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
@@ -162,9 +165,7 @@ void make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
             "make CLSAG multisig partial sig: bad private key (proposal decoy response)!");
     }
 
-    const std::size_t num_ring_members{proposal.nominal_proof_Ks.size()};
-    CHECK_AND_ASSERT_THROW_MES(proposal.nominal_pedersen_Cs.size() == num_ring_members,
-        "make CLSAG multisig partial sig: inconsistent number of pedersen commitments!");
+    const std::size_t num_ring_members{proposal.ring_members.size()};
     CHECK_AND_ASSERT_THROW_MES(proposal.decoy_responses.size() == num_ring_members,
         "make CLSAG multisig partial sig: inconsistent number of decoy responses!");
     CHECK_AND_ASSERT_THROW_MES(proposal.l < num_ring_members, "make CLSAG multisig partial sig: l is out of range.");
@@ -237,12 +238,24 @@ void make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
             sum_together_multisig_pub_nonces(signer_pub_nonces_Hp_mul8)
         };
 
+    // split the ring members
+    rct::keyV nominal_proof_Ks;
+    rct::keyV nominal_pedersen_Cs;
+    nominal_proof_Ks.reserve(num_ring_members);
+    nominal_pedersen_Cs.reserve(num_ring_members);
+
+    for (const rct::ctkey &ring_member : proposal.ring_members)
+    {
+        nominal_proof_Ks.emplace_back(ring_member.dest);
+        nominal_pedersen_Cs.emplace_back(ring_member.mask);
+    }
+
 
     /// prepare CLSAG context
     multisig::signing::CLSAG_context_t CLSAG_context;
 
-    CLSAG_context.init(proposal.nominal_proof_Ks,
-        proposal.nominal_pedersen_Cs,
+    CLSAG_context.init(nominal_proof_Ks,
+        nominal_pedersen_Cs,
         proposal.masked_C,
         proposal.message,
         rct::ki2rct(proposal.KI),
@@ -415,26 +428,6 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
             ring_members,
             masked_commitment),
         "Multisig CLSAG failed to verify on assembly!");
-}
-//-------------------------------------------------------------------------------------------------------------------
-void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
-    const rct::keyV &nominal_proof_Ks,
-    const rct::keyV &nominal_pedersen_Cs,
-    const rct::key &masked_commitment,
-    rct::clsag &proof_out)
-{
-    // merge nominal proof keys and pedersen commitments
-    CHECK_AND_ASSERT_THROW_MES(nominal_proof_Ks.size() == nominal_pedersen_Cs.size(),
-        "finalize clsag multisig proof: ring member keys are inconsistent!");
-
-    rct::ctkeyV ring_members;
-    ring_members.reserve(nominal_proof_Ks.size());
-
-    for (std::size_t ring_index{0}; ring_index < nominal_proof_Ks.size(); ++ring_index)
-        ring_members.emplace_back(rct::ctkey{nominal_proof_Ks[ring_index], nominal_pedersen_Cs[ring_index]});
-
-    // finish finalizing the proof
-    finalize_clsag_multisig_proof(partial_sigs, ring_members, masked_commitment, proof_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

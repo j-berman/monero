@@ -133,26 +133,26 @@ struct CLSAGMultisigProposal final
 {
     // message to be signed
     rct::key message;
-    // ring of nominal proof keys
-    rct::keyV nominal_proof_Ks;
-    // ring of nominal ancillary proof keys (Pedersen commitments)
-    rct::keyV nominal_pedersen_Cs;
-    // masked Pedersen commitment at index l (commitment to zero: nominal_pedersen_Cs[l] - masked_C = z G)
+    // ring of proof keys {main keys, auxilliary keys (Pedersen commitments)}
+    rct::ctkeyV ring_members;
+    // masked Pedersen commitment at index l (commitment to zero: ring_members[l].mask - masked_C = z G)
     rct::key masked_C;
     // main key image KI
     crypto::key_image KI;
     // ancillary key image D (note: D is stored as '1/8 * D' in the rct::clsag struct, but is stored unmultiplied here)
-    // note: D = z * Hp(nominal_proof_Ks[l])
+    // note: D = z * Hp(ring_members[l].dest)
     crypto::key_image D;
-    // decoy responses for each nominal {proof key, ancillary proof key} pair (the decoy at index l will be replaced by
+    // decoy responses for each {proof key, ancillary proof key} pair (the decoy at index l will be replaced by
     //    the real multisig aggregate response in the final proof)
     rct::keyV decoy_responses;
 
-    // real proof key's index in nominal proof keys
+    // real proof key's index in the ring
     std::uint32_t l;
 
-    // range-checked access to the real proof key
+    // range-checked access to the main real proof key
     const rct::key& main_proof_key() const;
+    // range-checked access to the auxilliary real proof key
+    const rct::key& auxilliary_proof_key() const;
 };
 
 ////
@@ -168,10 +168,10 @@ struct CLSAGMultisigPartial final
     rct::key message;
     // main proof key K
     rct::key main_proof_key_K;
-    // real proof key's index in nominal proof keys
+    // real proof key's index in the ring
     std::uint32_t l;
 
-    // responses for each nominal {proof key, ancillary proof key} pair 
+    // responses for each {proof key, ancillary proof key} pair 
     // - the response at index l is this multisig partial signature's partial response
     rct::keyV responses;
     // challenge
@@ -189,17 +189,16 @@ struct CLSAGMultisigPartial final
 /**
 * brief: make_clsag_multisig_proposal - propose to make a multisig CLSAG proof
 * param: message - message to insert in the proof's Fiat-Shamir transform hash
-* param: nominal_proof_Ks - ring of main proof keys
-* param: nominal_pedersen_Cs - ring of auxilliary proof keys (Pedersen commitments)
-* param: masked_C - masked auxilliary proof key at index l (commitment to zero: nominal_pedersen_Cs[l] - masked_C = z G)
+* param: ring_members - ring of proof keys {main key, auxiliary key (Pedersen commitments)}
+* param: masked_C - masked auxilliary proof key at index l
+*                   commitment to zero: ring_members[l].mask - masked_C = z G
 * param: KI - main key image
 * param: D - auxilliary key image
 * param: l - index of the real signing keys in the key rings
 * outparam: proposal_out - CLSAG multisig proposal
 */
 void make_clsag_multisig_proposal(const rct::key &message,
-    rct::keyV nominal_proof_Ks,
-    rct::keyV nominal_pedersen_Cs,
+    rct::ctkeyV ring_members,
     const rct::key &masked_C,
     const crypto::key_image &KI,
     const crypto::key_image &D,
@@ -251,18 +250,13 @@ bool try_make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
 /**
 * brief: finalize_clsag_multisig_proof - create a CLSAG proof from multisig partial signatures
 * param: partial_sigs - partial signatures from enough multisig participants to complete a full proof
-* param: nominal_proof_Ks - main proof ring member keys used by the proof (for validating the assembled proof)
+* param: ring_members - ring member keys used by the proof (for validating the assembled proof)
 * param: nominal_pedersen_Cs - main proof ring member keys used by the proof (for validating the assembled proof)
 * param: masked_commitment - masked commitment used by the proof (for validating the assembled proof)
 * outparam: proof_out - CLSAG
 */
 void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
     const rct::ctkeyV &ring_members,
-    const rct::key &masked_commitment,
-    rct::clsag &proof_out);
-void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &partial_sigs,
-    const rct::keyV &nominal_proof_Ks,
-    const rct::keyV &nominal_pedersen_Cs,
     const rct::key &masked_commitment,
     rct::clsag &proof_out);
 

@@ -99,6 +99,7 @@ void check_v1_sp_multisig_input_proposal_semantics_v1(const SpMultisigInputPropo
 * param: input_context -
 * param: address_mask -
 * param: commitment_mask -
+* param: reference_set -
 * outparam: proposal_out -
 */
 void make_v1_legacy_multisig_input_proposal_v1(const LegacyEnoteVariant &enote,
@@ -107,9 +108,11 @@ void make_v1_legacy_multisig_input_proposal_v1(const LegacyEnoteVariant &enote,
     const std::uint64_t tx_output_index,
     const std::uint64_t unlock_time,
     const crypto::secret_key &commitment_mask,
+    std::vector<std::uint64_t> reference_set,
     LegacyMultisigInputProposalV1 &proposal_out);
 void make_v1_legacy_multisig_input_proposal_v1(const LegacyEnoteRecord &enote_record,
     const crypto::secret_key &commitment_mask,
+    std::vector<std::uint64_t> reference_set,
     LegacyMultisigInputProposalV1 &proposal_out);
 /**
 * brief: make_v1_sp_multisig_input_proposal_v1 - make a serpahis multisig input proposal (can be sent to other people)
@@ -163,6 +166,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
 * param: version_string -
 * param: legacy_multisig_input_proposals -
 * param: sp_multisig_input_proposals -
+* param: legacy_ring_signature_preps -
 * param: aggregate_signer_set_filter -
 * param: legacy_spend_pubkey -
 * param: legacy_subaddress_map -
@@ -178,6 +182,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::string version_string,
     std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals,
     std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals,
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
     const multisig::signer_set_filter aggregate_signer_set_filter,
     const rct::key &legacy_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
@@ -187,6 +192,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     SpMultisigTxProposalV1 &proposal_out);
 void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
     const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
+    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps, //must line up with 'legacy_contextual_inputs'
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
