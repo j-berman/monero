@@ -231,9 +231,15 @@ void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input);
 * brief: make_v1_partial_input_v1 - make a v1 partial input
 * param: input_proposal -
 * param: proposal_prefix -
-* param: sp_spend_privkey -
+* param: sp_image_proof -
+* param: sp_spend_pubkey -
 * outparam: partial_input_out -
 */
+void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
+    const rct::key &proposal_prefix,
+    SpImageProofV1 sp_image_proof,
+    const rct::key &sp_spend_pubkey,
+    SpPartialInputV1 &partial_input_out);
 void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
     const rct::key &proposal_prefix,
     const crypto::secret_key &sp_spend_privkey,

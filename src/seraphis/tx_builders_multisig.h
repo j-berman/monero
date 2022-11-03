@@ -257,10 +257,11 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out);
 /**
-* brief: try_make_v1_sp_partial_inputs_v1 - try to make seraphis partial inputs from a collection of multisig partial
-*      signatures
+* brief: try_make_inputs_for_multisig_v1 - try to make legacy inputs and seraphis partial inputs from a collection of
+*      multisig partial signatures
 *   - weak preconditions: ignores invalid partial signature sets
-*   - will only succeed if a partial input can be made for each of the inputs found in the multisig tx proposal
+*   - will only succeed if a legacy input and seraphis partial input can be made for each of the inputs found in the
+*     multisig tx proposal
 * param: multisig_tx_proposal -
 * param: multisig_signers -
 * param: legacy_spend_pubkey -
@@ -272,10 +273,10 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
 * param: sp_input_partial_sigs_per_signer -
 * outparam: legacy_inputs_out -
 * outparam: sp_partial_inputs_out -
-* return: true if legacy_inputs_out and partial_inputs_out contain inputs/partial inputs corresponding to each input
+* return: true if legacy_inputs_out and sp_partial_inputs_out contain inputs/partial inputs corresponding to each input
 *         proposal in the multisig tx proposal
 */
-bool try_make_partial_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
+bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
     const std::vector<crypto::public_key> &multisig_signers,
     const rct::key &legacy_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,

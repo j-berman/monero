@@ -104,6 +104,12 @@ void make_v3_legacy_ring_signatures_v1(std::vector<LegacyRingSignaturePrepV1> ri
 void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input);
 void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
     const LegacyInputProposalV1 &input_proposal,
+    rct::ctkeyV referenced_enotes,
+    LegacyRingSignatureV3 ring_signature,
+    const rct::key &legacy_spend_pubkey,
+    LegacyInputV1 &input_out);
+void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
+    const LegacyInputProposalV1 &input_proposal,
     LegacyRingSignaturePrepV1 ring_signature_prep,
     const crypto::secret_key &legacy_spend_privkey,
     LegacyInputV1 &input_out);

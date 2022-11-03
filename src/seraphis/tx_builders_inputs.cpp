@@ -576,31 +576,48 @@ void check_v1_partial_input_semantics_v1(const SpPartialInputV1 &partial_input)
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
     const rct::key &proposal_prefix,
-    const crypto::secret_key &sp_spend_privkey,
+    SpImageProofV1 sp_image_proof,
+    const rct::key &sp_spend_pubkey,
     SpPartialInputV1 &partial_input_out)
 {
     // 1. check input proposal semantics
-    rct::key sp_spend_pubkey;
-    make_seraphis_spendbase(sp_spend_privkey, sp_spend_pubkey);
-
     check_v1_input_proposal_semantics_v1(input_proposal, sp_spend_pubkey);
 
     // 2. prepare input image
     input_proposal.get_enote_image_v1(partial_input_out.m_input_image);
 
-    // 3. copy misc. proposal info
+    // 3. set partial input pieces
+    partial_input_out.m_image_proof                  = std::move(sp_image_proof);
     partial_input_out.m_address_mask                 = input_proposal.m_core.m_address_mask;
     partial_input_out.m_commitment_mask              = input_proposal.m_core.m_commitment_mask;
     partial_input_out.m_proposal_prefix              = proposal_prefix;
+    partial_input_out.m_input_enote_core             = input_proposal.m_core.enote_core();
     partial_input_out.m_input_amount                 = input_proposal.amount();
     partial_input_out.m_input_amount_blinding_factor = input_proposal.m_core.m_amount_blinding_factor;
-    partial_input_out.m_input_enote_core             = input_proposal.m_core.enote_core();
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_v1_partial_input_v1(const SpInputProposalV1 &input_proposal,
+    const rct::key &proposal_prefix,
+    const crypto::secret_key &sp_spend_privkey,
+    SpPartialInputV1 &partial_input_out)
+{
+    // 1. initialization
+    rct::key sp_spend_pubkey;
+    make_seraphis_spendbase(sp_spend_privkey, sp_spend_pubkey);
 
-    // 4. construct image proof
+    // 2. construct image proof
+    SpImageProofV1 sp_image_proof;
     make_v1_image_proof_v1(input_proposal.m_core,
-        partial_input_out.m_proposal_prefix,
+        proposal_prefix,
         sp_spend_privkey,
-        partial_input_out.m_image_proof);
+        sp_image_proof);
+
+    // 3. finalize the partial input
+    make_v1_partial_input_v1(input_proposal,
+        proposal_prefix,
+        std::move(sp_image_proof),
+        sp_spend_pubkey,
+        partial_input_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_proposals,

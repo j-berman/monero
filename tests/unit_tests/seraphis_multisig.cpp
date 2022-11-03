@@ -1093,7 +1093,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     std::vector<SpPartialInputV1> sp_partial_inputs;
 
     ASSERT_NO_THROW(
-            ASSERT_TRUE(try_make_partial_inputs_for_multisig_v1(multisig_tx_proposal,
+            ASSERT_TRUE(try_make_inputs_for_multisig_v1(multisig_tx_proposal,
                 seraphis_accounts[0].get_signers(),
                 rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
                 legacy_subaddress_map,

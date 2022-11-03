@@ -34,6 +34,7 @@
 #pragma once
 
 //local headers
+#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
 #include "cryptonote_basic/subaddress_index.h"
@@ -79,6 +80,9 @@ struct LegacyMultisigInputProposalV1 final
 
     /// z
     crypto::secret_key m_commitment_mask;
+
+    /// cached legacy enote indices of a legacy ring signature (should include a reference to this input proposal's enote)
+    std::vector<std::uint64_t> m_reference_set;
 
     /**
     * brief: get_input_proposal_v1 - convert this input to a legacy input proposal (throws on failure to convert)
@@ -141,7 +145,7 @@ struct SpMultisigTxProposalV1 final
     /// seraphis tx inputs to sign with multisig (NOT SORTED)
     std::vector<SpMultisigInputProposalV1> m_sp_multisig_input_proposals;
     /// legacy ring signature proposals (CLSAGs) for each legacy input proposal (ALIGNED TO SORTED LEGACY INPUTS)
-//    std::vector<CLSAGMultisigProposal> m_legacy_input_clsag_proposals;
+    std::vector<CLSAGMultisigProposal> m_legacy_input_proof_proposals;
     /// composition proof proposals for each seraphis input proposal (ALIGNED TO SORTED LEGACY INPUTS)
     std::vector<SpCompositionProofMultisigProposal> m_sp_input_proof_proposals;
     /// all multisig signers who should participate in signing this proposal

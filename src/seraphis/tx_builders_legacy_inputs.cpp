@@ -368,31 +368,52 @@ void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input)
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
     const LegacyInputProposalV1 &input_proposal,
-    LegacyRingSignaturePrepV1 ring_signature_prep,
-    const crypto::secret_key &legacy_spend_privkey,
+    rct::ctkeyV referenced_enotes,
+    LegacyRingSignatureV3 ring_signature,
+    const rct::key &legacy_spend_pubkey,
     LegacyInputV1 &input_out)
 {
     // 1. check input proposal semantics
-    const rct::key legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
     check_v1_legacy_input_proposal_semantics_v1(input_proposal, legacy_spend_pubkey);
 
-    // 2. ring signature prep must line up with specified proposal prefix
-    CHECK_AND_ASSERT_THROW_MES(proposal_prefix == ring_signature_prep.m_proposal_prefix,
-        "make v1 legacy input: ring signature prep does not have desired proposal prefix.");
-
-    // 3. prepare input image
+    // 2. prepare input image
     input_proposal.get_enote_image_v2(input_out.m_input_image);
 
-    // 4. copy misc. proposal info
+    // 3. set remaining legacy input info
     input_out.m_input_amount    = input_proposal.m_amount;
     sc_add(to_bytes(input_out.m_input_masked_commitment_blinding_factor),
         to_bytes(input_proposal.m_commitment_mask),
         to_bytes(input_proposal.m_amount_blinding_factor));
-    input_out.m_ring_members    = ring_signature_prep.m_referenced_enotes;
+    input_out.m_ring_members    = std::move(referenced_enotes);
     input_out.m_proposal_prefix = proposal_prefix;
+    input_out.m_ring_signature  = std::move(ring_signature);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
+    const LegacyInputProposalV1 &input_proposal,
+    LegacyRingSignaturePrepV1 ring_signature_prep,
+    const crypto::secret_key &legacy_spend_privkey,
+    LegacyInputV1 &input_out)
+{
+    // 1. ring signature prep must line up with specified proposal prefix
+    CHECK_AND_ASSERT_THROW_MES(proposal_prefix == ring_signature_prep.m_proposal_prefix,
+        "make v1 legacy input: ring signature prep does not have desired proposal prefix.");
 
-    // 5. construct ring signature
-    make_v3_legacy_ring_signature_v1(std::move(ring_signature_prep), legacy_spend_privkey, input_out.m_ring_signature);
+    // 2. misc initialization
+    rct::ctkeyV referenced_enotes_copy{ring_signature_prep.m_referenced_enotes};
+    const rct::key legacy_spend_pubkey{rct::scalarmultBase(rct::sk2rct(legacy_spend_privkey))};
+
+    // 3. construct ring signature
+    LegacyRingSignatureV3 ring_signature;
+    make_v3_legacy_ring_signature_v1(std::move(ring_signature_prep), legacy_spend_privkey, ring_signature);
+
+    // 4. finish making the input
+    make_v1_legacy_input_v1(proposal_prefix,
+        input_proposal,
+        std::move(referenced_enotes_copy),
+        std::move(ring_signature),
+        legacy_spend_pubkey,
+        input_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
