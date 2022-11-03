@@ -30,12 +30,13 @@
 
 //paired header
 #include "multisig_signing_helper_types.h"
-#include "sp_composition_proof.h"
 
 //local headers
+#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "sp_composition_proof.h"
 
 //third party headers
 
@@ -64,11 +65,10 @@ bool MultisigProofInitSetV1::try_get_nonces(const rct::key &proof_key,
 //-------------------------------------------------------------------------------------------------------------------
 const rct::key& MultisigPartialSigVariant::message() const
 {
-    if (this->is_type<SpCompositionProofMultisigPartial>())
+    if (this->is_type<CLSAGMultisigPartial>())
+        return this->partial_sig<CLSAGMultisigPartial>().message;
+    else if (this->is_type<SpCompositionProofMultisigPartial>())
         return this->partial_sig<SpCompositionProofMultisigPartial>().message;
-    //todo: legacy
-    //else if (this->is_type<SpContextualBasicEnoteRecordV1>())
-    //    return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
     else
     {
         static constexpr rct::key temp{};
@@ -78,11 +78,10 @@ const rct::key& MultisigPartialSigVariant::message() const
 //-------------------------------------------------------------------------------------------------------------------
 const rct::key& MultisigPartialSigVariant::proof_key() const
 {
-    if (this->is_type<SpCompositionProofMultisigPartial>())
+    if (this->is_type<CLSAGMultisigPartial>())
+        return this->partial_sig<CLSAGMultisigPartial>().main_proof_key_K;
+    else if (this->is_type<SpCompositionProofMultisigPartial>())
         return this->partial_sig<SpCompositionProofMultisigPartial>().K;
-    //todo: legacy
-    //else if (this->is_type<SpContextualBasicEnoteRecordV1>())
-    //    return get_contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
     else
     {
         static constexpr rct::key temp{};

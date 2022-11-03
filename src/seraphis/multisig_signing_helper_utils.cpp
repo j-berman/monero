@@ -103,9 +103,10 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
 
     // 2. try to make the partial sig set (if unable to make a partial signature on all proof proposals in the set, then
     //    an exception will be thrown)
+    std::size_t pub_nonces_set_size{static_cast<std::size_t>(-1)};
     std::vector<MultisigPubNonces> signer_pub_nonces_set_temp;
-    std::vector<MultisigPubNonces> signer_pub_nonces_temp;
-    signer_pub_nonces_temp.reserve(threshold);
+    std::vector<std::vector<MultisigPubNonces>> signer_pub_nonce_sets_temp;
+    signer_pub_nonce_sets_temp.reserve(threshold);
 
     partial_signatures_out.clear();
     partial_signatures_out.reserve(proof_keys.size());
@@ -113,7 +114,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
     for (const rct::key &proof_key : proof_keys)
     {
         // a. collect nonces from all signers in this signing group
-        signer_pub_nonces_temp.clear();
+        signer_pub_nonce_sets_temp.clear();
         for (std::size_t signer_index{0}; signer_index < all_init_sets.size(); ++signer_index)
         {
             // ignore signers not in the requested signing group
@@ -129,22 +130,33 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
                     signer_pub_nonces_set_temp))
                 throw;
 
-            // for seraphis proofs there should only be one nonce pubkey pair per nonce pubkey set
-            //todo: make generic (unconstrained number of pub nonce pairs per set)
-            if (signer_pub_nonces_set_temp.size() != 1)
+            // initialize nonce set size
+            if (pub_nonces_set_size == static_cast<std::size_t>(-1))
+            {
+                pub_nonces_set_size = signer_pub_nonces_set_temp.size();
+                signer_pub_nonce_sets_temp.resize(pub_nonces_set_size);
+            }
+
+            // expect nonce sets to be consistently sized
+            if (signer_pub_nonces_set_temp.size() != pub_nonces_set_size)
                 throw;
 
-            signer_pub_nonces_temp.emplace_back(signer_pub_nonces_set_temp[0]);
+            // save nonce sets; the set members are split between rows in the signer_pub_nonce_sets_temp matrix
+            for (std::size_t nonce_set_index{0}; nonce_set_index < pub_nonces_set_size; ++nonce_set_index)
+                signer_pub_nonce_sets_temp[nonce_set_index].emplace_back(signer_pub_nonces_set_temp[nonce_set_index]);
         }
 
         // b. sanity check
-        if (signer_pub_nonces_temp.size() != threshold)
-            throw;
+        for (const std::vector<MultisigPubNonces> &signer_pub_nonce_set : signer_pub_nonce_sets_temp)
+        {
+            if (signer_pub_nonce_set.size() != threshold)
+                throw;
+        }
 
         // c. make a partial signature
         partial_sig_maker.attempt_make_partial_sig(proof_key,
             filter,
-            signer_pub_nonces_temp,
+            signer_pub_nonce_sets_temp,
             local_signer_privkey,
             nonce_record_inout,
             add_element(partial_signatures_out));

@@ -34,6 +34,7 @@
 #pragma once
 
 //local headers
+#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "multisig_signing_helper_types.h"
@@ -72,11 +73,13 @@ public:
     /**
     * brief: attempt_make_partial_sig - attempt to make a partial multisig signature (i.e. partially sign using the local
     *     multisig signer's private key)
-    *  - throws on failure
+    * - throws on failure
     * param: proof_key - proof key of one of the multisig proposals stored in this signature maker
     * param: signer_group_filter - filter representing the subgroup of multisig signers who are expected to participate
     *                              in making this partial signature (i.e. their public nonces will be used)
-    * param: signer_group_pub_nonces - the public nonces of the signers who are participating in this signature attempt
+    * param: signer_group_pub_nonces - the public nonces of the signers who are participating in this signature attempt,
+    *                                  each element in the primary vector is a set of public nonces corresponding to one
+    *                                  nonce base key (e.g. G and Hp(proof key) for CLSAG, and U for sp composition proofs)
     * param: local_multisig_signing_key - the local multisig signer's multisig signing key for the multisig subgroup
     *                                     represented by 'signer_group_filter'
     * inoutparam: nonce_record_inout - the nonce record from which the local signer's nonce private keys for this
@@ -86,13 +89,46 @@ public:
     */
     virtual void attempt_make_partial_sig(const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
-        const std::vector<MultisigPubNonces> &signer_group_pub_nonces,
+        const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
         MultisigNonceRecord &nonce_record_inout,
         MultisigPartialSigVariant &partial_sig_out) const = 0;
 };
 
-//todo: MultisigPartialSigMakerLegacyCLSAG
+////
+// MultisigPartialSigMakerCLSAG: make CLSAG multisig partial signatures
+///
+class MultisigPartialSigMakerCLSAG final : public MultisigPartialSigMaker
+{
+public:
+//constructors
+    MultisigPartialSigMakerCLSAG(const std::uint32_t threshold,
+        const std::vector<CLSAGMultisigProposal> &proof_proposals,
+        const std::vector<crypto::secret_key> &proof_privkeys_k_offset,
+        const std::vector<crypto::secret_key> &proof_privkeys_z);
+
+//overloaded operators
+    /// disable copy/move (this is a scoped manager [reference wrapper])
+    MultisigPartialSigMakerCLSAG& operator=(MultisigPartialSigMakerCLSAG&&) = delete;
+
+//member functions
+    void attempt_make_partial_sig(const rct::key &proof_key,
+        const multisig::signer_set_filter signer_group_filter,
+        const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
+        const crypto::secret_key &local_multisig_signing_key,
+        MultisigNonceRecord &nonce_record_inout,
+        MultisigPartialSigVariant &partial_sig_out) const override;
+
+//member variables
+private:
+    const rct::key m_inv_threshold;  // 1/threshold
+    const std::vector<CLSAGMultisigProposal> &m_proof_proposals;
+    const std::vector<crypto::secret_key> &m_proof_privkeys_k_offset;
+    const std::vector<crypto::secret_key> &m_proof_privkeys_z;
+
+    // cached proof keys mapped to indices in the set of proof proposals
+    std::unordered_map<rct::key, std::size_t> m_cached_proof_keys;
+};
 
 ////
 // MultisigPartialSigMakerSpCompositionProof: make seraphis composition proof multisig partial signatures
@@ -115,7 +151,7 @@ public:
 //member functions
     void attempt_make_partial_sig(const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
-        const std::vector<MultisigPubNonces> &signer_group_pub_nonces,
+        const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
         MultisigNonceRecord &nonce_record_inout,
         MultisigPartialSigVariant &partial_sig_out) const override;

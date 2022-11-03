@@ -34,6 +34,7 @@
 #pragma once
 
 //local headers
+#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "multisig_nonce_record.h"
@@ -68,14 +69,15 @@ struct MultisigProofInitSetV1 final
     crypto::public_key m_signer_id;
     /// message to be signed by the image proofs
     rct::key m_proof_message;
-    /// all multisig signers who should participate in attempting to make these composition proofs
+    /// all multisig signers who should participate in attempting to make these multisig proofs
     multisig::signer_set_filter m_aggregate_signer_set_filter;
 
     // map [proof key to sign : { {alpha_{ki,1,e}*J_1, alpha_{ki,2,e}*J_1}, {alpha_{ki,1,e}*J_2, alpha_{ki,2,e}*J_2}, ... }]
     // - key: main proof key to sign on
-    // - value: a set of signature nonce pubkeys for each signer set that includes the specified signer id (i.e. each tx
-    //   attempt)
-    //   - the set of nonce pubkeys corresponds to a set of nonce base keys across which the multisig signature will be made
+    // - value: a set of signature nonce pubkeys for each signer set in permutations of the aggregate signer set that
+    //          includes the specified signer id; note that permutations of signers depend on the threshold and list of
+    //          multisig signers, which are not recorded here
+    //   - the set of nonce pubkeys aligns to a set of nonce base keys across which the multisig signature will be made
     //     (for example: CLSAG signs across both G and Hp(Ko), where Ko = ko*G is the proof key recorded here)
     //   - WARNING: ordering is dependent on the signer set filter permutation generator
     std::unordered_map<rct::key, std::vector<std::vector<MultisigPubNonces>>> m_inits;
@@ -92,7 +94,7 @@ struct MultisigProofInitSetV1 final
 ///
 class MultisigPartialSigVariant final
 {
-    using VType = boost::variant<SpCompositionProofMultisigPartial>;
+    using VType = boost::variant<CLSAGMultisigPartial, SpCompositionProofMultisigPartial>;
 
 public:
 //constructors
@@ -114,7 +116,7 @@ public:
     template <typename T>
     const T& partial_sig() const
     {
-        static constexpr T empty{};
+        static const T empty{};
         return this->is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
     }
 

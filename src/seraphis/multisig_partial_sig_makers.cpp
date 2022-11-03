@@ -32,6 +32,7 @@
 #include "multisig_partial_sig_makers.h"
 
 //local headers
+#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 extern "C"
 {
@@ -57,6 +58,46 @@ extern "C"
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
+// for partial proof key K_e = (k_offset + k_e)*G
+// and secondary proof key C_z = z*G
+//-------------------------------------------------------------------------------------------------------------------
+static CLSAGMultisigPartial attempt_make_clsag_multisig_partial_sig(const rct::key &one_div_threshold,
+    const crypto::secret_key &k_e,
+    const crypto::secret_key &k_offset,
+    const crypto::secret_key &z,
+    const CLSAGMultisigProposal &proof_proposal,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces_G,
+    const std::vector<MultisigPubNonces> &signer_pub_nonces_Hp,
+    const multisig::signer_set_filter filter,
+    MultisigNonceRecord &nonce_record_inout)
+{
+    // prepare the main signing key: (1/threshold)*k_offset + k_e
+    // note: k_offset is assumed to be a value known by all signers, so each signer adds (1/threshold)*k_offset to ensure
+    //       the sum of partial signatures works out
+    crypto::secret_key k_e_signing;
+    sc_mul(to_bytes(k_e_signing), one_div_threshold.bytes, to_bytes(k_offset));
+    sc_add(to_bytes(k_e_signing), to_bytes(k_e_signing), to_bytes(k_e));
+
+    // prepare the auxilliary signing key: (1/threshold)*z
+    crypto::secret_key z_e_signing;
+    sc_mul(to_bytes(z_e_signing), one_div_threshold.bytes, to_bytes(z));
+
+    // local signer's partial sig for this proof key
+    CLSAGMultisigPartial partial_sig;
+
+    if (!try_make_clsag_multisig_partial_sig(proof_proposal,
+            k_e_signing,
+            z_e_signing,
+            signer_pub_nonces_G,
+            signer_pub_nonces_Hp,
+            filter,
+            nonce_record_inout,
+            partial_sig))
+        throw;
+
+    return partial_sig;
+}
+//-------------------------------------------------------------------------------------------------------------------
 // for partial proof key K_e = x*G + y*X + z_multiplier*( (1/threshold) * z_offset + z_e )*U
 //-------------------------------------------------------------------------------------------------------------------
 static SpCompositionProofMultisigPartial attempt_make_sp_composition_multisig_partial_sig(
@@ -73,13 +114,13 @@ static SpCompositionProofMultisigPartial attempt_make_sp_composition_multisig_pa
 {
     // prepare the signing key: z_multiplier((1/threshold)*z_offset + z_e)
     // note: z_offset is assumed to be a value known by all signers, so each signer adds (1/threshold)*z_offset to ensure
-    //       the sum works out
+    //       the sum of partial signatures works out
     crypto::secret_key z_e_signing;
     sc_mul(to_bytes(z_e_signing), one_div_threshold.bytes, to_bytes(z_offset));
     sc_add(to_bytes(z_e_signing), to_bytes(z_e_signing), to_bytes(z_e));
     sc_mul(to_bytes(z_e_signing), to_bytes(z_multiplier), to_bytes(z_e_signing));
 
-    // local signer's partial sig for this input
+    // local signer's partial sig for this proof key
     SpCompositionProofMultisigPartial partial_sig;
 
     if (!try_make_sp_composition_multisig_partial_sig(proof_proposal,
@@ -95,6 +136,55 @@ static SpCompositionProofMultisigPartial attempt_make_sp_composition_multisig_pa
     return partial_sig;
 }
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+MultisigPartialSigMakerCLSAG::MultisigPartialSigMakerCLSAG(const std::uint32_t threshold,
+    const std::vector<CLSAGMultisigProposal> &proof_proposals,
+    const std::vector<crypto::secret_key> &proof_privkeys_k_offset,
+    const std::vector<crypto::secret_key> &proof_privkeys_z) :
+        m_inv_threshold{threshold ? invert(rct::d2h(threshold)) : rct::zero()},  //avoid throwing in call to invert()
+        m_proof_proposals{proof_proposals},
+        m_proof_privkeys_k_offset{proof_privkeys_k_offset},
+        m_proof_privkeys_z{proof_privkeys_z}
+{
+    const std::size_t num_proposals{m_proof_proposals.size()};
+
+    CHECK_AND_ASSERT_THROW_MES(threshold > 0,
+        "MultisigPartialSigMakerCLSAG: multisig threshold is zero.");
+    CHECK_AND_ASSERT_THROW_MES(m_proof_privkeys_k_offset.size() == num_proposals,
+        "MultisigPartialSigMakerCLSAG: proof k offset privkeys don't line up with proof proposals.");
+    CHECK_AND_ASSERT_THROW_MES(m_proof_privkeys_z.size() == num_proposals,
+        "MultisigPartialSigMakerCLSAG: proof z privkeys don't line up with proof proposals.");
+
+    // cache the proof keys mapped to indices in the referenced signature context data
+    for (std::size_t signature_proposal_index{0}; signature_proposal_index < num_proposals; ++signature_proposal_index)
+        m_cached_proof_keys[m_proof_proposals[signature_proposal_index].main_proof_key()] = signature_proposal_index;
+}
+//-------------------------------------------------------------------------------------------------------------------
+void MultisigPartialSigMakerCLSAG::attempt_make_partial_sig(const rct::key &proof_key,
+    const multisig::signer_set_filter signer_group_filter,
+    const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
+    const crypto::secret_key &local_multisig_signing_key,
+    MultisigNonceRecord &nonce_record_inout,
+    MultisigPartialSigVariant &partial_sig_out) const
+{
+    CHECK_AND_ASSERT_THROW_MES(m_cached_proof_keys.find(proof_key) != m_cached_proof_keys.end(),
+        "MultisigPartialSigMakerCLSAG (attempt make partial sig): requested signature proposal's proof key is unknown.");
+    CHECK_AND_ASSERT_THROW_MES(signer_group_pub_nonces.size() == 2,
+        "MultisigPartialSigMakerCLSAG (attempt make partial sig): signer group's pub nonces don't line up with signature "
+        "requirements (must be two sets for base keys G and Hp(proof key)).");
+
+    const std::size_t signature_proposal_index{m_cached_proof_keys.at(proof_key)};
+
+    partial_sig_out = attempt_make_clsag_multisig_partial_sig(m_inv_threshold,
+        local_multisig_signing_key,
+        m_proof_privkeys_k_offset.at(signature_proposal_index),
+        m_proof_privkeys_z.at(signature_proposal_index),
+        m_proof_proposals.at(signature_proposal_index),
+        signer_group_pub_nonces.at(0),  //G
+        signer_group_pub_nonces.at(1),  //Hp(proof key)
+        signer_group_filter,
+        nonce_record_inout);
+}
 //-------------------------------------------------------------------------------------------------------------------
 MultisigPartialSigMakerSpCompositionProof::MultisigPartialSigMakerSpCompositionProof(const std::uint32_t threshold,
     const std::vector<SpCompositionProofMultisigProposal> &proof_proposals,
@@ -129,7 +219,7 @@ MultisigPartialSigMakerSpCompositionProof::MultisigPartialSigMakerSpCompositionP
 //-------------------------------------------------------------------------------------------------------------------
 void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const rct::key &proof_key,
     const multisig::signer_set_filter signer_group_filter,
-    const std::vector<MultisigPubNonces> &signer_group_pub_nonces,
+    const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
     const crypto::secret_key &local_multisig_signing_key,
     MultisigNonceRecord &nonce_record_inout,
     MultisigPartialSigVariant &partial_sig_out) const
@@ -137,6 +227,9 @@ void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const r
     CHECK_AND_ASSERT_THROW_MES(m_cached_proof_keys.find(proof_key) != m_cached_proof_keys.end(),
         "MultisigPartialSigMakerSpCompositionProof (attempt make partial sig): requested signature proposal's proof key "
         "is unknown.");
+    CHECK_AND_ASSERT_THROW_MES(signer_group_pub_nonces.size() == 1,
+        "MultisigPartialSigMakerSpCompositionProof (attempt make partial sig): signer group's pub nonces don't line up with "
+        "signature requirements (must be one sets for base key U).");
 
     const std::size_t signature_proposal_index{m_cached_proof_keys.at(proof_key)};
 
@@ -147,7 +240,7 @@ void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const r
         m_proof_privkeys_z_multiplier.at(signature_proposal_index),
         local_multisig_signing_key,
         m_proof_proposals.at(signature_proposal_index),
-        signer_group_pub_nonces,
+        signer_group_pub_nonces.at(0),
         signer_group_filter,
         nonce_record_inout);
 }
