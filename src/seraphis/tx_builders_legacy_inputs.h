@@ -121,6 +121,12 @@ void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
 //todo
 std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const crypto::secret_key &legacy_spend_privkey,
     const std::vector<rct::xmr_amount> &input_amounts);
+void gen_mock_legacy_ring_signature_members_for_enote_at_pos_v1(const std::uint64_t real_reference_index_in_ledger,
+    const std::uint64_t ring_size,
+    const MockLedgerContext &ledger_context,
+    std::vector<std::uint64_t> &reference_set_out,
+    rct::ctkeyV &referenced_enotes_out,
+    std::uint64_t &real_reference_index_out);
 LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_for_enote_at_pos_v1(const rct::key &proposal_prefix,
     const std::uint64_t real_reference_index_in_ledger,
     const LegacyEnoteImageV2 &real_reference_image,

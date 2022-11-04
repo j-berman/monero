@@ -453,15 +453,14 @@ std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const cryp
     return input_proposals;
 }
 //-------------------------------------------------------------------------------------------------------------------
-LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_for_enote_at_pos_v1(const rct::key &proposal_prefix,
-    const std::uint64_t real_reference_index_in_ledger,
-    const LegacyEnoteImageV2 &real_reference_image,
-    const crypto::secret_key &real_reference_view_privkey,
-    const crypto::secret_key &commitment_mask,
+void gen_mock_legacy_ring_signature_members_for_enote_at_pos_v1(const std::uint64_t real_reference_index_in_ledger,
     const std::uint64_t ring_size,
-    const MockLedgerContext &ledger_context)
+    const MockLedgerContext &ledger_context,
+    std::vector<std::uint64_t> &reference_set_out,
+    rct::ctkeyV &referenced_enotes_out,
+    std::uint64_t &real_reference_index_out)
 {
-    // generate a mock ring signature prep for a legacy enote at a known position in the mock ledger
+    // generate ring members for a mock legacy ring signature for a legacy enote at a known position in the mock ledger
 
     /// make reference set
     LegacyRingSignaturePrepV1 proof_prep;
@@ -471,25 +470,41 @@ LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_for_enote_at_pos_v
 
     // 2. reference set
     CHECK_AND_ASSERT_THROW_MES(ring_size > 0,
-        "gen mock legacy ring signature prep (for enote at pos): ring size of 0 is not allowed.");
+        "gen mock legacy ring signature members (for enote at pos): ring size of 0 is not allowed.");
 
-    decoy_selector.get_ring_members(real_reference_index_in_ledger,
-        ring_size,
-        proof_prep.m_reference_set,
-        proof_prep.m_real_reference_index);
+    decoy_selector.get_ring_members(real_reference_index_in_ledger, ring_size, reference_set_out, real_reference_index_out);
 
-    CHECK_AND_ASSERT_THROW_MES(proof_prep.m_real_reference_index < proof_prep.m_reference_set.size(),
-        "gen mock legacy ring signature prep (for enote at pos): real reference index is outside of reference set.");
+    CHECK_AND_ASSERT_THROW_MES(real_reference_index_out < reference_set_out.size(),
+        "gen mock legacy ring signature members (for enote at pos): real reference index is outside of reference set.");
 
 
     /// copy all referenced legacy enotes from the ledger
-    ledger_context.get_reference_set_proof_elements_v1(proof_prep.m_reference_set, proof_prep.m_referenced_enotes);
+    ledger_context.get_reference_set_proof_elements_v1(reference_set_out, referenced_enotes_out);
 
-    CHECK_AND_ASSERT_THROW_MES(proof_prep.m_reference_set.size() == proof_prep.m_referenced_enotes.size(),
-        "gen mock legacy ring signature prep (for enote at pos): reference set doesn't line up with reference enotes.");
+    CHECK_AND_ASSERT_THROW_MES(reference_set_out.size() == referenced_enotes_out.size(),
+        "gen mock legacy ring signature members (for enote at pos): reference set doesn't line up with reference enotes.");
+}
+//-------------------------------------------------------------------------------------------------------------------
+LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_for_enote_at_pos_v1(const rct::key &proposal_prefix,
+    const std::uint64_t real_reference_index_in_ledger,
+    const LegacyEnoteImageV2 &real_reference_image,
+    const crypto::secret_key &real_reference_view_privkey,
+    const crypto::secret_key &commitment_mask,
+    const std::uint64_t ring_size,
+    const MockLedgerContext &ledger_context)
+{
+    // generate a mock ring signature prep for a legacy enote at a known position in the mock ledger
+    LegacyRingSignaturePrepV1 proof_prep;
 
+    // generate ring members
+    gen_mock_legacy_ring_signature_members_for_enote_at_pos_v1(real_reference_index_in_ledger,
+        ring_size,
+        ledger_context,
+        proof_prep.m_reference_set,
+        proof_prep.m_referenced_enotes,
+        proof_prep.m_real_reference_index);
 
-    /// copy misc pieces
+    // copy misc pieces
     proof_prep.m_proposal_prefix = proposal_prefix;
     proof_prep.m_reference_image = real_reference_image;
     proof_prep.m_reference_view_privkey = real_reference_view_privkey;

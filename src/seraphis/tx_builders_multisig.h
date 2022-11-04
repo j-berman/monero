@@ -182,7 +182,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::string version_string,
     std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals,
     std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals,
-    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> legacy_ring_signature_preps,
     const multisig::signer_set_filter aggregate_signer_set_filter,
     const rct::key &legacy_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
@@ -192,7 +192,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     SpMultisigTxProposalV1 &proposal_out);
 void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
     const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
-    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps, //must line up with 'legacy_contextual_inputs'
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> legacy_ring_signature_preps,
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
@@ -293,5 +293,11 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
     std::vector<LegacyInputV1> &legacy_inputs_out,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out);
+
+//todo
+bool try_gen_legacy_multisig_ring_signature_preps_v1(const std::list<LegacyContextualEnoteRecordV1> &contextual_records,
+    const std::uint64_t legacy_ring_size,
+    const MockLedgerContext &ledger_context,
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> &mapped_preps_out);
 
 } //namespace sp

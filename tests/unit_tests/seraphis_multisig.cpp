@@ -94,7 +94,8 @@ static crypto::secret_key make_secret_key()
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void make_multisig_jamtis_mock_keys(const multisig::multisig_account &account, sp::jamtis::jamtis_mock_keys &keys_out)
+static void make_multisig_jamtis_mock_keys(const multisig::multisig_account &account,
+    sp::jamtis::jamtis_mock_keys &keys_out)
 {
     using namespace sp;
     using namespace jamtis;
@@ -770,6 +771,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     rct::xmr_amount specified_fee;
     ASSERT_TRUE(try_get_fee_value(fee, specified_fee));
     const std::size_t fee_per_tx_weight{specified_fee};
+    const std::size_t legacy_ring_size{2};
     const std::size_t ref_set_decomp_m{2};
     const std::size_t ref_set_decomp_n{2};
     const std::size_t bin_radius{1};
@@ -951,18 +953,21 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         selfsend_payment_proposals,
         discretized_transaction_fee)));
 
-    //todo: prepare for legacy input proofs
-    // note: need legacy ledger mappings here because legacy multisig proofs include ledger references (the ring signature
-    //       decoys must be taken from the chain); however, seraphis ledger mappings are NOT needed because seraphis
-    //       multisig proofs only operate on seraphis enote images, which don't require ledger references
-    std::unordered_map<crypto::key_image, std::uint64_t> legacy_input_ledger_mappings;
-    ASSERT_TRUE(try_get_membership_proof_real_reference_mappings(legacy_contextual_inputs, legacy_input_ledger_mappings));
+    // d) prepare for legacy input proofs
+    // note: need legacy ring signature preps here because legacy multisig proofs include ledger references (the ring
+    //       signature decoys must be taken from the chain); however, seraphis ledger mappings are NOT needed because
+    //       seraphis multisig proofs only operate on seraphis enote images, which don't require ledger references
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> mapped_legacy_multisig_ring_signature_preps;
+    ASSERT_TRUE(try_gen_legacy_multisig_ring_signature_preps_v1(legacy_contextual_inputs,
+        legacy_ring_size,
+        ledger_context,
+        mapped_legacy_multisig_ring_signature_preps));
 
-    // c) make multisig tx proposal
+    // e) make multisig tx proposal
     SpMultisigTxProposalV1 multisig_tx_proposal;
     ASSERT_NO_THROW(make_v1_multisig_tx_proposal_v1(legacy_contextual_inputs,
         sp_contextual_inputs,
-        {}, //todo: legacy ring signature preps (maybe use map of preps instead of vector for easier alignment with legacy inputs)
+        std::move(mapped_legacy_multisig_ring_signature_preps),
         semantic_rules_version,
         aggregate_filter_of_requested_multisig_signers,
         std::move(normal_payment_proposals),
@@ -1038,7 +1043,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     {
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
-            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(seraphis_accounts[signer_index],
+            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(
+                seraphis_accounts[signer_index],
                 multisig_tx_proposal,
                 rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
                 legacy_subaddress_map,

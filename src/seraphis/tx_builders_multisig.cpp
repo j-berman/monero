@@ -768,7 +768,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     std::string version_string,
     std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals,
     std::vector<SpMultisigInputProposalV1> sp_multisig_input_proposals,
-    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> legacy_ring_signature_preps,
     const multisig::signer_set_filter aggregate_signer_set_filter,
     const rct::key &legacy_spend_pubkey,
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
@@ -815,11 +815,11 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     rct::key proposal_prefix;
     tx_proposal.get_proposal_prefix(version_string, k_view_balance, proposal_prefix);
 
-    // 6. make sure the legacy proof preps are sorted and align with legacy input proposals
+    // 6. make sure the legacy proof preps align with legacy input proposals
+    // note: if the legacy input proposals contain duplicates, then the call to check_v1_tx_proposal_semantics_v1()
+    //       will catch it
     CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.size() == tx_proposal.m_legacy_input_proposals.size(),
         "make v1 multisig tx proposal (v1): legacy ring signature preps don't line up with input proposals.");
-
-    std::sort(legacy_ring_signature_preps.begin(), legacy_ring_signature_preps.end());
 
     // 7. legacy proof proposals
     proposal_out.m_legacy_input_proof_proposals.clear();
@@ -827,27 +827,28 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     LegacyEnoteImageV2 legacy_enote_image_temp;
     crypto::key_image auxilliary_key_image_temp;
 
-    for (std::size_t legacy_input_index{0};
-        legacy_input_index < tx_proposal.m_legacy_input_proposals.size();
-        ++legacy_input_index)
+    for (const LegacyInputProposalV1 &legacy_input_proposal : tx_proposal.m_legacy_input_proposals)
     {
-        tx_proposal.m_legacy_input_proposals[legacy_input_index].get_enote_image_v2(legacy_enote_image_temp);
-
-        CHECK_AND_ASSERT_THROW_MES(legacy_enote_image_temp.m_key_image ==
-                legacy_ring_signature_preps[legacy_input_index].m_reference_image.m_key_image,
+        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.find(legacy_input_proposal.m_key_image) !=
+                legacy_ring_signature_preps.end(),
             "make v1 multisig tx proposal (v1): a legacy ring signature prep doesn't line up with an input proposal.");
+        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.at(legacy_input_proposal.m_key_image).m_key_image ==
+                legacy_input_proposal.m_key_image,
+            "make v1 multisig tx proposal (v1): a legacy ring signature prep is mapped to the incorrect key image.");
+
+        legacy_input_proposal.get_enote_image_v2(legacy_enote_image_temp);
 
         make_legacy_auxilliary_key_image_v1(
-            tx_proposal.m_legacy_input_proposals[legacy_input_index].m_commitment_mask,
-            tx_proposal.m_legacy_input_proposals[legacy_input_index].m_onetime_address,
+            legacy_input_proposal.m_commitment_mask,
+            legacy_input_proposal.m_onetime_address,
             auxilliary_key_image_temp);
 
         make_clsag_multisig_proposal(proposal_prefix,
-            std::move(legacy_ring_signature_preps[legacy_input_index].m_referenced_enotes),
+            std::move(legacy_ring_signature_preps[legacy_input_proposal.m_key_image].m_referenced_enotes),
             legacy_enote_image_temp.m_masked_commitment,
             legacy_enote_image_temp.m_key_image,
             auxilliary_key_image_temp,
-            legacy_ring_signature_preps[legacy_input_index].m_real_reference_index,
+            legacy_ring_signature_preps.at(legacy_input_proposal.m_key_image).m_real_reference_index,
             add_element(proposal_out.m_legacy_input_proof_proposals));
     }
 
@@ -880,7 +881,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
     const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
-    std::vector<LegacyRingSignaturePrepV1> legacy_ring_signature_preps,
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> legacy_ring_signature_preps,
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
@@ -900,21 +901,23 @@ void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecord
 
     std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals;
     legacy_multisig_input_proposals.reserve(legacy_contextual_inputs.size());
-    std::size_t legacy_input_index{0};
 
     for (const LegacyContextualEnoteRecordV1 &legacy_contextual_input : legacy_contextual_inputs)
     {
-        CHECK_AND_ASSERT_THROW_MES(legacy_contextual_input.key_image() ==
-                legacy_ring_signature_preps[legacy_input_index].m_reference_image.m_key_image,
-            "make v1 multisig tx proposal (v1): a legacy contextual input doesn't line up with its ring signature prep.");
+        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.find(legacy_contextual_input.key_image()) !=
+                legacy_ring_signature_preps.end(),
+            "make v1 multisig tx proposal (v1): a legacy ring signature prep doesn't line up with a contextual input.");
+        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.at(legacy_contextual_input.key_image()).m_key_image ==
+                legacy_contextual_input.key_image(),
+            "make v1 multisig tx proposal (v1): a legacy ring signature prep is mapped to the incorrect key image.");
 
         // convert inputs to input proposals
         make_v1_legacy_multisig_input_proposal_v1(legacy_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
-            legacy_ring_signature_preps[legacy_input_index].m_reference_set,  //don't consume, we need it later
+            legacy_ring_signature_preps
+                    .at(legacy_contextual_input.key_image())
+                    .m_reference_set,  //don't consume, we need it later
             add_element(legacy_multisig_input_proposals));
-
-        ++legacy_input_index;
     }
 
     // 2. convert seraphis inputs to seraphis multisig input proposals (inputs to spend)
@@ -1240,6 +1243,33 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
             sp_spend_pubkey,
             sp_partial_inputs_out))
         return false;
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool try_gen_legacy_multisig_ring_signature_preps_v1(const std::list<LegacyContextualEnoteRecordV1> &contextual_records,
+    const std::uint64_t legacy_ring_size,
+    const MockLedgerContext &ledger_context,
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> &mapped_preps_out)
+{
+    // extract map [ legacy KI : enote ledger index ] from contextual records
+    std::unordered_map<crypto::key_image, std::uint64_t> enote_ledger_mappings;
+
+    if (!try_get_membership_proof_real_reference_mappings(contextual_records, enote_ledger_mappings))
+        return false;
+
+    // generate legacy multisig ring signature preps for each legacy enote requested
+    for (const auto &enote_ledger_mapping : enote_ledger_mappings)
+    {
+        LegacyMultisigRingSignaturePrepV1 &prep = mapped_preps_out[enote_ledger_mapping.first];
+
+        gen_mock_legacy_ring_signature_members_for_enote_at_pos_v1(enote_ledger_mapping.second,
+            legacy_ring_size,
+            ledger_context,
+            prep.m_reference_set,
+            prep.m_referenced_enotes,
+            prep.m_real_reference_index);
+    }
 
     return true;
 }

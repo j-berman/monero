@@ -127,6 +127,25 @@ struct SpMultisigInputProposalV1 final
 };
 
 ////
+// LegacyMultisigRingSignaturePrepV1
+// - data for producing a legacy ring signature using multisig
+// - this struct contains a subset of data found in LegacyRingSignaturePrepV1 because in multisig, legacy ring signature
+//   preps need to be created before a tx proposal is available (this information is used to build multisig input proposals
+//   and multisig tx proposals)
+///
+struct LegacyMultisigRingSignaturePrepV1 final
+{
+    /// ledger indices of legacy enotes referenced by the proof
+    std::vector<std::uint64_t> m_reference_set;
+    /// the referenced enotes ({Ko, C"}((legacy)) representation)
+    rct::ctkeyV m_referenced_enotes;
+    /// the index of the real enote being referenced within the reference set
+    std::uint64_t m_real_reference_index;
+    /// key image of the real reference
+    crypto::key_image m_key_image;
+};
+
+////
 // SpMultisigTxProposalV1
 // - propose to fund a set of outputs with multisig inputs
 ///
