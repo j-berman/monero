@@ -958,10 +958,10 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     //       signature decoys must be taken from the chain); however, seraphis ledger mappings are NOT needed because
     //       seraphis multisig proofs only operate on seraphis enote images, which don't require ledger references
     std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> mapped_legacy_multisig_ring_signature_preps;
-    ASSERT_TRUE(try_gen_legacy_multisig_ring_signature_preps_v1(legacy_contextual_inputs,
+    ASSERT_NO_THROW(ASSERT_TRUE(try_gen_legacy_multisig_ring_signature_preps_v1(legacy_contextual_inputs,
         legacy_ring_size,
         ledger_context,
-        mapped_legacy_multisig_ring_signature_preps));
+        mapped_legacy_multisig_ring_signature_preps)));
 
     // e) make multisig tx proposal
     SpMultisigTxProposalV1 multisig_tx_proposal;
@@ -983,7 +983,6 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     ASSERT_TRUE(multisig_tx_proposal.m_tx_fee == fee);
 
-    //todo: get legacy input proof inits from all requested signers
 
     /// 4) get seraphis input proof inits from all requested signers
     std::vector<MultisigNonceRecord> signer_nonce_records;
@@ -1033,16 +1032,26 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     }
 
 
-    ///todo: get legacy partial signatures from all requested signers
+    /// 5) get partial signatures from all requested signers
     std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> legacy_input_partial_sigs_per_signer;
-
-    /// 5) get seraphis partial signatures from all requested signers
     std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> sp_input_partial_sigs_per_signer;
 
     for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
+            ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(
+                legacy_accounts[signer_index],
+                multisig_tx_proposal,
+                legacy_subaddress_map,
+                shared_sp_keys.K_1_base,
+                shared_sp_keys.k_vb,
+                version_string,
+                legacy_input_inits[signer_index],
+                legacy_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                signer_nonce_records[signer_index],
+                legacy_input_partial_sigs_per_signer[legacy_accounts[signer_index].get_base_pubkey()])));
+
             ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(
                 seraphis_accounts[signer_index],
                 multisig_tx_proposal,
@@ -1057,16 +1066,29 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         }
         else
         {
-            ASSERT_ANY_THROW(try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(seraphis_accounts[signer_index],
-                multisig_tx_proposal,
-                rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
-                legacy_subaddress_map,
-                legacy_accounts[0].get_common_privkey(),
-                version_string,
-                sp_input_inits[signer_index],
-                sp_input_inits,  //don't need to remove the local init (will be filtered out internally)
-                signer_nonce_records[signer_index],
-                sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()]));
+            ASSERT_ANY_THROW(
+                    try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(legacy_accounts[signer_index],
+                        multisig_tx_proposal,
+                        legacy_subaddress_map,
+                        shared_sp_keys.K_1_base,
+                        shared_sp_keys.k_vb,
+                        version_string,
+                        legacy_input_inits[signer_index],
+                        legacy_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                        signer_nonce_records[signer_index],
+                        legacy_input_partial_sigs_per_signer[legacy_accounts[signer_index].get_base_pubkey()])
+                    &&
+                    try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(seraphis_accounts[signer_index],
+                        multisig_tx_proposal,
+                        rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+                        legacy_subaddress_map,
+                        legacy_accounts[0].get_common_privkey(),
+                        version_string,
+                        sp_input_inits[signer_index],
+                        sp_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                        signer_nonce_records[signer_index],
+                        sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])
+                );
         }
     }
 

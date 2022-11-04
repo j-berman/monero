@@ -235,11 +235,39 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     MultisigProofInitSetV1 &legacy_input_init_set_out,
     MultisigProofInitSetV1 &sp_input_init_set_out);
 /**
+* brief: try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1 - try to make multisig partial signatures for legacy
+*      tx inputs
+*   - weak preconditions: ignores invalid initializers from non-local signers
+*   - will throw if local signer is not in the aggregate signer filter (or has an invalid initializer)
+*   - will only succeed if a partial sig set can be made for each of the legacy inputs found in the multisig tx proposal
+* param: signer_account -
+* param: multisig_tx_proposal -
+* param: legacy_subaddress_map -
+* param: jamtis_spend_pubkey -
+* param: k_view_balance -
+* param: expected_version_string -
+* param: local_input_init_set -
+* param: other_input_init_sets -
+* inoutparam: nonce_record_inout -
+* outparam: legacy_input_partial_sig_sets_out -
+* return: true if at least one set of partial signatures was created (one set will contain a partial sig for each input)
+*/
+bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::multisig_account &signer_account,
+    const SpMultisigTxProposalV1 &multisig_tx_proposal,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const rct::key &jamtis_spend_pubkey,
+    const crypto::secret_key &k_view_balance,
+    const std::string &expected_version_string,
+    MultisigProofInitSetV1 local_input_init_set,
+    std::vector<MultisigProofInitSetV1> other_input_init_sets,
+    MultisigNonceRecord &nonce_record_inout,
+    std::vector<MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out);
+/**
 * brief: try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1 - try to make multisig partial signatures for seraphis
 *      tx inputs
 *   - weak preconditions: ignores invalid initializers from non-local signers
 *   - will throw if local signer is not in the aggregate signer filter (or has an invalid initializer)
-*   - will only succeed if a partial sig set can be made for each of the inputs found in the multisig tx proposal
+*   - will only succeed if a partial sig set can be made for each of the seraphis inputs found in the multisig tx proposal
 * param: signer_account -
 * param: multisig_tx_proposal -
 * param: legacy_spend_pubkey -
