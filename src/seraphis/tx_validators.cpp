@@ -513,17 +513,12 @@ bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3>
     {
         // collect CLSAG ring members
         rct::ctkeyV ring_members;
-        tx_validation_context.get_reference_set_proof_elements_v1(legacy_ring_signatures[legacy_input_index].m_reference_set,
+        tx_validation_context.get_reference_set_proof_elements_v1(
+            legacy_ring_signatures[legacy_input_index].m_reference_set,
             ring_members);
 
-        // make legacy input proof message
-        rct::key ring_signature_message;
-        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
-            legacy_ring_signatures[legacy_input_index].m_reference_set,
-            ring_signature_message);
-
         // verify CLSAG proof
-        if (!rct::verRctCLSAGSimple(ring_signature_message,
+        if (!rct::verRctCLSAGSimple(tx_proposal_prefix,
                 legacy_ring_signatures[legacy_input_index].m_clsag_proof,
                 ring_members,
                 legacy_input_images[legacy_input_index].m_masked_commitment))

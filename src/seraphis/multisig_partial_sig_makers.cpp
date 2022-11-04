@@ -75,8 +75,8 @@ static CLSAGMultisigPartial attempt_make_clsag_multisig_partial_sig(const rct::k
     // note: k_offset is assumed to be a value known by all signers, so each signer adds (1/threshold)*k_offset to ensure
     //       the sum of partial signatures works out
     crypto::secret_key k_e_signing;
-    sc_mul(to_bytes(k_e_signing), one_div_threshold.bytes, to_bytes(k_offset));
-    sc_add(to_bytes(k_e_signing), to_bytes(k_e_signing), to_bytes(k_e));
+    sc_mul(to_bytes(k_e_signing), one_div_threshold.bytes, to_bytes(k_offset));  //(1/threshold)*k_offset
+    sc_add(to_bytes(k_e_signing), to_bytes(k_e_signing), to_bytes(k_e));  //+ k_e
 
     // prepare the auxilliary signing key: (1/threshold)*z
     crypto::secret_key z_e_signing;

@@ -105,8 +105,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
     //    an exception will be thrown)
     std::size_t pub_nonces_set_size{static_cast<std::size_t>(-1)};
     std::vector<MultisigPubNonces> signer_pub_nonces_set_temp;
-    std::vector<std::vector<MultisigPubNonces>> signer_pub_nonce_sets_temp;
-    signer_pub_nonce_sets_temp.reserve(threshold);
+    std::vector<std::vector<MultisigPubNonces>> split_signer_pub_nonce_sets_temp;
 
     partial_signatures_out.clear();
     partial_signatures_out.reserve(proof_keys.size());
@@ -114,7 +113,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
     for (const rct::key &proof_key : proof_keys)
     {
         // a. collect nonces from all signers in this signing group
-        signer_pub_nonce_sets_temp.clear();
+        split_signer_pub_nonce_sets_temp.clear();
         for (std::size_t signer_index{0}; signer_index < all_init_sets.size(); ++signer_index)
         {
             // ignore signers not in the requested signing group
@@ -132,22 +131,21 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
 
             // initialize nonce set size
             if (pub_nonces_set_size == static_cast<std::size_t>(-1))
-            {
                 pub_nonces_set_size = signer_pub_nonces_set_temp.size();
-                signer_pub_nonce_sets_temp.resize(pub_nonces_set_size);
-            }
 
             // expect nonce sets to be consistently sized
             if (signer_pub_nonces_set_temp.size() != pub_nonces_set_size)
                 throw;
 
-            // save nonce sets; the set members are split between rows in the signer_pub_nonce_sets_temp matrix
+            // save nonce sets; the set members are split between rows in the split_signer_pub_nonce_sets_temp matrix
+            split_signer_pub_nonce_sets_temp.resize(pub_nonces_set_size);
+
             for (std::size_t nonce_set_index{0}; nonce_set_index < pub_nonces_set_size; ++nonce_set_index)
-                signer_pub_nonce_sets_temp[nonce_set_index].emplace_back(signer_pub_nonces_set_temp[nonce_set_index]);
+                split_signer_pub_nonce_sets_temp[nonce_set_index].emplace_back(signer_pub_nonces_set_temp[nonce_set_index]);
         }
 
         // b. sanity check
-        for (const std::vector<MultisigPubNonces> &signer_pub_nonce_set : signer_pub_nonce_sets_temp)
+        for (const std::vector<MultisigPubNonces> &signer_pub_nonce_set : split_signer_pub_nonce_sets_temp)
         {
             if (signer_pub_nonce_set.size() != threshold)
                 throw;
@@ -156,7 +154,7 @@ static void attempt_make_v1_multisig_partial_sig_set_v1(const std::uint32_t thre
         // c. make a partial signature
         partial_sig_maker.attempt_make_partial_sig(proof_key,
             filter,
-            signer_pub_nonce_sets_temp,
+            split_signer_pub_nonce_sets_temp,
             local_signer_privkey,
             nonce_record_inout,
             add_element(partial_signatures_out));
@@ -373,7 +371,8 @@ void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
             nonce_record_inout.try_add_nonces(proof_message, proof_info.first, filter);
 
             // add nonces to the inits at this filter permutation
-            add_element(init_set_out.m_inits[proof_info.first]).reserve(proof_info.second.size());
+            init_set_out.m_inits[proof_info.first].emplace_back();
+            init_set_out.m_inits[proof_info.first].back().reserve(proof_info.second.size());
 
             // record the nonce pubkeys for each requested proof base point (should not fail)
             for (const rct::key &proof_base : proof_info.second)
@@ -457,7 +456,7 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
     partial_sig_sets_out.reserve(expected_num_partial_sig_sets);
 
     std::uint32_t num_aborted_partial_sig_sets{0};
-    crypto::secret_key k_b_e_temp;
+    crypto::secret_key k_e_temp;
 
     for (const multisig::signer_set_filter filter : filter_permutations)
     {
@@ -473,7 +472,7 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
             try
             {
                 // 1. get local signer's signing key for this group
-                if (!signer_account.try_get_aggregate_signing_key(filter, k_b_e_temp))
+                if (!signer_account.try_get_aggregate_signing_key(filter, k_e_temp))
                     throw;
 
                 // 2. attempt to make the partial sig set
@@ -484,7 +483,7 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
                     available_signers_as_filters,
                     signer_nonce_trackers,
                     partial_sig_maker,
-                    k_b_e_temp,
+                    k_e_temp,
                     nonce_record_inout,
                     partial_sig_sets_out.back().m_partial_signatures);
 
