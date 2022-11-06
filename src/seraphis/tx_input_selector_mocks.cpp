@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -89,7 +89,7 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
                     return false;
 
                 return LegacyContextualEnoteRecordV1::have_same_destination(contextual_enote_record,
-                    comparison_record.second.contextual_record<LegacyContextualEnoteRecordV1>());
+                    comparison_record.second.unwrap<LegacyContextualEnoteRecordV1>());
             };
 
         // ignore already added legacy inputs
@@ -119,7 +119,7 @@ bool InputSelectorMockSimpleV1::try_select_input_v1(const boost::multiprecision:
                     return false;
 
                 return SpContextualEnoteRecordV1::have_same_destination(contextual_enote_record,
-                    comparison_record.second.contextual_record<SpContextualEnoteRecordV1>());
+                    comparison_record.second.unwrap<SpContextualEnoteRecordV1>());
             };
 
         // ignore already added seraphis inputs
@@ -161,7 +161,7 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
 
                 return LegacyContextualEnoteRecordV1::have_same_destination(
                         mapped_enote_record.second,
-                        comparison_record.second.contextual_record<LegacyContextualEnoteRecordV1>()
+                        comparison_record.second.unwrap<LegacyContextualEnoteRecordV1>()
                     );
             };
 
@@ -221,7 +221,7 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
 
                 return SpContextualEnoteRecordV1::have_same_destination(
                         mapped_enote_record.second,
-                        comparison_record.second.contextual_record<SpContextualEnoteRecordV1>()
+                        comparison_record.second.unwrap<SpContextualEnoteRecordV1>()
                     );
             };
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -119,7 +119,7 @@ public:
     bool is_type() const { return boost::strict_get<T>(&m_partial_sig) != nullptr; }
 
     template <typename T>
-    const T& partial_sig() const
+    const T& unwrap() const
     {
         static const T empty{};
         return this->is_type<T>() ? boost::get<T>(m_partial_sig) : empty;

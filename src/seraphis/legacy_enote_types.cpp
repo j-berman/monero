@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -78,13 +78,13 @@ void LegacyEnoteV4::gen()
 const rct::key& LegacyEnoteVariant::onetime_address() const
 {
     if (this->is_type<LegacyEnoteV1>())
-        return this->enote<LegacyEnoteV1>().m_onetime_address;
+        return this->unwrap<LegacyEnoteV1>().m_onetime_address;
     else if (this->is_type<LegacyEnoteV2>())
-        return this->enote<LegacyEnoteV2>().m_onetime_address;
+        return this->unwrap<LegacyEnoteV2>().m_onetime_address;
     else if (this->is_type<LegacyEnoteV3>())
-        return this->enote<LegacyEnoteV3>().m_onetime_address;
+        return this->unwrap<LegacyEnoteV3>().m_onetime_address;
     else if (this->is_type<LegacyEnoteV4>())
-        return this->enote<LegacyEnoteV4>().m_onetime_address;
+        return this->unwrap<LegacyEnoteV4>().m_onetime_address;
     else
     {
         static constexpr rct::key temp{};
@@ -95,13 +95,13 @@ const rct::key& LegacyEnoteVariant::onetime_address() const
 rct::key LegacyEnoteVariant::amount_commitment() const
 {
     if (this->is_type<LegacyEnoteV1>())
-        return rct::zeroCommit(this->enote<LegacyEnoteV1>().m_amount);
+        return rct::zeroCommit(this->unwrap<LegacyEnoteV1>().m_amount);
     else if (this->is_type<LegacyEnoteV2>())
-        return this->enote<LegacyEnoteV2>().m_amount_commitment;
+        return this->unwrap<LegacyEnoteV2>().m_amount_commitment;
     else if (this->is_type<LegacyEnoteV3>())
-        return this->enote<LegacyEnoteV3>().m_amount_commitment;
+        return this->unwrap<LegacyEnoteV3>().m_amount_commitment;
     else if (this->is_type<LegacyEnoteV4>())
-        return this->enote<LegacyEnoteV4>().m_amount_commitment;
+        return this->unwrap<LegacyEnoteV4>().m_amount_commitment;
     else
         return rct::key{};
 }

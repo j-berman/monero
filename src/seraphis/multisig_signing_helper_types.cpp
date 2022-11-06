@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -61,9 +61,9 @@ bool MultisigProofInitSetV1::try_get_nonces(const std::size_t filter_index, std:
 const rct::key& MultisigPartialSigVariant::message() const
 {
     if (this->is_type<CLSAGMultisigPartial>())
-        return this->partial_sig<CLSAGMultisigPartial>().message;
+        return this->unwrap<CLSAGMultisigPartial>().message;
     else if (this->is_type<SpCompositionProofMultisigPartial>())
-        return this->partial_sig<SpCompositionProofMultisigPartial>().message;
+        return this->unwrap<SpCompositionProofMultisigPartial>().message;
     else
     {
         static constexpr rct::key temp{};
@@ -74,9 +74,9 @@ const rct::key& MultisigPartialSigVariant::message() const
 const rct::key& MultisigPartialSigVariant::proof_key() const
 {
     if (this->is_type<CLSAGMultisigPartial>())
-        return this->partial_sig<CLSAGMultisigPartial>().main_proof_key_K;
+        return this->unwrap<CLSAGMultisigPartial>().main_proof_key_K;
     else if (this->is_type<SpCompositionProofMultisigPartial>())
-        return this->partial_sig<SpCompositionProofMultisigPartial>().K;
+        return this->unwrap<SpCompositionProofMultisigPartial>().K;
     else
     {
         static constexpr rct::key temp{};

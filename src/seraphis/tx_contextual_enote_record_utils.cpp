@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -101,7 +101,7 @@ void split_selected_input_set(const input_set_tracker_t &input_set,
                 "splitting an input set (legacy): record is supposed to be legacy but is not.");
 
             legacy_contextual_records_out.emplace_back(
-                    mapped_contextual_enote_record.second.contextual_record<LegacyContextualEnoteRecordV1>()
+                    mapped_contextual_enote_record.second.unwrap<LegacyContextualEnoteRecordV1>()
                 );
         }
     }
@@ -114,7 +114,7 @@ void split_selected_input_set(const input_set_tracker_t &input_set,
                 "splitting an input set (legacy): record is supposed to be seraphis but is not.");
 
             sp_contextual_records_out.emplace_back(
-                    mapped_contextual_enote_record.second.contextual_record<SpContextualEnoteRecordV1>()
+                    mapped_contextual_enote_record.second.unwrap<SpContextualEnoteRecordV1>()
                 );
         }
     }

@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -303,7 +303,7 @@ public:
     bool is_type() const { return boost::strict_get<T>(&m_basic_record) != nullptr; }
 
     template <typename T>
-    const T& contextual_record() const
+    const T& unwrap() const
     {
         static const T empty{};
         return this->is_type<T>() ? boost::get<T>(m_basic_record) : empty;
@@ -342,7 +342,7 @@ public:
     bool is_type() const { return boost::strict_get<T>(&m_record) != nullptr; }
 
     template <typename T>
-    const T& contextual_record() const
+    const T& unwrap() const
     {
         static const T empty{};
         return this->is_type<T>() ? boost::get<T>(m_record) : empty;

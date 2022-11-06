@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -204,7 +204,7 @@ void collect_partial_sigs_v1(const std::vector<MultisigPartialSigVariant> &type_
         if (!type_erased_partial_sig.is_type<PartialSigT>())
             continue;
 
-        partial_sigs_out.emplace_back(type_erased_partial_sig.partial_sig<PartialSigT>());
+        partial_sigs_out.emplace_back(type_erased_partial_sig.unwrap<PartialSigT>());
     }
 }
 /**

@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -61,7 +61,7 @@ struct x25519_pubkey : public mx25519_pubkey
     x25519_pubkey(const mx25519_pubkey &other) { *this = other; }
     x25519_pubkey& operator=(const mx25519_pubkey &other) { memcpy(data, other.data, 32); return *this; }
 };
-struct x25519_scalar : public  mx25519_privkey
+struct x25519_scalar : public mx25519_privkey
 {
     x25519_scalar() = default;
     x25519_scalar(const mx25519_privkey &other) { *this = other; }

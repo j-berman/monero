@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -158,9 +158,9 @@ bool SpContextualEnoteRecordV1::has_spent_status(const SpEnoteSpentStatus test_s
 const SpEnoteOriginContextV1& ContextualBasicRecordVariant::origin_context() const
 {
     if (this->is_type<LegacyContextualBasicEnoteRecordV1>())
-        return this->contextual_record<LegacyContextualBasicEnoteRecordV1>().m_origin_context;
+        return this->unwrap<LegacyContextualBasicEnoteRecordV1>().m_origin_context;
     else if (this->is_type<SpContextualBasicEnoteRecordV1>())
-        return this->contextual_record<SpContextualBasicEnoteRecordV1>().m_origin_context;
+        return this->unwrap<SpContextualBasicEnoteRecordV1>().m_origin_context;
     else
     {
         static const SpEnoteOriginContextV1 temp{};
@@ -171,9 +171,9 @@ const SpEnoteOriginContextV1& ContextualBasicRecordVariant::origin_context() con
 rct::xmr_amount ContextualRecordVariant::amount() const
 {
     if (this->is_type<LegacyContextualEnoteRecordV1>())
-        return this->contextual_record<LegacyContextualEnoteRecordV1>().amount();
+        return this->unwrap<LegacyContextualEnoteRecordV1>().amount();
     else if (this->is_type<SpContextualEnoteRecordV1>())
-        return this->contextual_record<SpContextualEnoteRecordV1>().amount();
+        return this->unwrap<SpContextualEnoteRecordV1>().amount();
     else
         return 0;
 }
@@ -181,9 +181,9 @@ rct::xmr_amount ContextualRecordVariant::amount() const
 const SpEnoteOriginContextV1& ContextualRecordVariant::origin_context() const
 {
     if (this->is_type<LegacyContextualEnoteRecordV1>())
-        return this->contextual_record<LegacyContextualEnoteRecordV1>().m_origin_context;
+        return this->unwrap<LegacyContextualEnoteRecordV1>().m_origin_context;
     else if (this->is_type<SpContextualEnoteRecordV1>())
-        return this->contextual_record<SpContextualEnoteRecordV1>().m_origin_context;
+        return this->unwrap<SpContextualEnoteRecordV1>().m_origin_context;
     else
     {
         static const SpEnoteOriginContextV1 temp{};
@@ -194,9 +194,9 @@ const SpEnoteOriginContextV1& ContextualRecordVariant::origin_context() const
 const SpEnoteSpentContextV1& ContextualRecordVariant::spent_context() const
 {
     if (this->is_type<LegacyContextualEnoteRecordV1>())
-        return this->contextual_record<LegacyContextualEnoteRecordV1>().m_spent_context;
+        return this->unwrap<LegacyContextualEnoteRecordV1>().m_spent_context;
     else if (this->is_type<SpContextualEnoteRecordV1>())
-        return this->contextual_record<SpContextualEnoteRecordV1>().m_spent_context;
+        return this->unwrap<SpContextualEnoteRecordV1>().m_spent_context;
     else
     {
         static const SpEnoteSpentContextV1 temp{};

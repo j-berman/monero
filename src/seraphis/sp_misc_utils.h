@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -81,10 +81,10 @@ typename ContainerT::value_type& add_element(ContainerT &container)
     container.emplace_back();
     return container.back();
 }
-/// convenience erasor for maps: std::erase_if(std::unordered_map) is C++20
-template <typename MapT>
-void for_all_in_map_erase_if(MapT &map_inout,
-    const std::function<bool(const typename MapT::value_type&)> &predicate)
+/// convenience erasor for unordered maps: std::erase_if(std::unordered_map) is C++20
+template <typename KeyT, typename ValueT>
+void for_all_in_map_erase_if(std::unordered_map<KeyT, ValueT> &map_inout,
+    const std::function<bool(const typename std::unordered_map<KeyT, ValueT>::value_type&)> &predicate)
 {
     for (auto map_it = map_inout.begin(); map_it != map_inout.end();)
     {

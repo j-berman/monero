@@ -1,4 +1,4 @@
-// Copyright (c) 2021, The Monero Project
+// Copyright (c) 2022, The Monero Project
 //
 // All rights reserved.
 //
@@ -169,7 +169,7 @@ public:
     bool is_type() const { return boost::strict_get<T>(&m_enote) != nullptr; }
 
     template <typename T>
-    const T& enote() const { static constexpr T empty{}; return this->is_type<T>() ? boost::get<T>(m_enote) : empty; }
+    const T& unwrap() const { static constexpr T empty{}; return this->is_type<T>() ? boost::get<T>(m_enote) : empty; }
 
 private:
 //member variables
