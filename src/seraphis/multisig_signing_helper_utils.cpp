@@ -459,13 +459,18 @@ bool validate_v1_multisig_init_set_collection_v1(
     if (init_set_collection.size() != expected_proof_contexts.size())
         return false;
 
+    // check that the init set collection maps to its internal proof keys correctly
+    if (!keys_match_internal_values(init_set_collection,
+                [](const MultisigProofInitSetV1 &init_set) -> const rct::key&
+                {
+                    return init_set.m_proof_key;
+                }
+            ))
+        return false;
+
     // validate each init set in the input collection
     for (const auto &init_set : init_set_collection)
     {
-        // check that the init set maps to its proof key properly
-        if (!(init_set.first == init_set.second.m_proof_key))
-            return false;
-
         // check that the init set has one of the expected messages
         // note: using maps ensures the expected proof contexts line up 1:1 with init sets without duplicates
         if (expected_proof_contexts.find(init_set.first) == expected_proof_contexts.end())
