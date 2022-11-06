@@ -68,7 +68,6 @@
 //third party headers
 
 //standard headers
-#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -79,72 +78,76 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
+// legacy proof context     [ legacy Ko : tx proposal prefix ]  //todo: per-proof message for legacy
+// legacy proof base points [ legacy Ko : {G, Hp(legacy Ko)} ]
 //-------------------------------------------------------------------------------------------------------------------
-static void get_legacy_onetime_addresses_for_multisig_init_set(
+static void prepare_for_legacy_multisig_init_set(const rct::key &tx_proposal_prefix,
     const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
-    std::vector<std::pair<rct::key, rct::keyV>> &legacy_onetime_addresses_for_multisig_init_set_out)
+    std::unordered_map<rct::key, rct::key> &legacy_input_proof_contexts_out,
+    std::unordered_map<rct::key, rct::keyV> &legacy_proof_key_base_points_out)
 {
-    legacy_onetime_addresses_for_multisig_init_set_out.clear();
-    legacy_onetime_addresses_for_multisig_init_set_out.reserve(legacy_input_proposals.size());
+    legacy_input_proof_contexts_out.clear();
+    legacy_proof_key_base_points_out.clear();
     crypto::key_image key_image_base_temp;
 
     for (const LegacyInputProposalV1 &input_proposal : legacy_input_proposals)
     {
-        crypto::generate_key_image(rct::rct2pk(input_proposal.m_onetime_address), rct::rct2sk(rct::I), key_image_base_temp);
+        // proof context
+        legacy_input_proof_contexts_out[input_proposal.m_onetime_address] = tx_proposal_prefix;
 
-        legacy_onetime_addresses_for_multisig_init_set_out.emplace_back(
-                std::pair<rct::key, rct::keyV>{
-                        input_proposal.m_onetime_address,
-                        {rct::G, rct::ki2rct(key_image_base_temp)}
-                    }
-            );
+        // proof base points
+        crypto::generate_key_image(rct::rct2pk(input_proposal.m_onetime_address), rct::rct2sk(rct::I), key_image_base_temp);
+        legacy_proof_key_base_points_out[input_proposal.m_onetime_address] = {rct::G, rct::ki2rct(key_image_base_temp)};
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
+// seraphis proof context [ seraphis K" : tx proposal prefix ]
+// seraphis proof keys    [ seraphis K" : {U}                ]
 //-------------------------------------------------------------------------------------------------------------------
-static void get_masked_addresses_for_multisig_init_set(const std::vector<SpInputProposalV1> &sp_input_proposals,
-    std::vector<std::pair<rct::key, rct::keyV>> &masked_addresses_for_multisig_init_set_out)
+static void prepare_for_sp_multisig_init_set(const rct::key &tx_proposal_prefix,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
+    std::unordered_map<rct::key, rct::key> &sp_input_proof_contexts_out,
+    std::unordered_map<rct::key, rct::keyV> &sp_proof_key_base_points_out)
 {
-    masked_addresses_for_multisig_init_set_out.clear();
-    masked_addresses_for_multisig_init_set_out.reserve(sp_input_proposals.size());
+    sp_input_proof_contexts_out.clear();
+    sp_proof_key_base_points_out.clear();
     SpEnoteImageV1 enote_image_temp;
 
     for (const SpInputProposalV1 &input_proposal : sp_input_proposals)
     {
         input_proposal.get_enote_image_v1(enote_image_temp);
 
-        masked_addresses_for_multisig_init_set_out.emplace_back(
-                std::pair<rct::key, rct::keyV>{
-                        enote_image_temp.m_core.m_masked_address,
-                        {rct::pk2rct(crypto::get_U())}
-                    }
-            );
+        // proof context
+        sp_input_proof_contexts_out[enote_image_temp.m_core.m_masked_address] = tx_proposal_prefix;
+
+        // proof base points
+        sp_proof_key_base_points_out[enote_image_temp.m_core.m_masked_address] = {rct::pk2rct(crypto::get_U())};
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void get_onetime_addresses(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
-    rct::keyV &input_onetime_addresses)
+static void get_legacy_proof_contexts_v1(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    const rct::key &tx_proposal_prefix,
+    std::unordered_map<rct::key, rct::key> &proof_contexts_out)  //[ proof key : proof message ]
 {
-    input_onetime_addresses.clear();
-    input_onetime_addresses.reserve(legacy_input_proposals.size());
+    proof_contexts_out.clear();
 
     for (const LegacyInputProposalV1 &input_proposal : legacy_input_proposals)
-        input_onetime_addresses.emplace_back(input_proposal.m_onetime_address);
+        proof_contexts_out[input_proposal.m_onetime_address] = tx_proposal_prefix;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void get_masked_addresses(const std::vector<SpInputProposalV1> &sp_input_proposals,
-    rct::keyV &masked_addresses_out)
+static void get_seraphis_proof_contexts_v1(const std::vector<SpInputProposalV1> &sp_input_proposals,
+    const rct::key &tx_proposal_prefix,
+    std::unordered_map<rct::key, rct::key> &proof_contexts_out)  //[ proof key : proof message ]
 {
-    masked_addresses_out.clear();
-    masked_addresses_out.reserve(sp_input_proposals.size());
+    proof_contexts_out.clear();
     SpEnoteImageV1 enote_image_temp;
 
     for (const SpInputProposalV1 &input_proposal : sp_input_proposals)
     {
         input_proposal.get_enote_image_v1(enote_image_temp);
-        masked_addresses_out.emplace_back(enote_image_temp.m_core.m_masked_address);
+        proof_contexts_out[enote_image_temp.m_core.m_masked_address] = tx_proposal_prefix;
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -269,119 +272,6 @@ static void collect_sp_composition_proof_privkeys_for_multisig(const std::vector
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void prepare_filters_for_multisig_partial_signing(const std::uint32_t threshold,
-    const std::vector<crypto::public_key> &multisig_signers,
-    const crypto::public_key &local_signer_id,
-    const multisig::signer_set_filter multisig_proposal_aggregate_signer_set_filter,
-    const std::vector<MultisigProofInitSetV1> &all_input_init_sets,
-    multisig::signer_set_filter &local_signer_filter_out,
-    multisig::signer_set_filter &available_signers_filter_out,
-    std::vector<multisig::signer_set_filter> &available_signers_as_filters_out,
-    std::vector<multisig::signer_set_filter> &filter_permutations_out)
-{
-    // 1. save local signer as filter
-    multisig::multisig_signer_to_filter(local_signer_id, multisig_signers, local_signer_filter_out);
-
-    // 2. collect available signers
-    std::vector<crypto::public_key> available_signers;
-    available_signers.reserve(all_input_init_sets.size());
-
-    for (const MultisigProofInitSetV1 &input_init_set : all_input_init_sets)
-        available_signers.emplace_back(input_init_set.m_signer_id);
-
-    // 3. available signers as a filter
-    multisig::multisig_signers_to_filter(available_signers, multisig_signers, available_signers_filter_out);
-
-    // 4. available signers as individual filters
-    available_signers_as_filters_out.clear();
-    available_signers_as_filters_out.reserve(available_signers.size());
-
-    for (const crypto::public_key &available_signer : available_signers)
-    {
-        multisig::multisig_signer_to_filter(available_signer,
-            multisig_signers,
-            add_element(available_signers_as_filters_out));
-    }
-
-    // 5. filter permutations (every subgroup of signers that is eligible to make a signature attempt)
-    multisig::aggregate_multisig_signer_set_filter_to_permutations(threshold,
-        multisig_signers.size(),
-        multisig_proposal_aggregate_signer_set_filter,
-        filter_permutations_out);
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-template <typename PartialSigT>
-static void collect_partial_sigs_v1(const std::vector<MultisigPartialSigVariant> &type_erased_partial_sigs,
-    std::vector<PartialSigT> &partial_sigs_out)
-{
-    partial_sigs_out.clear();
-    partial_sigs_out.reserve(type_erased_partial_sigs.size());
-
-    for (const MultisigPartialSigVariant &type_erased_partial_sig : type_erased_partial_sigs)
-    {
-        // skip partial signatures of undesired types
-        if (!type_erased_partial_sig.is_type<PartialSigT>())
-            continue;
-
-        partial_sigs_out.emplace_back(type_erased_partial_sig.partial_sig<PartialSigT>());
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-template <typename PartialSigT, typename ContextualSigT>
-bool try_assemble_contextual_multisig_partial_sigs(const std::size_t num_expected_completed_sigs,
-    const std::unordered_map<multisig::signer_set_filter,  //signing group
-        std::unordered_map<rct::key,                       //proof key 
-            std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter,
-    const std::function<bool(const rct::key&, const std::vector<PartialSigT>&, ContextualSigT&)>
-        &try_assemble_partial_sigs_func,
-    std::vector<ContextualSigT> &contextual_sigs_out)
-{
-    contextual_sigs_out.clear();
-    contextual_sigs_out.reserve(num_expected_completed_sigs);
-
-    std::unordered_set<rct::key> proof_keys_with_completed_signatures;
-    std::vector<PartialSigT> partial_sigs_temp;
-
-    for (const auto &signer_group_partial_sigs : collected_sigs_per_key_per_filter)
-    {
-        for (const auto &proof_key_and_partial_sigs : signer_group_partial_sigs.second)
-        {
-            // a. skip partial sig sets for proof keys that already have a completed proof (from a different
-            //   signer group)
-            if (proof_keys_with_completed_signatures.find(proof_key_and_partial_sigs.first) != 
-                    proof_keys_with_completed_signatures.end())
-                continue;
-
-            // b. convert type-erased partial sigs to the type we want
-            collect_partial_sigs_v1<PartialSigT>(proof_key_and_partial_sigs.second, partial_sigs_temp);
-
-            // c. try to make the contextual signature (ignore exceptions and failures)
-            contextual_sigs_out.emplace_back();
-
-            bool assemble_result;
-            try
-            {
-                assemble_result = try_assemble_partial_sigs_func(proof_key_and_partial_sigs.first,
-                    partial_sigs_temp,
-                    contextual_sigs_out.back());
-            } catch (...) { assemble_result = false; }
-
-            if (assemble_result == true)
-                proof_keys_with_completed_signatures.insert(proof_key_and_partial_sigs.first);
-            else
-                contextual_sigs_out.pop_back();
-        }
-    }
-
-    if (contextual_sigs_out.size() != num_expected_completed_sigs)
-        return false;
-
-    return true;
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
 static bool try_make_v1_legacy_input_v1(const rct::key &expected_proposal_prefix,
     const LegacyInputProposalV1 &input_proposal,
     std::vector<std::uint64_t> reference_set,
@@ -461,120 +351,6 @@ static bool try_make_v1_sp_partial_input_v1(const rct::key &expected_proposal_pr
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static bool try_make_v1_multisig_partial_sig_sets_for_inputs_v1(const multisig::multisig_account &signer_account,
-    const cryptonote::account_generator_era expected_multisig_account_era,
-    const SpMultisigTxProposalV1 &multisig_tx_proposal,
-    const rct::key &legacy_spend_pubkey,
-    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
-    const crypto::secret_key &legacy_view_privkey,
-    const rct::key &jamtis_spend_pubkey,
-    const crypto::secret_key &k_view_balance,
-    const std::string &expected_version_string,
-    const rct::keyV &expected_proof_keys,
-    const std::size_t num_expected_proof_basekeys,
-    const MultisigPartialSigMaker &partial_sig_maker,
-    MultisigProofInitSetV1 local_input_init_set,
-    std::vector<MultisigProofInitSetV1> other_input_init_sets,
-    MultisigNonceRecord &nonce_record_inout,
-    std::vector<MultisigPartialSigSetV1> &input_partial_sig_sets_out)
-{
-    CHECK_AND_ASSERT_THROW_MES(signer_account.multisig_is_ready(),
-        "multisig input partial sigs: signer account is not complete, so it can't make partial signatures.");
-    CHECK_AND_ASSERT_THROW_MES(signer_account.get_era() == expected_multisig_account_era,
-        "multisig input partial sigs: signer account does not have the expected account era.");
-
-    input_partial_sig_sets_out.clear();
-
-
-    /// prepare pieces to use below
-
-    // 1. misc. from account
-    const std::uint32_t threshold{signer_account.get_threshold()};
-    const std::vector<crypto::public_key> &multisig_signers{signer_account.get_signers()};
-    const crypto::public_key &local_signer_id{signer_account.get_base_pubkey()};
-
-    // 3. validate multisig tx proposal
-    // note: this check is effectively redundant because it is called when making the local input init set,
-    //       so validating the local input init set (which was successfully created) with the tx proposal's proposal
-    //       prefix should imply the multisig tx proposal here is valid; but, redundancy is good
-    check_v1_multisig_tx_proposal_semantics_v1(multisig_tx_proposal,
-        expected_version_string,
-        threshold,
-        multisig_signers.size(),
-        legacy_spend_pubkey,
-        legacy_subaddress_map,
-        legacy_view_privkey,
-        jamtis_spend_pubkey,
-        k_view_balance);
-
-    // 4. misc. from multisig tx proposal
-    SpTxProposalV1 tx_proposal;
-    multisig_tx_proposal.get_v1_tx_proposal_v1(legacy_spend_pubkey,
-        legacy_subaddress_map,
-        legacy_view_privkey,
-        jamtis_spend_pubkey,
-        k_view_balance,
-        tx_proposal);
-
-    rct::key tx_proposal_prefix;
-    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
-
-    // 5. validate and assemble input inits
-    std::vector<MultisigProofInitSetV1> all_input_init_sets;
-
-    validate_and_prepare_multisig_init_sets_v1(multisig_tx_proposal.m_aggregate_signer_set_filter,
-        threshold,
-        multisig_signers,
-        local_signer_id,
-        expected_proof_keys,
-        num_expected_proof_basekeys,
-        tx_proposal_prefix,
-        std::move(local_input_init_set),
-        std::move(other_input_init_sets),
-        all_input_init_sets);
-
-    // 6. prepare filters for signing
-    multisig::signer_set_filter local_signer_filter;
-    multisig::signer_set_filter available_signers_filter;
-    std::vector<multisig::signer_set_filter> available_signers_as_filters;
-    std::vector<multisig::signer_set_filter> filter_permutations;
-
-    prepare_filters_for_multisig_partial_signing(threshold,
-        multisig_signers,
-        local_signer_id,
-        multisig_tx_proposal.m_aggregate_signer_set_filter,
-        all_input_init_sets,
-        local_signer_filter,
-        available_signers_filter,
-        available_signers_as_filters,  //note: expected to align with all_input_init_sets
-        filter_permutations);
-
-
-    /// give up if not enough signers provided material to initialize a signature
-    if (available_signers_as_filters.size() < threshold)
-        return false;
-
-
-    /// make partial signatures
-    make_v1_multisig_partial_sig_sets_v1(signer_account,
-        tx_proposal_prefix,
-        expected_proof_keys,
-        filter_permutations,
-        local_signer_filter,
-        all_input_init_sets,
-        available_signers_filter,
-        available_signers_as_filters,
-        partial_sig_maker,
-        nonce_record_inout,
-        input_partial_sig_sets_out);
-
-    if (input_partial_sig_sets_out.size() == 0)
-        return false;
-
-    return true;
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
 static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
     const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
     const std::vector<LegacyMultisigInputProposalV1> &legacy_multisig_input_proposals,
@@ -588,13 +364,13 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
     // - collect onetime addresses of legacy inputs
     // - map legacy input proposals to their onetime addresses
     // - map masked commitments to the corresponding onetime addresses
-    std::unordered_set<rct::key> expected_legacy_onetime_addresses;
+    std::unordered_map<rct::key, rct::key> legacy_proof_contexts;  //[ proof key : proof message ]
     std::unordered_map<rct::key, LegacyInputProposalV1> mapped_legacy_input_proposals;
     std::unordered_map<rct::key, rct::key> mapped_masked_commitments;
 
     for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
     {
-        expected_legacy_onetime_addresses.insert(legacy_input_proposal.m_onetime_address);
+        legacy_proof_contexts[legacy_input_proposal.m_onetime_address] = tx_proposal_prefix;  //todo: message per Ko
         mapped_legacy_input_proposals[legacy_input_proposal.m_onetime_address] = legacy_input_proposal;
         mask_key(legacy_input_proposal.m_commitment_mask,
             legacy_input_proposal.m_amount_commitment,
@@ -622,15 +398,14 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
             std::vector<MultisigPartialSigVariant>>> collected_sigs_per_key_per_filter;
 
     filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
-        tx_proposal_prefix,
-        expected_legacy_onetime_addresses,
+        legacy_proof_contexts,
         MultisigPartialSigVariant::type_index_of<CLSAGMultisigPartial>(),
         legacy_input_partial_sigs_per_signer,
         collected_sigs_per_key_per_filter);
 
-    // 5. try to make one legacy input per onetime address
+    // 5. try to make one legacy input per input proposal
     if (!try_assemble_contextual_multisig_partial_sigs<CLSAGMultisigPartial, LegacyInputV1>(
-                expected_legacy_onetime_addresses.size(),
+                legacy_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
                 [&](const rct::key &proof_key,
                     const std::vector<CLSAGMultisigPartial> &partial_sigs,
@@ -661,14 +436,14 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
     std::vector<SpPartialInputV1> &sp_partial_inputs_out)
 {
     // 1. collect seraphis masked addresses of input images and map seraphis input proposals to their masked addresses
-    std::unordered_set<rct::key> expected_sp_masked_addresses;
+    std::unordered_map<rct::key, rct::key> sp_proof_contexts;  //[ proof key : proof message ]
     std::unordered_map<rct::key, SpInputProposalV1> mapped_sp_input_proposals;
     SpEnoteImageV1 enote_image_temp;
 
     for (const SpInputProposalV1 &sp_input_proposal : sp_input_proposals)
     {
         sp_input_proposal.get_enote_image_v1(enote_image_temp);
-        expected_sp_masked_addresses.insert(enote_image_temp.m_core.m_masked_address);
+        sp_proof_contexts[enote_image_temp.m_core.m_masked_address] = tx_proposal_prefix;
         mapped_sp_input_proposals[enote_image_temp.m_core.m_masked_address] = sp_input_proposal;
     }
 
@@ -678,15 +453,14 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
             std::vector<MultisigPartialSigVariant>>> collected_sigs_per_key_per_filter;
 
     filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
-        tx_proposal_prefix,
-        expected_sp_masked_addresses,
+        sp_proof_contexts,
         MultisigPartialSigVariant::type_index_of<SpCompositionProofMultisigPartial>(),
         sp_input_partial_sigs_per_signer,
         collected_sigs_per_key_per_filter);
 
-    // 3. try to make one seraphis partial input per masked address
+    // 3. try to make one seraphis partial input per input proposal
     if (!try_assemble_contextual_multisig_partial_sigs<SpCompositionProofMultisigPartial, SpPartialInputV1>(
-                expected_sp_masked_addresses.size(),
+                sp_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
                 [&](const rct::key &proof_key,
                     const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
@@ -1151,8 +925,8 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     MultisigNonceRecord &nonce_record_inout,
-    MultisigProofInitSetV1 &legacy_input_init_set_out,
-    MultisigProofInitSetV1 &sp_input_init_set_out)
+    std::unordered_map<rct::key, MultisigProofInitSetV1> &legacy_input_init_set_collection_out,
+    std::unordered_map<rct::key, MultisigProofInitSetV1> &sp_input_init_set_collection_out)
 {
     // 1. validate multisig tx proposal
     check_v1_multisig_tx_proposal_semantics_v1(multisig_tx_proposal,
@@ -1169,47 +943,58 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
             multisig_tx_proposal.m_sp_multisig_input_proposals.size() > 0,
         "make multisig input init sets: no inputs to initialize.");
 
-    // 2. make proposal prefix
+    // 2. make tx proposal (for sorted inputs and the tx proposal prefix)
     SpTxProposalV1 tx_proposal;
-    rct::key proposal_prefix;
     multisig_tx_proposal.get_v1_tx_proposal_v1(legacy_spend_pubkey,
         legacy_subaddress_map,
         legacy_view_privkey,
         jamtis_spend_pubkey,
         k_view_balance,
         tx_proposal);
-    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, proposal_prefix);
 
-    // 3. prepare proof keys (mapped to multisig proof base point sets)
-    // a. legacy proof keys [ legacy Ko : {G, Hp(legacy Ko)} ]
-    std::vector<std::pair<rct::key, rct::keyV>> legacy_onetime_addresses_for_multisig_init_set;
-    get_legacy_onetime_addresses_for_multisig_init_set(tx_proposal.m_legacy_input_proposals,
-        legacy_onetime_addresses_for_multisig_init_set);
+    // 3. tx proposal prefix
+    rct::key tx_proposal_prefix;
+    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
-    // b. seraphis proof keys [ seraphis K" : {U} ]
-    std::vector<std::pair<rct::key, rct::keyV>> masked_addresses_for_multisig_init_set;
-    get_masked_addresses_for_multisig_init_set(tx_proposal.m_sp_input_proposals, masked_addresses_for_multisig_init_set);
+    // 4. prepare proof contexts and multisig proof base points
+    // a. legacy proof context     [ legacy Ko : tx proposal prefix ]  //todo: per-proof message for legacy
+    // b. legacy proof base points [ legacy Ko : {G, Hp(legacy Ko)} ]
+    std::unordered_map<rct::key, rct::key> legacy_input_proof_contexts;
+    std::unordered_map<rct::key, rct::keyV> legacy_proof_key_base_points;
+    prepare_for_legacy_multisig_init_set(tx_proposal_prefix,
+        tx_proposal.m_legacy_input_proposals,
+        legacy_input_proof_contexts,
+        legacy_proof_key_base_points);
 
-    // 4. finish making multisig input init sets
+    // c. seraphis proof context [ seraphis K" : tx proposal prefix ]
+    // d. seraphis proof keys    [ seraphis K" : {U}                ]
+    std::unordered_map<rct::key, rct::key> sp_input_proof_contexts;
+    std::unordered_map<rct::key, rct::keyV> sp_proof_key_base_points;
+    prepare_for_sp_multisig_init_set(tx_proposal_prefix,
+        tx_proposal.m_sp_input_proposals,
+        sp_input_proof_contexts,
+        sp_proof_key_base_points);
+
+    // 5. finish making multisig input init sets
     // a. legacy input init set
-    make_v1_multisig_init_set_v1(signer_id,
-        threshold,
+    make_v1_multisig_init_set_collection_v1(threshold,
         multisig_signers,
-        proposal_prefix,
-        legacy_onetime_addresses_for_multisig_init_set,
         multisig_tx_proposal.m_aggregate_signer_set_filter,
+        signer_id,
+        legacy_input_proof_contexts,
+        legacy_proof_key_base_points,
         nonce_record_inout,
-        legacy_input_init_set_out);
+        legacy_input_init_set_collection_out);
 
     // b. seraphis input init set
-    make_v1_multisig_init_set_v1(signer_id,
-        threshold,
+    make_v1_multisig_init_set_collection_v1(threshold,
         multisig_signers,
-        proposal_prefix,
-        masked_addresses_for_multisig_init_set,
         multisig_tx_proposal.m_aggregate_signer_set_filter,
+        signer_id,
+        sp_input_proof_contexts,
+        sp_proof_key_base_points,
         nonce_record_inout,
-        sp_input_init_set_out);
+        sp_input_init_set_collection_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::multisig_account &signer_account,
@@ -1218,8 +1003,11 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const std::string &expected_version_string,
-    MultisigProofInitSetV1 local_input_init_set,
-    std::vector<MultisigProofInitSetV1> other_input_init_sets,
+    //[ proof key : init set ]
+    std::unordered_map<rct::key, MultisigProofInitSetV1> local_input_init_set_collection,
+    //[ signer id : [ proof key : init set ] ]
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        other_input_init_set_collections,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out)
 {
@@ -1241,7 +1029,21 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     const std::uint32_t threshold{signer_account.get_threshold()};
     const rct::key legacy_spend_pubkey{rct::pk2rct(signer_account.get_multisig_pubkey())};
 
-    // 2. normal tx proposal (to get sorted inputs)
+    // 2. validate multisig tx proposal
+    // note: this check is effectively redundant because it is called when making the local input init set,
+    //       so validating the local input init set (which was successfully created) with the tx proposal's proposal
+    //       prefix should imply the multisig tx proposal here is valid; but, redundancy is good
+    check_v1_multisig_tx_proposal_semantics_v1(multisig_tx_proposal,
+        expected_version_string,
+        threshold,
+        signer_account.get_signers().size(),
+        legacy_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
+        jamtis_spend_pubkey,
+        k_view_balance);
+
+    // 3. normal tx proposal (to get sorted inputs and the tx proposal prefix)
     SpTxProposalV1 tx_proposal;
     multisig_tx_proposal.get_v1_tx_proposal_v1(legacy_spend_pubkey,
         legacy_subaddress_map,
@@ -1250,11 +1052,16 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
         k_view_balance,
         tx_proposal);
 
-    // 3. legacy onetime addresses
-    rct::keyV input_onetime_addresses;
-    get_onetime_addresses(tx_proposal.m_legacy_input_proposals, input_onetime_addresses);
+    // 4. tx proposal prefix
+    rct::key tx_proposal_prefix;
+    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
-    // 4. legacy enote view privkeys and amount commitment masks (for signing)
+    // 5. legacy proof contexts: [ onetime address : tx proposal prefix ]
+    // note: for legacy inputs, all CLSAG input proofs sign the same message (TODO: sign separate messages)
+    std::unordered_map<rct::key, rct::key> input_proof_contexts;  //[ proof key : proof message ]
+    get_legacy_proof_contexts_v1(tx_proposal.m_legacy_input_proposals, tx_proposal_prefix, input_proof_contexts);
+
+    // 6. legacy enote view privkeys and amount commitment masks (for signing)
     std::vector<crypto::secret_key> proof_privkeys_k_offset;
     std::vector<crypto::secret_key> proof_privkeys_z;
 
@@ -1262,7 +1069,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
         proof_privkeys_k_offset,
         proof_privkeys_z);
 
-    // 5. signature maker for legacy CLSAG proofs
+    // 7. signature maker for legacy CLSAG proofs
     const MultisigPartialSigMakerCLSAG partial_sig_maker{
             threshold,
             multisig_tx_proposal.m_legacy_input_proof_proposals,
@@ -1272,20 +1079,14 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
 
 
     /// finish making partial signatures
-    if (!try_make_v1_multisig_partial_sig_sets_for_inputs_v1(signer_account,
+    if (!try_make_v1_multisig_partial_sig_sets_v1(signer_account,
             cryptonote::account_generator_era::cryptonote,
-            multisig_tx_proposal,
-            legacy_spend_pubkey,
-            legacy_subaddress_map,
-            legacy_view_privkey,
-            jamtis_spend_pubkey,
-            k_view_balance,
-            expected_version_string,
-            input_onetime_addresses,
+            multisig_tx_proposal.m_aggregate_signer_set_filter,
+            input_proof_contexts,
             2,  //legacy multisig: sign on G and Hp(Ko)
             partial_sig_maker,
-            std::move(local_input_init_set),
-            std::move(other_input_init_sets),
+            std::move(local_input_init_set_collection),
+            std::move(other_input_init_set_collections),
             nonce_record_inout,
             legacy_input_partial_sig_sets_out))
         return false;
@@ -1299,8 +1100,11 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
     const std::string &expected_version_string,
-    MultisigProofInitSetV1 local_input_init_set,
-    std::vector<MultisigProofInitSetV1> other_input_init_sets,
+    //[ proof key : init set ]
+    std::unordered_map<rct::key, MultisigProofInitSetV1> local_input_init_set_collection,
+    //[ signer id : [ proof key : init set ] ]
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        other_input_init_set_collections,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out)
 {
@@ -1324,7 +1128,18 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     rct::key jamtis_spend_pubkey{rct::pk2rct(signer_account.get_multisig_pubkey())};
     extend_seraphis_spendkey_x(k_view_balance, jamtis_spend_pubkey);
 
-    // 3. normal tx proposal (to get sorted inputs)
+    // 3. validate multisig tx proposal (this may be redundant for the caller, but should be done for robustness)
+    check_v1_multisig_tx_proposal_semantics_v1(multisig_tx_proposal,
+        expected_version_string,
+        threshold,
+        signer_account.get_signers().size(),
+        legacy_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
+        jamtis_spend_pubkey,
+        k_view_balance);
+
+    // 4. normal tx proposal (to get tx proposal prefix and sorted inputs)
     SpTxProposalV1 tx_proposal;
     multisig_tx_proposal.get_v1_tx_proposal_v1(legacy_spend_pubkey,
         legacy_subaddress_map,
@@ -1333,11 +1148,16 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
         k_view_balance,
         tx_proposal);
 
-    // 4. seraphis masked addresses
-    rct::keyV input_masked_addresses;
-    get_masked_addresses(tx_proposal.m_sp_input_proposals, input_masked_addresses);
+    // 5. tx proposal prefix
+    rct::key tx_proposal_prefix;
+    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
-    // 5. seraphis enote view privkeys, address masks, and squash prefixes (for signing)
+    // 6. seraphis proof contexts: [ masked address : tx proposal prefix ]
+    // note: for seraphis, all seraphis input image proofs sign the same message
+    std::unordered_map<rct::key, rct::key> input_proof_contexts;  //[ proof key : proof message ]
+    get_seraphis_proof_contexts_v1(tx_proposal.m_sp_input_proposals, tx_proposal_prefix, input_proof_contexts);
+
+    // 7. seraphis enote view privkeys, address masks, and squash prefixes (for signing)
     std::vector<crypto::secret_key> proof_privkeys_x;
     std::vector<crypto::secret_key> proof_privkeys_y;
     std::vector<crypto::secret_key> proof_privkeys_z_offset;
@@ -1349,7 +1169,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
         proof_privkeys_z_offset,
         proof_privkeys_z_multiplier);
 
-    // 6. signature maker for seraphis composition proofs
+    // 8. signature maker for seraphis composition proofs
     const MultisigPartialSigMakerSpCompositionProof partial_sig_maker{
             threshold,
             multisig_tx_proposal.m_sp_input_proof_proposals,
@@ -1361,20 +1181,14 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
 
 
     /// finish making partial signatures
-    if (!try_make_v1_multisig_partial_sig_sets_for_inputs_v1(signer_account,
+    if (!try_make_v1_multisig_partial_sig_sets_v1(signer_account,
             cryptonote::account_generator_era::seraphis,
-            multisig_tx_proposal,
-            legacy_spend_pubkey,
-            legacy_subaddress_map,
-            legacy_view_privkey,
-            jamtis_spend_pubkey,
-            k_view_balance,
-            expected_version_string,
-            input_masked_addresses,
+            multisig_tx_proposal.m_aggregate_signer_set_filter,
+            input_proof_contexts,
             1,  //sp multisig: sign on U
             partial_sig_maker,
-            std::move(local_input_init_set),
-            std::move(other_input_init_sets),
+            std::move(local_input_init_set_collection),
+            std::move(other_input_init_set_collections),
             nonce_record_inout,
             sp_input_partial_sig_sets_out))
         return false;

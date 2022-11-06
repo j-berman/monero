@@ -48,17 +48,12 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-bool MultisigProofInitSetV1::try_get_nonces(const rct::key &proof_key,
-    const std::size_t nonces_index,
-    std::vector<MultisigPubNonces> &nonces_out) const
+bool MultisigProofInitSetV1::try_get_nonces(const std::size_t filter_index, std::vector<MultisigPubNonces> &nonces_out) const
 {
-    if (m_inits.find(proof_key) == m_inits.end())
+    if (filter_index >= m_inits.size())
         return false;
 
-    if (nonces_index >= m_inits.at(proof_key).size())
-        return false;
-
-    nonces_out = m_inits.at(proof_key)[nonces_index];
+    nonces_out = m_inits[filter_index];
 
     return true;
 }

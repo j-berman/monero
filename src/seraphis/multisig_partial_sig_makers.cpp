@@ -160,7 +160,8 @@ MultisigPartialSigMakerCLSAG::MultisigPartialSigMakerCLSAG(const std::uint32_t t
         m_cached_proof_keys[m_proof_proposals[signature_proposal_index].main_proof_key()] = signature_proposal_index;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void MultisigPartialSigMakerCLSAG::attempt_make_partial_sig(const rct::key &proof_key,
+void MultisigPartialSigMakerCLSAG::attempt_make_partial_sig(const rct::key &proof_message,
+    const rct::key &proof_key,
     const multisig::signer_set_filter signer_group_filter,
     const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
     const crypto::secret_key &local_multisig_signing_key,
@@ -174,6 +175,10 @@ void MultisigPartialSigMakerCLSAG::attempt_make_partial_sig(const rct::key &proo
         "requirements (must be two sets for base keys G and Hp(proof key)).");
 
     const std::size_t signature_proposal_index{m_cached_proof_keys.at(proof_key)};
+
+    CHECK_AND_ASSERT_THROW_MES(m_proof_proposals.at(signature_proposal_index).message == proof_message,
+        "MultisigPartialSigMakerCLSAG (attempt make partial sig): requested proof message doesn't match with the expected "
+        "proof proposal.");
 
     partial_sig_out = attempt_make_clsag_multisig_partial_sig(m_inv_threshold,
         local_multisig_signing_key,
@@ -217,7 +222,8 @@ MultisigPartialSigMakerSpCompositionProof::MultisigPartialSigMakerSpCompositionP
         m_cached_proof_keys[m_proof_proposals[signature_proposal_index].K] = signature_proposal_index;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const rct::key &proof_key,
+void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const rct::key &proof_message,
+    const rct::key &proof_key,
     const multisig::signer_set_filter signer_group_filter,
     const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
     const crypto::secret_key &local_multisig_signing_key,
@@ -232,6 +238,10 @@ void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const r
         "signature requirements (must be one sets for base key U).");
 
     const std::size_t signature_proposal_index{m_cached_proof_keys.at(proof_key)};
+
+    CHECK_AND_ASSERT_THROW_MES(m_proof_proposals.at(signature_proposal_index).message == proof_message,
+        "MultisigPartialSigMakerCLSAG (attempt make partial sig): requested proof message doesn't match with the expected "
+        "proof proposal.");
 
     partial_sig_out = attempt_make_sp_composition_multisig_partial_sig(m_inv_threshold,
         m_proof_privkeys_x.at(signature_proposal_index),

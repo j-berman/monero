@@ -218,8 +218,8 @@ void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecord
 * param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * inoutparam: nonce_record_inout -
-* outparam: legacy_input_init_set_out -
-* outparam: sp_input_init_set_out -
+* outparam: legacy_input_init_set_collection_out -
+* outparam: sp_input_init_set_collection_out -
 */
 void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_id,
     const std::uint32_t threshold,
@@ -232,8 +232,8 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     MultisigNonceRecord &nonce_record_inout,
-    MultisigProofInitSetV1 &legacy_input_init_set_out,
-    MultisigProofInitSetV1 &sp_input_init_set_out);
+    std::unordered_map<rct::key, MultisigProofInitSetV1> &legacy_input_init_set_collection_out,
+    std::unordered_map<rct::key, MultisigProofInitSetV1> &sp_input_init_set_collection_out);
 /**
 * brief: try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1 - try to make multisig partial signatures for legacy
 *      tx inputs
@@ -246,8 +246,8 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
 * param: jamtis_spend_pubkey -
 * param: k_view_balance -
 * param: expected_version_string -
-* param: local_input_init_set -
-* param: other_input_init_sets -
+* param: local_input_init_set_collection -
+* param: other_input_init_set_collections -
 * inoutparam: nonce_record_inout -
 * outparam: legacy_input_partial_sig_sets_out -
 * return: true if at least one set of partial signatures was created (one set will contain a partial sig for each input)
@@ -258,8 +258,11 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
     const std::string &expected_version_string,
-    MultisigProofInitSetV1 local_input_init_set,
-    std::vector<MultisigProofInitSetV1> other_input_init_sets,
+    //[ proof key : init set ]
+    std::unordered_map<rct::key, MultisigProofInitSetV1> local_input_init_set_collection,
+    //[ signer id : [ proof key : init set ] ]
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        other_input_init_set_collections,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out);
 /**
@@ -274,8 +277,8 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
 * param: legacy_subaddress_map -
 * param: legacy_view_privkey -
 * param: expected_version_string -
-* param: local_input_init_set -
-* param: other_input_init_sets -
+* param: local_input_init_set_collection -
+* param: other_input_init_set_collections -
 * inoutparam: nonce_record_inout -
 * outparam: sp_input_partial_sig_sets_out -
 * return: true if at least one set of partial signatures was created (one set will contain a partial sig for each input)
@@ -286,8 +289,11 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
     const crypto::secret_key &legacy_view_privkey,
     const std::string &expected_version_string,
-    MultisigProofInitSetV1 local_input_init_set,
-    std::vector<MultisigProofInitSetV1> other_input_init_sets,
+    //[ proof key : init set ]
+    std::unordered_map<rct::key, MultisigProofInitSetV1> local_input_init_set_collection,
+    //[ signer id : [ proof key : init set ] ]
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        other_input_init_set_collections,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out);
 /**

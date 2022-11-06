@@ -35,6 +35,7 @@
 #include "cryptonote_config.h"
 #include "legacy_enote_utils.h"
 #include "misc_log_ex.h"
+#include "sp_misc_utils.h"
 #include "tx_contextual_enote_record_types.h"
 #include "tx_contextual_enote_record_utils.h"
 #include "tx_legacy_enote_record_utils.h"
@@ -56,20 +57,6 @@
 
 namespace sp
 {
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-template <typename MapT>
-static void for_all_in_map_erase_if(MapT &map_inout,
-    const std::function<bool(const typename MapT::value_type&)> &predicate)
-{
-    for (auto map_it = map_inout.begin(); map_it != map_inout.end();)
-    {
-        if (predicate(*map_it))
-            map_it = map_inout.erase(map_it);
-        else
-            ++map_it;
-    }
-}
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static bool onchain_legacy_enote_is_locked(const std::uint64_t enote_origin_height,

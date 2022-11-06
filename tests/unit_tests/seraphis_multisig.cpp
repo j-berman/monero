@@ -984,16 +984,14 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     /// 4) get seraphis input proof inits from all requested signers
     std::vector<MultisigNonceRecord> signer_nonce_records;
-    std::vector<MultisigProofInitSetV1> legacy_input_inits;
-    std::vector<MultisigProofInitSetV1> sp_input_inits;
-    legacy_input_inits.reserve(seraphis_accounts.size());
-    sp_input_inits.reserve(seraphis_accounts.size());
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        legacy_input_init_collections_per_signer;
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        sp_input_init_collections_per_signer;
     //signer_nonce_records.reserve(seraphis_accounts.size());  //nonce records are non-copyable, so .reserve() doesn't work
 
     for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
-        legacy_input_inits.emplace_back();
-        sp_input_inits.emplace_back();
         signer_nonce_records.emplace_back();
 
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
@@ -1009,8 +1007,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 shared_sp_keys.K_1_base,
                 shared_sp_keys.k_vb,
                 signer_nonce_records.back(),
-                legacy_input_inits.back(),
-                sp_input_inits.back()));
+                legacy_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()],
+                sp_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()]));
         }
         else
         {
@@ -1025,8 +1023,8 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 shared_sp_keys.K_1_base,
                 shared_sp_keys.k_vb,
                 signer_nonce_records.back(),
-                legacy_input_inits.back(),
-                sp_input_inits.back()));
+                legacy_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()],
+                sp_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()]));
         }
     }
 
@@ -1046,8 +1044,9 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 shared_sp_keys.K_1_base,
                 shared_sp_keys.k_vb,
                 version_string,
-                legacy_input_inits[signer_index],
-                legacy_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                legacy_input_init_collections_per_signer[legacy_accounts[signer_index].get_base_pubkey()],
+                //don't need to remove the local init (will be filtered out internally)
+                legacy_input_init_collections_per_signer,
                 signer_nonce_records[signer_index],
                 legacy_input_partial_sigs_per_signer[legacy_accounts[signer_index].get_base_pubkey()])));
 
@@ -1058,8 +1057,9 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 legacy_subaddress_map,
                 legacy_accounts[0].get_common_privkey(),
                 version_string,
-                sp_input_inits[signer_index],
-                sp_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                sp_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()],
+                //don't need to remove the local init (will be filtered out internally)
+                sp_input_init_collections_per_signer,
                 signer_nonce_records[signer_index],
                 sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])));
         }
@@ -1072,8 +1072,9 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                         shared_sp_keys.K_1_base,
                         shared_sp_keys.k_vb,
                         version_string,
-                        legacy_input_inits[signer_index],
-                        legacy_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                        legacy_input_init_collections_per_signer[legacy_accounts[signer_index].get_base_pubkey()],
+                        //don't need to remove the local init (will be filtered out internally)
+                        legacy_input_init_collections_per_signer,
                         signer_nonce_records[signer_index],
                         legacy_input_partial_sigs_per_signer[legacy_accounts[signer_index].get_base_pubkey()])
                     &&
@@ -1083,8 +1084,9 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                         legacy_subaddress_map,
                         legacy_accounts[0].get_common_privkey(),
                         version_string,
-                        sp_input_inits[signer_index],
-                        sp_input_inits,  //don't need to remove the local init (will be filtered out internally)
+                        sp_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()],
+                        //don't need to remove the local init (will be filtered out internally)
+                        sp_input_init_collections_per_signer,
                         signer_nonce_records[signer_index],
                         sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])
                 );

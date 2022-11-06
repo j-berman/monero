@@ -81,6 +81,19 @@ typename ContainerT::value_type& add_element(ContainerT &container)
     container.emplace_back();
     return container.back();
 }
+/// convenience erasor for maps: std::erase_if(std::unordered_map) is C++20
+template <typename MapT>
+void for_all_in_map_erase_if(MapT &map_inout,
+    const std::function<bool(const typename MapT::value_type&)> &predicate)
+{
+    for (auto map_it = map_inout.begin(); map_it != map_inout.end();)
+    {
+        if (predicate(*map_it))
+            map_it = map_inout.erase(map_it);
+        else
+            ++map_it;
+    }
+}
 /**
 * brief: ref_set_size_from_decomp - compute n^m from decomposition of a reference set
 * param: ref_set_decomp_n -

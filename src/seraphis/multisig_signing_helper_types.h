@@ -57,35 +57,40 @@ namespace sp
 
 ////
 // MultisigProofInitSetV1
-// - initialize a set of proofs to be signed by a multisig group
-// - each proof has a set of proof nonces for every set of multisig signers that includes the signer in the signer's
-//   multisig group
+// - initialize a proof to be signed by a multisig group
+// - every set of multisig signers that includes the signer in the signer's multisig group gets a 'signature
+//   initialization', which is a vector of nonce pubkeys that aligns to the proof base keys that will be signed on (e.g.
+//   CLSAG signs on G and Hp(Ko) simultaneously)
 //   - the vectors of proof nonces map 1:1 with the signer sets that include the local signer that can be extracted
 //     from the aggregate filter
 ///
 struct MultisigProofInitSetV1 final
 {
-    /// id of signer who made this proof initializer set
-    crypto::public_key m_signer_id;
-    /// message to be signed by the image proofs
-    rct::key m_proof_message;
     /// all multisig signers who should participate in attempting to make these multisig proofs
     multisig::signer_set_filter m_aggregate_signer_set_filter;
+    /// id of signer who made this proof initializer set
+    crypto::public_key m_signer_id;
+    /// message to be signed by the multisig proofs
+    rct::key m_proof_message;
+    /// main proof key to be signed by the multisig proofs (any additional/auxilliary proof keys aren't recorded here,
+    ///   since they are assumed to be tied to the main proof key)
+    rct::key m_proof_key;
 
-    // map [proof key to sign : { {alpha_{ki,1,e}*J_1, alpha_{ki,2,e}*J_1}, {alpha_{ki,1,e}*J_2, alpha_{ki,2,e}*J_2}, ... }]
-    // - key: main proof key to sign on
-    // - value: a set of signature nonce pubkeys for each signer set in permutations of the aggregate signer set that
-    //          includes the specified signer id; note that permutations of signers depend on the threshold and list of
-    //          multisig signers, which are not recorded here
-    //   - the set of nonce pubkeys aligns to a set of nonce base keys across which the multisig signature will be made
-    //     (for example: CLSAG signs across both G and Hp(Ko), where Ko = ko*G is the proof key recorded here)
+    // {  { {pub nonces: filter 0 and proof base key 0},  {pub nonces: filter 0 and proof base key 1 } },  ... }
+    // - for each signer set in permutations of the aggregate signer set that includes the specified signer id, record a
+    //   vector of pub nonces where each element aligns to a set of nonce base keys across which the multisig signature will
+    //   be made (for example: CLSAG signs across both G and Hp(Ko), where Ko = ko*G is the proof key recorded here)
+    // - note that permutations of signers depend on the threshold and list of multisig signers, which are not recorded here
     //   - WARNING: ordering is dependent on the signer set filter permutation generator
-    std::unordered_map<rct::key, std::vector<std::vector<MultisigPubNonces>>> m_inits;
+    //   - the set of nonce pubkeys aligns 
+    std::vector<               //filter permutations
+        std::vector<           //proof base keys
+            MultisigPubNonces  //nonces
+        >
+    > m_inits;
 
-    /// get set of nonces at a [proof key : nonce index] location (return false if the location doesn't exist)
-    bool try_get_nonces(const rct::key &proof_key,
-        const std::size_t nonces_index,
-        std::vector<MultisigPubNonces> &nonces_out) const;
+    /// get set of nonces for a given filter (return false if the location doesn't exist)
+    bool try_get_nonces(const std::size_t filter_index, std::vector<MultisigPubNonces> &nonces_out) const;
 };
 
 ////
@@ -147,15 +152,13 @@ private:
 ///
 struct MultisigPartialSigSetV1 final
 {
-    /// id of signer who made these partial signatures
-    crypto::public_key m_signer_id;
-    /// proof message signed by these partial signatures
-    rct::key m_proof_message;
     /// set of multisig signers these partial signatures correspond to
     multisig::signer_set_filter m_signer_set_filter;
+    /// id of signer who made these partial signatures
+    crypto::public_key m_signer_id;
 
-    // partial signatures
-    std::vector<MultisigPartialSigVariant> m_partial_signatures;
+    /// [ proof key : partial signatures ] partial signatures mapped to their internally cached proof keys
+    std::unordered_map<rct::key, MultisigPartialSigVariant> m_partial_signatures;
 };
 
 } //namespace sp

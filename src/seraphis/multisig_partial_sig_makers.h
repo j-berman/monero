@@ -74,6 +74,7 @@ public:
     * brief: attempt_make_partial_sig - attempt to make a partial multisig signature (i.e. partially sign using the local
     *     multisig signer's private key)
     * - throws on failure
+    * param: proof_message - proof message to make a signature for
     * param: proof_key - proof key of one of the multisig proposals stored in this signature maker
     * param: signer_group_filter - filter representing the subgroup of multisig signers who are expected to participate
     *                              in making this partial signature (i.e. their public nonces will be used)
@@ -87,7 +88,8 @@ public:
     * outparam: partial_sig_out - partial signature created by the local signer for the specified signature proposal and
     *                             signing group
     */
-    virtual void attempt_make_partial_sig(const rct::key &proof_key,
+    virtual void attempt_make_partial_sig(const rct::key &proof_message,
+        const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
         const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
@@ -112,7 +114,8 @@ public:
     MultisigPartialSigMakerCLSAG& operator=(MultisigPartialSigMakerCLSAG&&) = delete;
 
 //member functions
-    void attempt_make_partial_sig(const rct::key &proof_key,
+    void attempt_make_partial_sig(const rct::key &proof_message,
+        const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
         const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
@@ -149,7 +152,8 @@ public:
     MultisigPartialSigMakerSpCompositionProof& operator=(MultisigPartialSigMakerSpCompositionProof&&) = delete;
 
 //member functions
-    void attempt_make_partial_sig(const rct::key &proof_key,
+    void attempt_make_partial_sig(const rct::key &proof_message,
+        const rct::key &proof_key,
         const multisig::signer_set_filter signer_group_filter,
         const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,

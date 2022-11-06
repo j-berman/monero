@@ -43,6 +43,7 @@
 //third party headers
 
 //standard headers
+#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -72,55 +73,62 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
     const std::vector<crypto::public_key> &multisig_signers,
     const std::size_t num_expected_nonce_sets_per_proofkey);
 /**
-* brief: validate_and_prepare_multisig_init_sets_v1 - validate multisig inits, clean them up, and combine into a
-*      collection of init sets that can be used to initialize partial signatures for multisig signing attempts
-* param: aggregate_signer_set_filter -
+* brief: validate_v1_multisig_init_set_v1 - validate a multisig init set (non-throwing)
+* param: init_set -
 * param: threshold -
 * param: multisig_signers -
-* param: local_signer_id -
-* param: proof_keys -
+* param: expected_aggregate_signer_set_filter -
+* param: expected_signer_id -
+* param: expected_proof_message -
+* param: expected_main_proof_key -
 * param: num_expected_nonce_sets_per_proofkey -
-* param: proof_message -
-* param: local_init_set -
-* param: other_init_sets -
-* outparam: all_init_sets_out -
+* return: true if the init set is valid
 */
 bool validate_v1_multisig_init_set_v1(const MultisigProofInitSetV1 &init_set,
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const rct::key &expected_proof_message,
     const multisig::signer_set_filter expected_aggregate_signer_set_filter,
-    const std::vector<rct::key> &expected_proof_keys,
+    const crypto::public_key &expected_signer_id,
+    const rct::key &expected_proof_message,
+    const rct::key &expected_main_proof_key,
     const std::size_t num_expected_nonce_sets_per_proofkey);
-void validate_and_prepare_multisig_init_sets_v1(const multisig::signer_set_filter aggregate_signer_set_filter,
+bool validate_v1_multisig_init_set_collection_v1(
+    const std::unordered_map<rct::key, MultisigProofInitSetV1> &init_set_collection, //[ proof key : init set ]
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const crypto::public_key &local_signer_id,
-    const rct::keyV &proof_keys,
-    const std::size_t num_expected_nonce_sets_per_proofkey,
-    const rct::key &proof_message,
-    MultisigProofInitSetV1 local_init_set,
-    std::vector<MultisigProofInitSetV1> other_init_sets,
-    std::vector<MultisigProofInitSetV1> &all_init_sets_out);
+    const multisig::signer_set_filter expected_aggregate_signer_set_filter,
+    const crypto::public_key &expected_signer_id,
+    const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
+    const std::size_t num_expected_nonce_sets_per_proofkey);
 /**
 * brief: make_v1_multisig_init_set_v1 - make a multisig initialization set for specified proof info
-* param: signer_id -
 * param: threshold -
 * param: multisig_signers -
-* param: proof_message -
-* param: proof_infos -
 * param: aggregate_signer_set_filter -
+* param: local_signer_id -
+* param: proof_message -
+* param: main_proof_key -
+* param: proof_key_base_points -
 * inoutparam: nonce_record_inout -
 * outparam: init_set_out -
 */
-void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
-    const std::uint32_t threshold,
+void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const rct::key &proof_message,
-    const std::vector<std::pair<rct::key, rct::keyV>> &proof_infos,  //[ proof key : {multisig proof base points} ]
     const multisig::signer_set_filter aggregate_signer_set_filter,
+    const crypto::public_key &local_signer_id,
+    const rct::key &proof_message,
+    const rct::key &main_proof_key,
+    const rct::keyV &proof_key_base_points,
     MultisigNonceRecord &nonce_record_inout,
     MultisigProofInitSetV1 &init_set_out);
+void make_v1_multisig_init_set_collection_v1(const std::uint32_t threshold,
+    const std::vector<crypto::public_key> &multisig_signers,
+    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const crypto::public_key &local_signer_id,
+    const std::unordered_map<rct::key, rct::key> &proof_contexts,  //[ proof key : proof message ]
+    const std::unordered_map<rct::key, rct::keyV> &proof_key_base_points,  //[ proof key : {proof key base points} ]
+    MultisigNonceRecord &nonce_record_inout,
+    std::unordered_map<rct::key, MultisigProofInitSetV1> &init_set_collection_out); //[ proof key : init set ]
 /**
 * brief: check_v1_multisig_partial_sig_set_semantics_v1 - check semantics of a multisig partial signature set
 *   - throws if a check fails
@@ -130,32 +138,34 @@ void make_v1_multisig_init_set_v1(const crypto::public_key &signer_id,
 void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV1 &partial_sig_set,
     const std::vector<crypto::public_key> &multisig_signers);
 /**
-* brief: make_v1_multisig_partial_sig_sets_v1 - try to make multisig partial signature sets with an injected partial sig
-*      maker
+* brief: try_make_v1_multisig_partial_sig_sets_v1 - try to make multisig partial signature sets with an injected partial
+*      sig maker
 *   - weak preconditions: ignores invalid initializers from non-local signers
 *   - will throw if local signer is not in the aggregate signer filter (or has an invalid initializer)
-*   - will only succeed if a partial sig set can be made containing a partial sig on each of the requested proof keys
+*   - will only return true if a partial sig set can be made containing a partial sig for each of the requested proof
+*     contexts
 * param: signer_account -
-* param: proof_message -
-* param: proof_keys -
-* param: filter_permutations -
-* param: local_signer_filter -
-* param: all_init_sets -
-* param: available_signers_filter -
-* param: available_signers_as_filters - expected to align 1:1 with signers in all_init_sets
+* param: expected_multisig_account_era -
+* param: aggregate_signer_set_filter -
+* param: expected_proof_contexts -
+* param: num_expected_proof_basekeys -
 * param: partial_sig_maker -
+* param: local_init_set_collection -
+* param: other_init_set_collections -
 * inoutparam: nonce_record_inout -
 * outparam: partial_sig_sets_out -
 */
-void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &signer_account,
-    const rct::key &proof_message,
-    const rct::keyV &proof_keys,
-    const std::vector<multisig::signer_set_filter> &filter_permutations,
-    const multisig::signer_set_filter local_signer_filter,
-    const std::vector<MultisigProofInitSetV1> &all_init_sets,
-    const multisig::signer_set_filter available_signers_filter,
-    const std::vector<multisig::signer_set_filter> &available_signers_as_filters,
+bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &signer_account,
+    const cryptonote::account_generator_era expected_multisig_account_era,
+    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
+    const std::size_t num_expected_proof_basekeys,
     const MultisigPartialSigMaker &partial_sig_maker,
+    //[ proof key : init set ]
+    std::unordered_map<rct::key, MultisigProofInitSetV1> local_init_set_collection,
+    //[ signer id : [ proof key : init set ] ]
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+        other_init_set_collections,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &partial_sig_sets_out);
 /**
@@ -163,19 +173,102 @@ void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &sign
 *      map for combining them into complete signatures
 *   - weak preconditions: ignores signature sets that don't conform to expectations
 * param: multisig_signers -
-* param: expected_proof_message -
-* param: expected_proof_keys -
+* param: allowed_proof_contexts -
 * param: expected_partial_sig_variant_index -
 * param: partial_sigs_per_signer -
 * outparam: collected_sigs_per_key_per_filter_out -
 */
 void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypto::public_key> &multisig_signers,
-    const rct::key &expected_proof_message,
-    const std::unordered_set<rct::key> &expected_proof_keys,
+    const std::unordered_map<rct::key, rct::key> &allowed_proof_contexts,  //[ proof key : proof message ]
     const int expected_partial_sig_variant_index,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &partial_sigs_per_signer,
     std::unordered_map<multisig::signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter_out);
+/**
+* brief: collect_partial_sigs_v1 - unwrap type-erased multisig partial signatures
+* type: PartialSigT -
+* param: type_erased_partial_sigs -
+* outparam: partial_sigs_out -
+*/
+template <typename PartialSigT>
+void collect_partial_sigs_v1(const std::vector<MultisigPartialSigVariant> &type_erased_partial_sigs,
+    std::vector<PartialSigT> &partial_sigs_out)
+{
+    partial_sigs_out.clear();
+    partial_sigs_out.reserve(type_erased_partial_sigs.size());
+
+    for (const MultisigPartialSigVariant &type_erased_partial_sig : type_erased_partial_sigs)
+    {
+        // skip partial signatures of undesired types
+        if (!type_erased_partial_sig.is_type<PartialSigT>())
+            continue;
+
+        partial_sigs_out.emplace_back(type_erased_partial_sig.partial_sig<PartialSigT>());
+    }
+}
+/**
+* brief: try_assemble_contextual_multisig_partial_sigs - try to combine type-erased multisig partial signatures
+*      into full signatures of type ContextualSigT using an injected function for merging partial signatures
+* type: PartialSigT -
+* type: ContextualSigT -
+* param: num_expected_completed_sigs -
+* param: collected_sigs_per_key_per_filter -
+* param: try_assemble_partial_sigs_func -
+* outparam: contextual_sigs_out -
+* return: true if the requested number of signatures were assembled (e.g. one per proof key represented in the
+*         collected_sigs_per_key_per_filter input)
+*/
+template <typename PartialSigT, typename ContextualSigT>
+bool try_assemble_contextual_multisig_partial_sigs(const std::size_t num_expected_completed_sigs,
+    const std::unordered_map<multisig::signer_set_filter,  //signing group
+        std::unordered_map<rct::key,                       //proof key 
+            std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter,
+    const std::function<bool(const rct::key&, const std::vector<PartialSigT>&, ContextualSigT&)>
+        &try_assemble_partial_sigs_func,
+    std::vector<ContextualSigT> &contextual_sigs_out)
+{
+    contextual_sigs_out.clear();
+    contextual_sigs_out.reserve(num_expected_completed_sigs);
+
+    std::unordered_set<rct::key> proof_keys_with_completed_signatures;
+    std::vector<PartialSigT> partial_sigs_temp;
+
+    for (const auto &signer_group_partial_sigs : collected_sigs_per_key_per_filter)
+    {
+        for (const auto &proof_key_and_partial_sigs : signer_group_partial_sigs.second)
+        {
+            // a. skip partial sig sets for proof keys that already have a completed proof (from a different
+            //   signer group)
+            if (proof_keys_with_completed_signatures.find(proof_key_and_partial_sigs.first) != 
+                    proof_keys_with_completed_signatures.end())
+                continue;
+
+            // b. convert type-erased partial sigs to the type we want
+            collect_partial_sigs_v1<PartialSigT>(proof_key_and_partial_sigs.second, partial_sigs_temp);
+
+            // c. try to make the contextual signature (ignore exceptions and failures)
+            contextual_sigs_out.emplace_back();
+
+            bool assemble_result;
+            try
+            {
+                assemble_result = try_assemble_partial_sigs_func(proof_key_and_partial_sigs.first,
+                    partial_sigs_temp,
+                    contextual_sigs_out.back());
+            } catch (...) { assemble_result = false; }
+
+            if (assemble_result == true)
+                proof_keys_with_completed_signatures.insert(proof_key_and_partial_sigs.first);
+            else
+                contextual_sigs_out.pop_back();
+        }
+    }
+
+    if (contextual_sigs_out.size() != num_expected_completed_sigs)
+        return false;
+
+    return true;
+}
 
 } //namespace sp
