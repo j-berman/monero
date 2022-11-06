@@ -509,18 +509,26 @@ bool validate_sp_legacy_input_proofs_v1(const std::vector<LegacyRingSignatureV3>
     }
 
     // validate each legacy ring signature
+    rct::ctkeyV ring_members_temp;
+    rct::key ring_signature_message_temp;
+
     for (std::size_t legacy_input_index{0}; legacy_input_index < legacy_ring_signatures.size(); ++legacy_input_index)
     {
         // collect CLSAG ring members
-        rct::ctkeyV ring_members;
+        ring_members_temp.clear();
         tx_validation_context.get_reference_set_proof_elements_v1(
             legacy_ring_signatures[legacy_input_index].m_reference_set,
-            ring_members);
+            ring_members_temp);
+
+        // make legacy proof message
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
+            legacy_ring_signatures[legacy_input_index].m_reference_set,
+            ring_signature_message_temp);
 
         // verify CLSAG proof
-        if (!rct::verRctCLSAGSimple(tx_proposal_prefix,
+        if (!rct::verRctCLSAGSimple(ring_signature_message_temp,
                 legacy_ring_signatures[legacy_input_index].m_clsag_proof,
-                ring_members,
+                ring_members_temp,
                 legacy_input_images[legacy_input_index].m_masked_commitment))
             return false;
     }

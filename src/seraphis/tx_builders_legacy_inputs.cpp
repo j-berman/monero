@@ -270,9 +270,13 @@ void make_v3_legacy_ring_signature_v1(const rct::key &tx_proposal_prefix,
     crypto::secret_key negated_commitment_mask;
     sc_mul(to_bytes(negated_commitment_mask), MINUS_ONE.bytes, to_bytes(reference_commitment_mask));
 
+    // 4. proof message
+    rct::key message;
+    make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix, reference_set, message);
+
 
     /// make clsag proof
-    ring_signature_out.m_clsag_proof = rct::CLSAG_Gen(tx_proposal_prefix,
+    ring_signature_out.m_clsag_proof = rct::CLSAG_Gen(message,
         referenced_onetime_addresses,
         rct::sk2rct(signing_privkey),
         nominal_commitments_to_zero,
@@ -348,8 +352,14 @@ void check_v1_legacy_input_semantics_v1(const LegacyInputV1 &input)
     CHECK_AND_ASSERT_THROW_MES(input.m_ring_signature.m_reference_set.size() == input.m_ring_members.size(),
         "legacy input semantics (v1): reference set indices don't match referenced enotes.");
 
+    // 4. ring signature message
+    rct::key ring_signature_message;
+    make_tx_legacy_ring_signature_message_v1(input.m_proposal_prefix,
+        input.m_ring_signature.m_reference_set,
+        ring_signature_message);
+
     // 4. ring signature is valid
-    CHECK_AND_ASSERT_THROW_MES(rct::verRctCLSAGSimple(input.m_proposal_prefix,
+    CHECK_AND_ASSERT_THROW_MES(rct::verRctCLSAGSimple(ring_signature_message,
             input.m_ring_signature.m_clsag_proof,
             input.m_ring_members,
             input.m_input_image.m_masked_commitment),

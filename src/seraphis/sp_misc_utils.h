@@ -74,6 +74,22 @@ bool is_sorted_and_unique(const T& container)
 
     return true;
 }
+/// convenience wrapper for checking if a mapped object is mapped to a key embedded in that object
+template <typename KeyT, typename ValueT>
+bool keys_match_internal_values(const std::unordered_map<KeyT, ValueT> &map,
+    const std::function<
+            const typename std::unordered_map<KeyT, ValueT>::key_type&
+            (const typename std::unordered_map<KeyT, ValueT>::mapped_type&)
+        > &get_internal_key_func)
+{
+    for (const auto &map_element : map)
+    {
+        if (!(map_element.first == get_internal_key_func(map_element.second)))
+            return false;
+    }
+
+    return true;
+}
 /// convenience wrapper for getting the last element after emplacing back
 template <typename ContainerT>
 typename ContainerT::value_type& add_element(ContainerT &container)

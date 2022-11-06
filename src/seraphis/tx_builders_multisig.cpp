@@ -78,67 +78,26 @@
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-// legacy proof context     [ legacy Ko : tx proposal prefix ]  //todo: per-proof message for legacy
-// legacy proof base points [ legacy Ko : {G, Hp(legacy Ko)} ]
+// legacy proof context  [ legacy Ko : legacy input message ]
 //-------------------------------------------------------------------------------------------------------------------
-static void prepare_for_legacy_multisig_init_set(const rct::key &tx_proposal_prefix,
-    const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
-    std::unordered_map<rct::key, rct::key> &legacy_input_proof_contexts_out,
-    std::unordered_map<rct::key, rct::keyV> &legacy_proof_key_base_points_out)
-{
-    legacy_input_proof_contexts_out.clear();
-    legacy_proof_key_base_points_out.clear();
-    crypto::key_image key_image_base_temp;
-
-    for (const LegacyInputProposalV1 &input_proposal : legacy_input_proposals)
-    {
-        // proof context
-        legacy_input_proof_contexts_out[input_proposal.m_onetime_address] = tx_proposal_prefix;
-
-        // proof base points
-        crypto::generate_key_image(rct::rct2pk(input_proposal.m_onetime_address), rct::rct2sk(rct::I), key_image_base_temp);
-        legacy_proof_key_base_points_out[input_proposal.m_onetime_address] = {rct::G, rct::ki2rct(key_image_base_temp)};
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-// seraphis proof context [ seraphis K" : tx proposal prefix ]
-// seraphis proof keys    [ seraphis K" : {U}                ]
-//-------------------------------------------------------------------------------------------------------------------
-static void prepare_for_sp_multisig_init_set(const rct::key &tx_proposal_prefix,
-    const std::vector<SpInputProposalV1> &sp_input_proposals,
-    std::unordered_map<rct::key, rct::key> &sp_input_proof_contexts_out,
-    std::unordered_map<rct::key, rct::keyV> &sp_proof_key_base_points_out)
-{
-    sp_input_proof_contexts_out.clear();
-    sp_proof_key_base_points_out.clear();
-    SpEnoteImageV1 enote_image_temp;
-
-    for (const SpInputProposalV1 &input_proposal : sp_input_proposals)
-    {
-        input_proposal.get_enote_image_v1(enote_image_temp);
-
-        // proof context
-        sp_input_proof_contexts_out[enote_image_temp.m_core.m_masked_address] = tx_proposal_prefix;
-
-        // proof base points
-        sp_proof_key_base_points_out[enote_image_temp.m_core.m_masked_address] = {rct::pk2rct(crypto::get_U())};
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void get_legacy_proof_contexts_v1(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
-    const rct::key &tx_proposal_prefix,
+static void get_legacy_proof_contexts_v1(const rct::key &tx_proposal_prefix,
+    const std::vector<LegacyMultisigInputProposalV1> &legacy_multisig_input_proposals,
     std::unordered_map<rct::key, rct::key> &proof_contexts_out)  //[ proof key : proof message ]
 {
     proof_contexts_out.clear();
 
-    for (const LegacyInputProposalV1 &input_proposal : legacy_input_proposals)
-        proof_contexts_out[input_proposal.m_onetime_address] = tx_proposal_prefix;
+    for (const LegacyMultisigInputProposalV1 &input_proposal : legacy_multisig_input_proposals)
+    {
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
+            input_proposal.m_reference_set,
+            proof_contexts_out[input_proposal.m_enote.onetime_address()]);
+    }
 }
 //-------------------------------------------------------------------------------------------------------------------
+// seraphis proof context  [ seraphis K" : tx proposal prefix ]
 //-------------------------------------------------------------------------------------------------------------------
-static void get_seraphis_proof_contexts_v1(const std::vector<SpInputProposalV1> &sp_input_proposals,
-    const rct::key &tx_proposal_prefix,
+static void get_seraphis_proof_contexts_v1(const rct::key &tx_proposal_prefix,
+    const std::vector<SpInputProposalV1> &sp_input_proposals,
     std::unordered_map<rct::key, rct::key> &proof_contexts_out)  //[ proof key : proof message ]
 {
     proof_contexts_out.clear();
@@ -148,6 +107,43 @@ static void get_seraphis_proof_contexts_v1(const std::vector<SpInputProposalV1> 
     {
         input_proposal.get_enote_image_v1(enote_image_temp);
         proof_contexts_out[enote_image_temp.m_core.m_masked_address] = tx_proposal_prefix;
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+// legacy proof base points  [ legacy Ko : {G, Hp(legacy Ko)} ]
+//-------------------------------------------------------------------------------------------------------------------
+static void get_legacy_proof_base_keys_v1(const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
+    std::unordered_map<rct::key, rct::keyV> &legacy_proof_key_base_points_out)
+{
+    legacy_proof_key_base_points_out.clear();
+    crypto::key_image KI_base_temp;
+
+    for (const LegacyInputProposalV1 &input_proposal : legacy_input_proposals)
+    {
+        // Hp(Ko)
+        crypto::generate_key_image(rct::rct2pk(input_proposal.m_onetime_address), rct::rct2sk(rct::I), KI_base_temp);
+
+        // [ Ko : {G, Hp(Ko)} ]
+        legacy_proof_key_base_points_out[input_proposal.m_onetime_address] =
+            {
+                rct::G,
+                rct::ki2rct(KI_base_temp)
+            };
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+// seraphis proof keys  [ seraphis K" : {U} ]
+//-------------------------------------------------------------------------------------------------------------------
+static void get_sp_proof_base_keys_v1(const std::vector<SpInputProposalV1> &sp_input_proposals,
+    std::unordered_map<rct::key, rct::keyV> &sp_proof_key_base_points_out)
+{
+    sp_proof_key_base_points_out.clear();
+    SpEnoteImageV1 enote_image_temp;
+
+    for (const SpInputProposalV1 &input_proposal : sp_input_proposals)
+    {
+        input_proposal.get_enote_image_v1(enote_image_temp);
+        sp_proof_key_base_points_out[enote_image_temp.m_core.m_masked_address] = {rct::pk2rct(crypto::get_U())};
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -272,7 +268,7 @@ static void collect_sp_composition_proof_privkeys_for_multisig(const std::vector
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static bool try_make_v1_legacy_input_v1(const rct::key &expected_proposal_prefix,
+static bool try_make_v1_legacy_input_v1(const rct::key &tx_proposal_prefix,
     const LegacyInputProposalV1 &input_proposal,
     std::vector<std::uint64_t> reference_set,
     rct::ctkeyV referenced_enotes,
@@ -283,14 +279,18 @@ static bool try_make_v1_legacy_input_v1(const rct::key &expected_proposal_prefix
 {
     try
     {
-        // all partial sigs must sign the expected message
+        // 1. make legacy ring signature message
+        rct::key ring_signature_message;
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix, reference_set, ring_signature_message);
+
+        // 2. all partial sigs must sign the expected message
         for (const CLSAGMultisigPartial &partial_sig : input_proof_partial_sigs)
         {
-            CHECK_AND_ASSERT_THROW_MES(partial_sig.message == expected_proposal_prefix,
+            CHECK_AND_ASSERT_THROW_MES(partial_sig.message == ring_signature_message,
                 "multisig make partial input: a partial signature's message does not match the expected message.");
         }
 
-        // assemble proof (will throw if partial sig assembly doesn't produce a valid proof)
+        // 3. assemble proof (will throw if partial sig assembly doesn't produce a valid proof)
         LegacyRingSignatureV3 ring_signature;
         finalize_clsag_multisig_proof(input_proof_partial_sigs,
             referenced_enotes,
@@ -299,15 +299,15 @@ static bool try_make_v1_legacy_input_v1(const rct::key &expected_proposal_prefix
 
         ring_signature.m_reference_set = std::move(reference_set);
 
-        // make legacy input
-        make_v1_legacy_input_v1(expected_proposal_prefix,
+        // 4. make legacy input
+        make_v1_legacy_input_v1(tx_proposal_prefix,
             input_proposal,
             std::move(referenced_enotes),
             std::move(ring_signature),
             legacy_spend_pubkey,
             input_out);
 
-        // validate semantics to minimize failure modes
+        // 5. validate semantics to minimize failure modes
         check_v1_legacy_input_semantics_v1(input_out);
     }
     catch (...) { return false; }
@@ -361,27 +361,35 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
     std::vector<LegacyInputV1> &legacy_inputs_out)
 {
     // 1. process input proposals
-    // - collect onetime addresses of legacy inputs
     // - map legacy input proposals to their onetime addresses
     // - map masked commitments to the corresponding onetime addresses
-    std::unordered_map<rct::key, rct::key> legacy_proof_contexts;  //[ proof key : proof message ]
     std::unordered_map<rct::key, LegacyInputProposalV1> mapped_legacy_input_proposals;
     std::unordered_map<rct::key, rct::key> mapped_masked_commitments;
 
     for (const LegacyInputProposalV1 &legacy_input_proposal : legacy_input_proposals)
     {
-        legacy_proof_contexts[legacy_input_proposal.m_onetime_address] = tx_proposal_prefix;  //todo: message per Ko
         mapped_legacy_input_proposals[legacy_input_proposal.m_onetime_address] = legacy_input_proposal;
         mask_key(legacy_input_proposal.m_commitment_mask,
             legacy_input_proposal.m_amount_commitment,
             mapped_masked_commitments[legacy_input_proposal.m_onetime_address]);
     }
 
-    // 2. map legacy reference sets to onetime addresses
+    // 2. process multisig input proposals
+    // - map ring signature messages to onetime addresses
+    // - map legacy reference sets to onetime addresses
+    std::unordered_map<rct::key, rct::key> legacy_proof_contexts;  //[ proof key : proof message ]
     std::unordered_map<rct::key, std::vector<std::uint64_t>> mapped_reference_sets;
+    rct::key message_temp;
 
     for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal : legacy_multisig_input_proposals)
     {
+        // [ proof key : proof message ]
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
+            legacy_multisig_input_proposal.m_reference_set,
+            message_temp);
+        legacy_proof_contexts[legacy_multisig_input_proposal.m_enote.onetime_address()] = message_temp;
+
+        // [ proof key : reference set ]
         mapped_reference_sets[legacy_multisig_input_proposal.m_enote.onetime_address()] =
             legacy_multisig_input_proposal.m_reference_set;
     }
@@ -403,7 +411,8 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
         legacy_input_partial_sigs_per_signer,
         collected_sigs_per_key_per_filter);
 
-    // 5. try to make one legacy input per input proposal
+    // 5. try to make one legacy input per input proposal, using the partial signatures from as many signing groups as
+    //    necessary
     if (!try_assemble_contextual_multisig_partial_sigs<CLSAGMultisigPartial, LegacyInputV1>(
                 legacy_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
@@ -491,8 +500,7 @@ void check_v1_legacy_multisig_input_proposal_semantics_v1(const LegacyMultisigIn
                 multisig_input_proposal.m_tx_output_index) !=
             multisig_input_proposal.m_reference_set.end(),
         "legacy multisig input proposal: referenced enote index is not in the reference set.");
-    CHECK_AND_ASSERT_THROW_MES(std::is_sorted(multisig_input_proposal.m_reference_set.begin(),
-                multisig_input_proposal.m_reference_set.end()),
+    CHECK_AND_ASSERT_THROW_MES(is_sorted_and_unique(multisig_input_proposal.m_reference_set),
         "legacy multisig input proposal: reference set indices are not sorted.");
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -616,8 +624,19 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
     check_v1_tx_proposal_semantics_v1(tx_proposal, legacy_spend_pubkey, jamtis_spend_pubkey, k_view_balance);
 
     // - get prefix from proposal
-    rct::key proposal_prefix;
-    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, proposal_prefix);
+    rct::key tx_proposal_prefix;
+    tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
+
+    // 3. collect legacy ring signature messages
+    std::unordered_map<rct::key, rct::key> legacy_proof_contexts;  //[ proof key : proof message ]
+
+    for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal :
+            multisig_tx_proposal.m_legacy_multisig_input_proposals)
+    {
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
+            legacy_multisig_input_proposal.m_reference_set,
+            legacy_proof_contexts[legacy_multisig_input_proposal.m_enote.onetime_address()]);
+    }
 
 
     /// multisig-related input checks
@@ -640,50 +659,49 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
         legacy_input_index < multisig_tx_proposal.m_legacy_input_proof_proposals.size();
         ++legacy_input_index)
     {
-        // a. input proof proposal messages all equal proposal prefix of core tx proposal
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].message ==
-                proposal_prefix,
-            "multisig tx proposal: legacy input proof proposal does not match the tx proposal (different proposal "
-            "prefixes).");
+        const LegacyInputProposalV1 &input_proposal{
+                tx_proposal.m_legacy_input_proposals[legacy_input_index]
+            };
+        const CLSAGMultisigProposal &input_proof_proposal{
+                multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index]
+            };
+
+        // a. input proof proposal messages all equal expected values
+        CHECK_AND_ASSERT_THROW_MES(legacy_proof_contexts.find(input_proposal.m_onetime_address) !=
+                legacy_proof_contexts.end(),
+            "multisig tx proposal: legacy input proof contexts is missing a proof key (bug).");
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.message ==
+                legacy_proof_contexts.at(input_proposal.m_onetime_address),
+            "multisig tx proposal: legacy input proof proposal does not match the tx proposal (unknown proof message).");
 
         // b. input proof proposal keys line up 1:1 and match with input proposals
-        tx_proposal.m_legacy_input_proposals[legacy_input_index].get_enote_image_v2(legacy_enote_image_temp);
+        input_proposal.get_enote_image_v2(legacy_enote_image_temp);
 
-        CHECK_AND_ASSERT_THROW_MES(
-                multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].main_proof_key() ==
-                    tx_proposal.m_legacy_input_proposals[legacy_input_index].m_onetime_address,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.main_proof_key() == input_proposal.m_onetime_address,
             "multisig tx proposal: legacy input proof proposal does not match input proposal (different proof keys).");
-        CHECK_AND_ASSERT_THROW_MES(
-                multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].auxilliary_proof_key() ==
-                tx_proposal.m_legacy_input_proposals[legacy_input_index].m_amount_commitment,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.auxilliary_proof_key() == input_proposal.m_amount_commitment,
             "multisig tx proposal: legacy input proof proposal does not match input proposal (different amount "
             "commitments).");
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].masked_C ==
-                legacy_enote_image_temp.m_masked_commitment,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.masked_C == legacy_enote_image_temp.m_masked_commitment,
             "multisig tx proposal: legacy input proof proposal does not match input proposal (different masked "
             "commitments).");
 
         // c. input proof proposal key images line up 1:1 and match with input proposals
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].KI ==
-                legacy_enote_image_temp.m_key_image,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.KI == legacy_enote_image_temp.m_key_image,
             "multisig tx proposal: legacy input proof proposal does not match input proposal (different KI).");
 
-        make_legacy_auxilliary_key_image_v1(
-            tx_proposal.m_legacy_input_proposals[legacy_input_index].m_commitment_mask,
-            tx_proposal.m_legacy_input_proposals[legacy_input_index].m_onetime_address,
-            auxilliary_key_image_temp);
+        make_legacy_auxilliary_key_image_v1(input_proposal.m_commitment_mask,
+                input_proposal.m_onetime_address,
+                auxilliary_key_image_temp);
 
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].D ==
-                auxilliary_key_image_temp,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.D == auxilliary_key_image_temp,
             "multisig tx proposal: legacy input proof proposal does not match input proposal (different D).");
 
         // d. ring-related information is aligned
-        CHECK_AND_ASSERT_THROW_MES(
-                multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].ring_members.size() ==
-                multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].decoy_responses.size(),
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.ring_members.size() ==
+                input_proof_proposal.decoy_responses.size(),
             "multisig tx proposal: legacy input proof proposal has invalid number of decoy responses.");
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].l <
-                multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index].ring_members.size(),
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.l < input_proof_proposal.ring_members.size(),
             "multisig tx proposal: legacy input proof proposal has out-of-range real index.");
     }
 
@@ -695,21 +713,25 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
         sp_input_index < multisig_tx_proposal.m_sp_input_proof_proposals.size();
         ++sp_input_index)
     {
+        const SpInputProposalV1 &input_proposal{
+                tx_proposal.m_sp_input_proposals[sp_input_index]
+            };
+        const SpCompositionProofMultisigProposal &input_proof_proposal{
+                multisig_tx_proposal.m_sp_input_proof_proposals[sp_input_index]
+            };
+
         // a. input proof proposal messages all equal proposal prefix of core tx proposal
-        CHECK_AND_ASSERT_THROW_MES(
-                multisig_tx_proposal.m_sp_input_proof_proposals[sp_input_index].message == proposal_prefix,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.message == tx_proposal_prefix,
             "multisig tx proposal: sp input proof proposal does not match the tx proposal (different proposal prefix).");
 
         // b. input proof proposal keys line up 1:1 and match with input proposals
-        tx_proposal.m_sp_input_proposals[sp_input_index].get_enote_image_v1(sp_enote_image_temp);
+        input_proposal.get_enote_image_v1(sp_enote_image_temp);
 
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_sp_input_proof_proposals[sp_input_index].K ==
-                sp_enote_image_temp.m_core.m_masked_address,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.K == sp_enote_image_temp.m_core.m_masked_address,
             "multisig tx proposal: sp input proof proposal does not match input proposal (different proof keys).");
 
         // c. input proof proposal key images line up 1:1 and match with input proposals
-        CHECK_AND_ASSERT_THROW_MES(multisig_tx_proposal.m_sp_input_proof_proposals[sp_input_index].KI ==
-                sp_enote_image_temp.m_core.m_key_image,
+        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.KI == sp_enote_image_temp.m_core.m_key_image,
             "multisig tx proposal: sp input proof proposal does not match input proposal (different key images).");
     }
 }
@@ -730,6 +752,13 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     const crypto::secret_key &k_view_balance,
     SpMultisigTxProposalV1 &proposal_out)
 {
+    CHECK_AND_ASSERT_THROW_MES(keys_match_internal_values(legacy_multisig_ring_signature_preps,
+            [](const LegacyMultisigRingSignaturePrepV1 &prep) -> const crypto::key_image&
+            {
+                return prep.m_key_image;
+            }),
+        "make v1 multisig tx proposal (v1): a legacy ring signature prep is mapped to the incorrect key image.");
+
     // 1. convert legacy multisig input proposals to input proposals
     std::vector<LegacyInputProposalV1> legacy_input_proposals;
 
@@ -765,8 +794,8 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     check_v1_tx_proposal_semantics_v1(tx_proposal, legacy_spend_pubkey, jamtis_spend_pubkey, k_view_balance);
 
     // 5. get proposal prefix
-    rct::key proposal_prefix;
-    tx_proposal.get_proposal_prefix(version_string, k_view_balance, proposal_prefix);
+    rct::key tx_proposal_prefix;
+    tx_proposal.get_proposal_prefix(version_string, k_view_balance, tx_proposal_prefix);
 
     // 6. make sure the legacy proof preps align with legacy input proposals
     // note: if the legacy input proposals contain duplicates, then the call to check_v1_tx_proposal_semantics_v1()
@@ -778,6 +807,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     // 7. prepare legacy proof proposals (note: using the tx proposal ensures proof proposals are sorted)
     proposal_out.m_legacy_input_proof_proposals.clear();
     proposal_out.m_legacy_input_proof_proposals.reserve(tx_proposal.m_legacy_input_proposals.size());
+    rct::key legacy_ring_signature_message_temp;
     LegacyEnoteImageV2 legacy_enote_image_temp;
     crypto::key_image auxilliary_key_image_temp;
 
@@ -786,19 +816,23 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
         CHECK_AND_ASSERT_THROW_MES(legacy_multisig_ring_signature_preps.find(legacy_input_proposal.m_key_image) !=
                 legacy_multisig_ring_signature_preps.end(),
             "make v1 multisig tx proposal (v1): a legacy ring signature prep doesn't line up with an input proposal.");
-        CHECK_AND_ASSERT_THROW_MES(
-                legacy_multisig_ring_signature_preps.at(legacy_input_proposal.m_key_image).m_key_image ==
-                    legacy_input_proposal.m_key_image,
-            "make v1 multisig tx proposal (v1): a legacy ring signature prep is mapped to the incorrect key image.");
 
+        // legacy message (per-proof)
+        make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
+            legacy_multisig_ring_signature_preps.at(legacy_input_proposal.m_key_image).m_reference_set,
+            legacy_ring_signature_message_temp);
+
+        // legacy enote image
         legacy_input_proposal.get_enote_image_v2(legacy_enote_image_temp);
 
+        // legacy auxilliary key image: D
         make_legacy_auxilliary_key_image_v1(
             legacy_input_proposal.m_commitment_mask,
             legacy_input_proposal.m_onetime_address,
             auxilliary_key_image_temp);
 
-        make_clsag_multisig_proposal(proposal_prefix,
+        // legacy multisig proof proposal
+        make_clsag_multisig_proposal(legacy_ring_signature_message_temp,
             std::move(legacy_multisig_ring_signature_preps[legacy_input_proposal.m_key_image].m_referenced_enotes),
             legacy_enote_image_temp.m_masked_commitment,
             legacy_enote_image_temp.m_key_image,
@@ -817,7 +851,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     {
         sp_input_proposal.get_enote_image_v1(sp_enote_image_temp);
 
-        make_sp_composition_multisig_proposal(proposal_prefix,
+        make_sp_composition_multisig_proposal(tx_proposal_prefix,
             sp_enote_image_temp.m_core.m_masked_address,
             sp_enote_image_temp.m_core.m_key_image,
             add_element(proposal_out.m_sp_input_proof_proposals));
@@ -836,7 +870,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecordV1> &legacy_contextual_inputs,
     const std::list<SpContextualEnoteRecordV1> &sp_contextual_inputs,
-    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> legacy_ring_signature_preps,
+    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> legacy_multisig_ring_signature_preps,
     const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
     const multisig::signer_set_filter aggregate_filter_of_requested_multisig_signers,
     std::vector<jamtis::JamtisPaymentProposalV1> normal_payment_proposals,
@@ -851,7 +885,7 @@ void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecord
     SpMultisigTxProposalV1 &multisig_tx_proposal_out)
 {
     // 1. convert legacy inputs to legacy multisig input proposals (inputs to spend)
-    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == legacy_ring_signature_preps.size(),
+    CHECK_AND_ASSERT_THROW_MES(legacy_contextual_inputs.size() == legacy_multisig_ring_signature_preps.size(),
         "make v1 multisig tx proposal (v1): legacy contextual inputs don't line up with ring signature preps.");
 
     std::vector<LegacyMultisigInputProposalV1> legacy_multisig_input_proposals;
@@ -859,19 +893,20 @@ void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecord
 
     for (const LegacyContextualEnoteRecordV1 &legacy_contextual_input : legacy_contextual_inputs)
     {
-        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.find(legacy_contextual_input.key_image()) !=
-                legacy_ring_signature_preps.end(),
+        CHECK_AND_ASSERT_THROW_MES(legacy_multisig_ring_signature_preps.find(legacy_contextual_input.key_image()) !=
+                legacy_multisig_ring_signature_preps.end(),
             "make v1 multisig tx proposal (v1): a legacy ring signature prep doesn't line up with a contextual input.");
-        CHECK_AND_ASSERT_THROW_MES(legacy_ring_signature_preps.at(legacy_contextual_input.key_image()).m_key_image ==
-                legacy_contextual_input.key_image(),
+        CHECK_AND_ASSERT_THROW_MES(
+                legacy_multisig_ring_signature_preps.at(legacy_contextual_input.key_image()).m_key_image ==
+                    legacy_contextual_input.key_image(),
             "make v1 multisig tx proposal (v1): a legacy ring signature prep is mapped to the incorrect key image.");
 
         // convert inputs to input proposals
         make_v1_legacy_multisig_input_proposal_v1(legacy_contextual_input.m_record,
             rct::rct2sk(rct::skGen()),
-            legacy_ring_signature_preps
+            legacy_multisig_ring_signature_preps
                     .at(legacy_contextual_input.key_image())
-                    .m_reference_set,  //don't consume, we need it later
+                    .m_reference_set,  //don't consume, the full prep needs to be consumed later
             add_element(legacy_multisig_input_proposals));
     }
 
@@ -904,7 +939,7 @@ void make_v1_multisig_tx_proposal_v1(const std::list<LegacyContextualEnoteRecord
         version_string,
         std::move(legacy_multisig_input_proposals),
         std::move(sp_multisig_input_proposals),
-        std::move(legacy_ring_signature_preps),
+        std::move(legacy_multisig_ring_signature_preps),
         aggregate_filter_of_requested_multisig_signers,
         legacy_spend_pubkey,
         legacy_subaddress_map,
@@ -957,23 +992,21 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
     // 4. prepare proof contexts and multisig proof base points
-    // a. legacy proof context     [ legacy Ko : tx proposal prefix ]  //todo: per-proof message for legacy
-    // b. legacy proof base points [ legacy Ko : {G, Hp(legacy Ko)} ]
+    // a. legacy proof context     [ legacy Ko : legacy input message ]
+    // b. legacy proof base points [ legacy Ko : {G, Hp(legacy Ko)}   ]
     std::unordered_map<rct::key, rct::key> legacy_input_proof_contexts;
     std::unordered_map<rct::key, rct::keyV> legacy_proof_key_base_points;
-    prepare_for_legacy_multisig_init_set(tx_proposal_prefix,
-        tx_proposal.m_legacy_input_proposals,
-        legacy_input_proof_contexts,
-        legacy_proof_key_base_points);
+    get_legacy_proof_contexts_v1(tx_proposal_prefix,
+        multisig_tx_proposal.m_legacy_multisig_input_proposals,
+        legacy_input_proof_contexts);
+    get_legacy_proof_base_keys_v1(tx_proposal.m_legacy_input_proposals, legacy_proof_key_base_points);
 
     // c. seraphis proof context [ seraphis K" : tx proposal prefix ]
     // d. seraphis proof keys    [ seraphis K" : {U}                ]
     std::unordered_map<rct::key, rct::key> sp_input_proof_contexts;
     std::unordered_map<rct::key, rct::keyV> sp_proof_key_base_points;
-    prepare_for_sp_multisig_init_set(tx_proposal_prefix,
-        tx_proposal.m_sp_input_proposals,
-        sp_input_proof_contexts,
-        sp_proof_key_base_points);
+    get_seraphis_proof_contexts_v1(tx_proposal_prefix, tx_proposal.m_sp_input_proposals, sp_input_proof_contexts);
+    get_sp_proof_base_keys_v1(tx_proposal.m_sp_input_proposals, sp_proof_key_base_points);
 
     // 5. finish making multisig input init sets
     // a. legacy input init set
@@ -1029,10 +1062,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     const std::uint32_t threshold{signer_account.get_threshold()};
     const rct::key legacy_spend_pubkey{rct::pk2rct(signer_account.get_multisig_pubkey())};
 
-    // 2. validate multisig tx proposal
-    // note: this check is effectively redundant because it is called when making the local input init set,
-    //       so validating the local input init set (which was successfully created) with the tx proposal's proposal
-    //       prefix should imply the multisig tx proposal here is valid; but, redundancy is good
+    // 2. validate multisig tx proposal (this may be redundant for the caller, but should be done for robustness)
     check_v1_multisig_tx_proposal_semantics_v1(multisig_tx_proposal,
         expected_version_string,
         threshold,
@@ -1056,10 +1086,11 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     rct::key tx_proposal_prefix;
     tx_proposal.get_proposal_prefix(multisig_tx_proposal.m_version_string, k_view_balance, tx_proposal_prefix);
 
-    // 5. legacy proof contexts: [ onetime address : tx proposal prefix ]
-    // note: for legacy inputs, all CLSAG input proofs sign the same message (TODO: sign separate messages)
+    // 5. legacy proof contexts: [ onetime address : legacy input message ]
     std::unordered_map<rct::key, rct::key> input_proof_contexts;  //[ proof key : proof message ]
-    get_legacy_proof_contexts_v1(tx_proposal.m_legacy_input_proposals, tx_proposal_prefix, input_proof_contexts);
+    get_legacy_proof_contexts_v1(tx_proposal_prefix,
+        multisig_tx_proposal.m_legacy_multisig_input_proposals,
+        input_proof_contexts);
 
     // 6. legacy enote view privkeys and amount commitment masks (for signing)
     std::vector<crypto::secret_key> proof_privkeys_k_offset;
@@ -1155,7 +1186,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     // 6. seraphis proof contexts: [ masked address : tx proposal prefix ]
     // note: for seraphis, all seraphis input image proofs sign the same message
     std::unordered_map<rct::key, rct::key> input_proof_contexts;  //[ proof key : proof message ]
-    get_seraphis_proof_contexts_v1(tx_proposal.m_sp_input_proposals, tx_proposal_prefix, input_proof_contexts);
+    get_seraphis_proof_contexts_v1(tx_proposal_prefix, tx_proposal.m_sp_input_proposals, input_proof_contexts);
 
     // 7. seraphis enote view privkeys, address masks, and squash prefixes (for signing)
     std::vector<crypto::secret_key> proof_privkeys_x;
