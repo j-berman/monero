@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_legacy_enote_record_utils.h"
+#include "tx_enote_record_utils_legacy.h"
 
 //local headers
 #include "crypto/crypto.h"

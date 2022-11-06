@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_legacy_component_types.h"
+#include "tx_component_types_legacy.h"
 
 //local headers
 #include "misc_log_ex.h"

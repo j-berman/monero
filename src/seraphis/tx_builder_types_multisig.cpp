@@ -41,13 +41,13 @@
 #include "sp_crypto_utils.h"
 #include "sp_misc_utils.h"
 #include "tx_builder_types.h"
+#include "tx_builder_types_legacy.h"
 #include "tx_builders_inputs.h"
 #include "tx_builders_legacy_inputs.h"
 #include "tx_builders_mixed.h"
+#include "tx_component_types_legacy.h"
+#include "tx_enote_record_utils_legacy.h"
 #include "tx_extra.h"
-#include "tx_legacy_builder_types.h"
-#include "tx_legacy_component_types.h"
-#include "tx_legacy_enote_record_utils.h"
 
 //third party headers
 

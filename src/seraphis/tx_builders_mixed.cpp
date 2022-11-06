@@ -53,9 +53,9 @@
 #include "tx_builders_legacy_inputs.h"
 #include "tx_builders_outputs.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_contextual_enote_record_utils.h"
 #include "tx_input_selection_output_context_v1.h"
-#include "tx_legacy_component_types.h"
 #include "tx_validation_context_mock.h"
 #include "txtype_squashed_v1.h"
 

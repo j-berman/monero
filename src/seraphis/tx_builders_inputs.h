@@ -42,8 +42,8 @@
 #include "tx_binned_reference_set.h"
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_enote_record_types.h"
-#include "tx_legacy_component_types.h"
 
 //third party headers
 

@@ -60,6 +60,7 @@ set(seraphis_sources
   tx_binned_reference_set.cpp
   tx_binned_reference_set_utils.cpp
   tx_builder_types.cpp
+  tx_builder_types_legacy.cpp
   tx_builder_types_multisig.cpp
   tx_builders_inputs.cpp
   tx_builders_legacy_inputs.cpp
@@ -67,11 +68,13 @@ set(seraphis_sources
   tx_builders_multisig.cpp
   tx_builders_outputs.cpp
   tx_component_types.cpp
+  tx_component_types_legacy.cpp
   tx_contextual_enote_record_types.cpp
   tx_contextual_enote_record_utils.cpp
   tx_discretized_fee.cpp
   tx_enote_finding_context_mocks.cpp
   tx_enote_record_utils.cpp
+  tx_enote_record_utils_legacy.cpp
   tx_enote_scanning.cpp
   tx_enote_scanning_utils.cpp
   tx_enote_store_mocks.cpp
@@ -81,9 +84,6 @@ set(seraphis_sources
   tx_input_selection.cpp
   tx_input_selection_output_context_v1.cpp
   tx_input_selector_mocks.cpp
-  tx_legacy_builder_types.cpp
-  tx_legacy_component_types.cpp
-  tx_legacy_enote_record_utils.cpp
   tx_ref_set_index_mapper_flat.cpp
   tx_validators.cpp
   txtype_squashed_v1.cpp)

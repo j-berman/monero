@@ -40,7 +40,7 @@ extern "C"
 #include "seraphis/legacy_enote_types.h"
 #include "seraphis/legacy_enote_utils.h"
 #include "seraphis/tx_enote_record_types.h"
-#include "seraphis/tx_legacy_enote_record_utils.h"
+#include "seraphis/tx_enote_record_utils_legacy.h"
 
 #include "boost/multiprecision/cpp_int.hpp"
 #include "gtest/gtest.h"

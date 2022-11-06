@@ -39,11 +39,11 @@
 #include "ringct/rctTypes.h"
 #include "jamtis_payment_proposal.h"
 #include "sp_core_types.h"
+#include "tx_builder_types_legacy.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
-#include "tx_legacy_builder_types.h"
-#include "tx_legacy_component_types.h"
 
 //third party headers
 

@@ -45,9 +45,9 @@
 #include "tx_builders_inputs.h"
 #include "tx_builders_legacy_inputs.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
-#include "tx_legacy_component_types.h"
 #include "tx_validation_context.h"
 
 //third party headers

@@ -45,9 +45,9 @@
 #include "sp_core_types.h"
 #include "sp_composition_proof.h"
 #include "tx_builder_types.h"
+#include "tx_builder_types_legacy.h"
 #include "tx_component_types.h"
 #include "tx_extra.h"
-#include "tx_legacy_builder_types.h"
 
 //third party headers
 

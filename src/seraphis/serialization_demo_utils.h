@@ -46,8 +46,8 @@
 #include "span.h"
 #include "tx_binned_reference_set.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_discretized_fee.h"
-#include "tx_legacy_component_types.h"
 #include "txtype_squashed_v1.h"
 
 //third party headers

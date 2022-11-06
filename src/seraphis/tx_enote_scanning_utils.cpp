@@ -48,10 +48,10 @@
 #include "tx_enote_finding_context.h"
 #include "tx_enote_record_types.h"
 #include "tx_enote_record_utils.h"
+#include "tx_enote_record_utils_legacy.h"
 #include "tx_enote_scanning.h"
 #include "tx_enote_scanning_context.h"
 #include "tx_extra.h"
-#include "tx_legacy_enote_record_utils.h"
 
 //third party headers
 

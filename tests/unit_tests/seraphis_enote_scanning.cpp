@@ -61,6 +61,7 @@
 #include "seraphis/tx_enote_finding_context_mocks.h"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils.h"
+#include "seraphis/tx_enote_record_utils_legacy.h"
 #include "seraphis/tx_enote_scanning.h"
 #include "seraphis/tx_enote_scanning_context_simple.h"
 #include "seraphis/tx_enote_store_mocks.h"
@@ -71,7 +72,6 @@
 #include "seraphis/tx_input_selection.h"
 #include "seraphis/tx_input_selection_output_context_v1.h"
 #include "seraphis/tx_input_selector_mocks.h"
-#include "seraphis/tx_legacy_enote_record_utils.h"
 #include "seraphis/tx_validation_context_mock.h"
 #include "seraphis/txtype_squashed_v1.h"
 

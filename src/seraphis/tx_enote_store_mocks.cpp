@@ -38,7 +38,7 @@
 #include "sp_misc_utils.h"
 #include "tx_contextual_enote_record_types.h"
 #include "tx_contextual_enote_record_utils.h"
-#include "tx_legacy_enote_record_utils.h"
+#include "tx_enote_record_utils_legacy.h"
 
 //third party headers
 

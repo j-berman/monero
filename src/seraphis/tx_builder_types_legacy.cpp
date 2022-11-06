@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_legacy_builder_types.h"
+#include "tx_builder_types_legacy.h"
 
 //local headers
 #include "crypto/crypto.h"
@@ -37,7 +37,7 @@
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "sp_crypto_utils.h"
-#include "tx_legacy_component_types.h"
+#include "tx_component_types_legacy.h"
 
 //third party headers
 

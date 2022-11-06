@@ -37,9 +37,9 @@
 #include "crypto/x25519.h"
 #include "ringct/rctTypes.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_discretized_fee.h"
 #include "tx_extra.h"
-#include "tx_legacy_component_types.h"
 
 //third party headers
 

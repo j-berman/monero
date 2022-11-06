@@ -37,9 +37,9 @@
 #include "crypto/crypto.h"
 #include "mock_ledger_context.h"
 #include "ringct/rctTypes.h"
+#include "tx_builder_types_legacy.h"
+#include "tx_component_types_legacy.h"
 #include "tx_enote_record_types.h"
-#include "tx_legacy_builder_types.h"
-#include "tx_legacy_component_types.h"
 
 //third party headers
 

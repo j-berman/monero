@@ -41,8 +41,8 @@
 #include "tx_base.h"
 #include "tx_builder_types.h"
 #include "tx_component_types.h"
+#include "tx_component_types_legacy.h"
 #include "tx_discretized_fee.h"
-#include "tx_legacy_component_types.h"
 #include "tx_validation_context.h"
 #include "tx_validators.h"
 

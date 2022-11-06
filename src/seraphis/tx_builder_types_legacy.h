@@ -36,7 +36,7 @@
 //local headers
 #include "crypto/crypto.h"
 #include "ringct/rctTypes.h"
-#include "tx_legacy_component_types.h"
+#include "tx_component_types_legacy.h"
 
 //third party headers
 
