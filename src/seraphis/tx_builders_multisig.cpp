@@ -413,13 +413,18 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
 
     // 5. try to make one legacy input per input proposal, using the partial signatures from as many signing groups as
     //    necessary
-    if (!try_assemble_contextual_multisig_partial_sigs<CLSAGMultisigPartial, LegacyInputV1>(
+    if (!try_assemble_multisig_partial_sigs_signer_group_attempts<CLSAGMultisigPartial, LegacyInputV1>(
                 legacy_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
                 [&](const rct::key &proof_key,
                     const std::vector<CLSAGMultisigPartial> &partial_sigs,
                     LegacyInputV1 &contextual_sig_out) -> bool
                 {
+                    // sanity check
+                    if (legacy_proof_contexts.find(proof_key) == legacy_proof_contexts.end())
+                        return false;
+
+                    // try to make the input
                     return try_make_v1_legacy_input_v1(tx_proposal_prefix,
                         mapped_legacy_input_proposals.at(proof_key),
                         mapped_reference_sets.at(proof_key),
@@ -468,13 +473,18 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
         collected_sigs_per_key_per_filter);
 
     // 3. try to make one seraphis partial input per input proposal
-    if (!try_assemble_contextual_multisig_partial_sigs<SpCompositionProofMultisigPartial, SpPartialInputV1>(
+    if (!try_assemble_multisig_partial_sigs_signer_group_attempts<SpCompositionProofMultisigPartial, SpPartialInputV1>(
                 sp_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
                 [&](const rct::key &proof_key,
                     const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
                     SpPartialInputV1 &sp_partial_input_out) -> bool
                 {
+                    // sanity check
+                    if (sp_proof_contexts.find(proof_key) == sp_proof_contexts.end())
+                        return false;
+
+                    // try to make the partial input
                     return try_make_v1_sp_partial_input_v1(tx_proposal_prefix,
                         mapped_sp_input_proposals.at(proof_key),
                         partial_sigs,

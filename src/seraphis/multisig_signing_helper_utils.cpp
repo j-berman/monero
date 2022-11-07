@@ -715,7 +715,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
         std::unordered_map<rct::key,                 //proof key
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter_out)
 {
-    // try to consume the partial signatures passed in by filtering them into the 'collected sigs' output map
+    // filter the partial signatures passed in into the 'collected sigs' output map
     std::unordered_map<multisig::signer_set_filter, std::unordered_set<crypto::public_key>> collected_signers_per_filter;
 
     for (const auto &partial_sigs_for_signer : partial_sigs_per_signer)
@@ -731,16 +731,13 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                 continue;
 
             // c. skip sig sets that look like duplicates (same signer group and signer)
-            // - do this after checking sig set validity to avoid inserting invalid filters into the collected signers map
+            // - do this after checking sig set validity to avoid inserting invalid filters into the collected signers
+            //   map, which could allow a malicious signer to block signer groups they aren't a member of
             if (collected_signers_per_filter[partial_sig_set.m_signer_set_filter].find(partial_sig_set.m_signer_id) !=
                     collected_signers_per_filter[partial_sig_set.m_signer_set_filter].end())
                 continue;
 
-            // d. record that this signer/filter combo has been used
-            collected_signers_per_filter[partial_sig_set.m_signer_set_filter]
-                .insert(partial_sig_set.m_signer_id);
-
-            // e. record the partial sigs
+            // d. record the partial sigs
             for (const auto &partial_sig : partial_sig_set.m_partial_signatures)
             {
                 // skip partial sigs with unknown proof keys
@@ -755,9 +752,13 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                 if (partial_sig.second.type_index() != expected_partial_sig_variant_index)
                     continue;
 
+                // add this signer's partial signature for this proof key for this signer group
                 collected_sigs_per_key_per_filter_out[partial_sig_set.m_signer_set_filter][partial_sig.first]
                     .emplace_back(partial_sig.second);
             }
+
+            // e. record that this signer/filter combo has been used
+            collected_signers_per_filter[partial_sig_set.m_signer_set_filter].insert(partial_sig_set.m_signer_id);
         }
     }
 }
