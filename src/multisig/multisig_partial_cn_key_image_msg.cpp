@@ -144,7 +144,8 @@ namespace multisig
     rct::key proof_msg;
     get_dualbase_proof_msg(MULTISIG_PARTIAL_CN_KI_MSG_MAGIC_V1, m_signing_pubkey, m_onetime_address, proof_msg);
     const crypto::DualBaseVectorProof proof{
-        crypto::dual_base_vector_prove(proof_msg, crypto::get_G(),
+        crypto::dual_base_vector_prove(proof_msg,
+          crypto::get_G(),
           rct::rct2pk(rct::ki2rct(key_image_base)),
           keyshare_privkeys)
       };
@@ -193,12 +194,12 @@ namespace multisig
     binary_archive<true> b_archive(serialized_msg_ss);
 
     multisig_partial_cn_ki_msg_serializable msg_serializable;
-    msg_serializable.onetime_address    = m_onetime_address;
-    msg_serializable.multisig_keyshares = dualbase_proof.V_1;
-    msg_serializable.partial_key_images = dualbase_proof.V_2;
-    msg_serializable.signing_pubkey     = m_signing_pubkey;
+    msg_serializable.onetime_address                = m_onetime_address;
+    msg_serializable.multisig_keyshares             = dualbase_proof.V_1;
+    msg_serializable.partial_key_images             = dualbase_proof.V_2;
+    msg_serializable.signing_pubkey                 = m_signing_pubkey;
     msg_serializable.dual_base_vector_proof_partial = mangled_dualbase_proof;
-    msg_serializable.signature          = msg_signature;
+    msg_serializable.signature                      = msg_signature;
 
     CHECK_AND_ASSERT_THROW_MES(::serialization::serialize(b_archive, msg_serializable),
       "Failed to serialize multisig cn key image msg.");

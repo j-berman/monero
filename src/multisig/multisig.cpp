@@ -88,7 +88,7 @@ namespace multisig
     const crypto::public_key &multisig_base_spend_key,
     const crypto::public_key &expected_onetime_address,
     const std::unordered_map<crypto::public_key, multisig_partial_cn_key_image_msg> &partial_ki_msgs, //[signer : msg ]]
-    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_bases_inout, //[Ko : partial Ki]
+    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_cores_inout, //[Ko : partial Ki]
     std::unordered_set<crypto::public_key> &onetime_addresses_with_insufficient_partial_kis_inout, //[Ko]
     std::unordered_set<crypto::public_key> &onetime_addresses_with_invalid_partial_kis_inout) //[Ko]
   {
@@ -122,7 +122,7 @@ namespace multisig
 
     // partial ki messages are invalid if the multisig base spend key can't be reproduced from the partial KI messages
     // - the entire purpose of the partial KI messages (which contain dual-base vector proofs) is to prove that the
-    //   constructed key image base has a proper discrete-log relation with the multisig group's base spend key k^s G
+    //   constructed key image core has a proper discrete-log relation with the multisig group's base spend key k^s G
     rct::key nominal_base_spendkey{rct::identity()};
 
     for (const crypto::public_key &multisig_keyshare : collected_multisig_keyshares)
@@ -134,14 +134,14 @@ namespace multisig
       return false;
     }
 
-    // compute the constructed key image base
-    rct::key key_image_base{rct::identity()};
+    // compute the constructed key image core: k^s * Hp(Ko)
+    rct::key key_image_core{rct::identity()};
 
     for (const crypto::public_key &partial_key_image : collected_partial_key_images)
-      rct::addKeys(key_image_base, key_image_base, rct::pk2rct(partial_key_image));
+      rct::addKeys(key_image_core, key_image_core, rct::pk2rct(partial_key_image));
 
     // save it
-    recovered_key_image_bases_inout[expected_onetime_address] = rct::rct2pk(key_image_base);
+    recovered_key_image_cores_inout[expected_onetime_address] = rct::rct2pk(key_image_core);
 
     return true;
   }
@@ -199,7 +199,15 @@ namespace multisig
     // - the 'multisig priv keys' here are those held by the local account
     // - later, we add in the components held by other participants
     cryptonote::keypair in_ephemeral;
-    if (!cryptonote::generate_key_image_helper(keys, subaddresses, out_key, tx_public_key, additional_tx_public_keys, real_output_index, in_ephemeral, ki, keys.get_device()))
+    if (!cryptonote::generate_key_image_helper(keys,
+          subaddresses,
+          out_key,
+          tx_public_key,
+          additional_tx_public_keys,
+          real_output_index,
+          in_ephemeral,
+          ki,
+          keys.get_device()))
       return false;
     std::unordered_set<crypto::key_image> used;
 
@@ -244,11 +252,11 @@ namespace multisig
     const crypto::public_key &multisig_base_spend_key,
     const std::unordered_map<crypto::public_key,
       std::unordered_map<crypto::public_key, multisig_partial_cn_key_image_msg>> &partial_ki_msgs, //[Ko : [signer : msg ]]
-    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_bases_out, //[Ko : partial Ki]
+    std::unordered_map<crypto::public_key, crypto::public_key> &recovered_key_image_cores_out, //[Ko : partial Ki]
     std::unordered_set<crypto::public_key> &onetime_addresses_with_insufficient_partial_kis_out, //[Ko]
     std::unordered_set<crypto::public_key> &onetime_addresses_with_invalid_partial_kis_out) //[Ko]
   {
-    recovered_key_image_bases_out.clear();
+    recovered_key_image_cores_out.clear();
     onetime_addresses_with_insufficient_partial_kis_out.clear();
     onetime_addresses_with_invalid_partial_kis_out.clear();
 
@@ -259,7 +267,7 @@ namespace multisig
         multisig_base_spend_key,
         partial_ki_set.first,
         partial_ki_set.second,
-        recovered_key_image_bases_out,
+        recovered_key_image_cores_out,
         onetime_addresses_with_insufficient_partial_kis_out,
         onetime_addresses_with_invalid_partial_kis_out);
     }
