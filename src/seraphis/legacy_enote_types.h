@@ -39,8 +39,6 @@
 #include "sp_variant.h"
 
 //third party headers
-#include <boost/variant/get.hpp>
-#include <boost/variant/variant.hpp>
 
 //standard headers
 

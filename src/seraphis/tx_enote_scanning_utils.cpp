@@ -191,8 +191,8 @@ static void process_chunk_new_record_update_sp(const SpEnoteRecordV1 &new_enote_
         spent_context_update = found_spent_key_images_inout[new_record_key_image];
 
         // d. save the tx id of the tx in this chunk where this enote was spent
-        // note: use spent context of contextual key images instead of the spent context update in case the update did not
-        //       resolve to a tx in this chunk (probably a bug, but better safe than sorry here)
+        // note: use spent context of contextual key images instead of the spent context update in case the update did
+        //       not resolve to a tx in this chunk (probably a bug, but better safe than sorry here)
         txs_have_spent_enotes_inout.insert(
                 contextual_key_images_of_record_spent_in_this_chunk->m_spent_context.m_transaction_id
             );
@@ -279,14 +279,14 @@ static std::unordered_set<rct::key> process_chunk_full_sp_selfsend_pass(
                     continue;
 
                 process_chunk_new_record_update_sp(new_enote_record,
-                    contextual_basic_record.origin_context(),
+                    origin_context_ref(contextual_basic_record),
                     chunk_contextual_key_images,
                     found_enote_records_inout,
                     found_spent_key_images_inout,
                     txs_have_spent_enotes_fresh);
 
                 // record all legacy key images attached to this self-spend for the caller to deal with
-                collect_legacy_key_images_from_tx(contextual_basic_record.origin_context().m_transaction_id,
+                collect_legacy_key_images_from_tx(origin_context_ref(contextual_basic_record).m_transaction_id,
                     chunk_contextual_key_images,
                     legacy_key_images_in_sp_selfspends_inout);
             } catch (...) {}
@@ -512,7 +512,7 @@ void process_chunk_intermediate_legacy(const rct::key &legacy_base_spend_pubkey,
                     continue;
 
                 process_chunk_new_intermediate_record_update_legacy(new_enote_record,
-                    contextual_basic_record.origin_context(),
+                    origin_context_ref(contextual_basic_record),
                     found_enote_records_inout);
             } catch (...) {}
         }
@@ -550,7 +550,7 @@ void process_chunk_intermediate_sp(const rct::key &jamtis_spend_pubkey,
                     continue;
 
                 process_chunk_new_intermediate_record_update_sp(new_enote_record,
-                    contextual_basic_record.origin_context(),
+                    origin_context_ref(contextual_basic_record),
                     found_enote_records_inout);
             } catch (...) {}
         }
@@ -615,7 +615,7 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
                     continue;
 
                 process_chunk_new_record_update_legacy(new_enote_record,
-                    contextual_basic_record.origin_context(),
+                    origin_context_ref(contextual_basic_record),
                     chunk_contextual_key_images,
                     found_enote_records_inout,
                     found_spent_key_images_inout);
@@ -697,7 +697,7 @@ void process_chunk_full_sp(const rct::key &jamtis_spend_pubkey,
                     continue;
 
                 process_chunk_new_record_update_sp(new_enote_record,
-                    contextual_basic_record.origin_context(),
+                    origin_context_ref(contextual_basic_record),
                     chunk_contextual_key_images,
                     found_enote_records_inout,
                     found_spent_key_images_inout,

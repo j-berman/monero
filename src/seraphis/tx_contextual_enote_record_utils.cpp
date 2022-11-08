@@ -125,7 +125,7 @@ boost::multiprecision::uint128_t total_amount(const std::list<LegacyContextualEn
     boost::multiprecision::uint128_t total_amount{0};
 
     for (const LegacyContextualEnoteRecordV1 &contextual_record : contextual_records)
-        total_amount += contextual_record.amount();
+        total_amount += amount_ref(contextual_record);
 
     return total_amount;
 }
@@ -135,7 +135,7 @@ boost::multiprecision::uint128_t total_amount(const std::list<SpContextualEnoteR
     boost::multiprecision::uint128_t total_amount{0};
 
     for (const SpContextualEnoteRecordV1 &contextual_record : contextual_records)
-        total_amount += contextual_record.amount();
+        total_amount += amount_ref(contextual_record);
 
     return total_amount;
 }

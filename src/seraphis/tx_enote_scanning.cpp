@@ -130,19 +130,19 @@ static void check_enote_scan_chunk_map_semantics_v1(
             "enote chunk semantics check: contextual key image doesn't have expected spent status.");
 
         // notes:
-        // - a scan chunk is expected to contain basic enote records mapped to txs, along with all the key images for each
-        //   of those txs
+        // - a scan chunk is expected to contain basic enote records mapped to txs, along with all the key images for
+        //   each of those txs
         // - basic enote records are view tag matches (in seraphis), so only txs with view tag matches will normally be
         //   represented
-        // - the standard seraphis tx-building convention puts a self-send in all txs so the enote scanning process will pick
-        //   up all key images of the user in scan chunks (assuming chunks only have key images for txs with view tag
-        //   matches)
+        // - the standard seraphis tx-building convention puts a self-send in all txs so the enote scanning process will
+        //   pick up all key images of the user in scan chunks (assuming chunks only have key images for txs with view
+        //   tag matches)
         // - if someone makes a tx with no self-sends, then chunk scanning won't reliably pick up that tx's key images
-        //   unless the chunk builder returns an empty basic records list for any tx that has no view tag matches (i.e. so
-        //   the chunk builder can return key images from all txs and satisfy the following test)
+        //   unless the chunk builder returns an empty basic records list for any tx that has no view tag matches (i.e.
+        //   so the chunk builder can return key images from all txs and satisfy the following test)
         //   - this is not supported by default for efficiency and simplicity
-        //   - note that all legacy txs should do this so all legacy key images will be available (legacy enote construction
-        //     did not require all txs to have a self-send output)
+        //   - note that all legacy txs should do this so all legacy key images will be available (legacy enote
+        //     construction did not require all txs to have a self-send output)
         CHECK_AND_ASSERT_THROW_MES(
                 chunk_basic_records_per_tx.find(contextual_key_image_set.m_spent_context.m_transaction_id) !=
                 chunk_basic_records_per_tx.end(),
@@ -154,9 +154,11 @@ static void check_enote_scan_chunk_map_semantics_v1(
     {
         for (const ContextualBasicRecordVariant &contextual_basic_record : tx_basic_records.second)
         {
-            CHECK_AND_ASSERT_THROW_MES(contextual_basic_record.origin_context().m_origin_status == expected_origin_status,
+            CHECK_AND_ASSERT_THROW_MES(origin_context_ref(contextual_basic_record).m_origin_status ==
+                    expected_origin_status,
                 "enote chunk semantics check: contextual basic record doesn't have expected origin status.");
-            CHECK_AND_ASSERT_THROW_MES(contextual_basic_record.origin_context().m_transaction_id == tx_basic_records.first,
+            CHECK_AND_ASSERT_THROW_MES(origin_context_ref(contextual_basic_record).m_transaction_id ==
+                    tx_basic_records.first,
                 "enote chunk semantics check: contextual basic record doesn't have origin tx id matching mapped id.");
         }
     }
@@ -392,13 +394,13 @@ void check_v1_enote_scan_chunk_ledger_semantics_v1(const EnoteScanningChunkLedge
     {
         for (const ContextualBasicRecordVariant &contextual_basic_record : tx_basic_records.second)
         {
-            CHECK_AND_ASSERT_THROW_MES(contextual_basic_record.origin_context().m_block_height ==
-                    tx_basic_records.second.begin()->origin_context().m_block_height,
+            CHECK_AND_ASSERT_THROW_MES(origin_context_ref(contextual_basic_record).m_block_height ==
+                    origin_context_ref(*tx_basic_records.second.begin()).m_block_height,
                 "enote chunk semantics check (ledger): contextual record tx height doesn't match other records in tx.");
 
             CHECK_AND_ASSERT_THROW_MES(
-                    contextual_basic_record.origin_context().m_block_height >= allowed_lowest_height &&
-                    contextual_basic_record.origin_context().m_block_height <= allowed_heighest_height,
+                    origin_context_ref(contextual_basic_record).m_block_height >= allowed_lowest_height &&
+                    origin_context_ref(contextual_basic_record).m_block_height <= allowed_heighest_height,
                 "enote chunk semantics check (ledger): contextual key image block height is out of the expected range.");
         }
     }
@@ -450,8 +452,8 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
         // 3. set reorg avoidance
         // note: we use an exponential back-off as a function of fullscan attempts because if a fullscan fails then
         //       the true location of alignment divergence is unknown; moreover, the distance between the first
-        //       desired start height and the enote store's minimum height may be very large; if a fixed back-off were used,
-        //       then it could take many fullscan attempts to find the point of divergence
+        //       desired start height and the enote store's minimum height may be very large; if a fixed back-off were
+        //       used, then it could take many fullscan attempts to find the point of divergence
         const std::uint64_t reorg_avoidance_depth =
             [&]() -> std::uint64_t
             {
@@ -474,7 +476,8 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
         else
             initial_refresh_height = enote_store_updater_inout.refresh_height();
 
-        // 5. set initial contiguity marker (highest block known to be contiguous with the prefix of the first block to scan)
+        // 5. set initial contiguity marker (highest block known to be contiguous with the prefix of the first block
+        //    to scan)
         ChainContiguityMarker contiguity_marker;
         contiguity_marker.m_block_height = initial_refresh_height - 1;
 
@@ -488,8 +491,8 @@ void refresh_enote_store_ledger(const RefreshLedgerEnoteStoreConfig &config,
                 "expected (bug).");
         }
 
-        // 6. set initial alignment marker (the heighest scanned block that matches with our current enote store's recorded
-        //   block ids)
+        // 6. set initial alignment marker (the heighest scanned block that matches with our current enote store's
+        //   recorded block ids)
         ChainContiguityMarker alignment_marker{contiguity_marker};
 
 

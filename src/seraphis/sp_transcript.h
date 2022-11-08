@@ -94,9 +94,9 @@ public:
 //member functions
     /// append a value to the transcript
     template <typename T>
-    void append(const T &value)
+    void append(const boost::string_ref label, const T &value)
     {
-        this->append_impl(value);
+        this->append_impl(label, value);
     }
 
     /// access the transcript data
@@ -285,7 +285,7 @@ private:
         //   void append_to_transcript(const T &container, SpTranscriptBuilder &transcript_inout);
         this->append_label(label);
         this->begin_named_container(container_name(named_container));
-        this->append_to_transcript(named_container, *this);
+        append_to_transcript(named_container, *this);  //non-member function assumed to be implemented elsewhere
         this->end_named_container();
     }
     template<typename T>

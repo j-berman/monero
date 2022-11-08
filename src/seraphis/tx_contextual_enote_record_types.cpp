@@ -34,6 +34,7 @@
 //local headers
 #include "crypto/crypto.h"
 #include "ringct/rctTypes.h"
+#include "sp_variant.h"
 
 //third party headers
 
@@ -95,7 +96,8 @@ void LegacyContextualIntermediateEnoteRecordV1::get_onetime_address(rct::key &on
     onetime_address_out = onetime_address_ref(m_record.m_enote);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool LegacyContextualIntermediateEnoteRecordV1::have_same_destination(const LegacyContextualIntermediateEnoteRecordV1 &record1,
+bool LegacyContextualIntermediateEnoteRecordV1::have_same_destination(
+    const LegacyContextualIntermediateEnoteRecordV1 &record1,
     const LegacyContextualIntermediateEnoteRecordV1 &record2)
 {
     return onetime_address_ref(record1.m_record.m_enote) == onetime_address_ref(record2.m_record.m_enote);
@@ -155,53 +157,54 @@ bool SpContextualEnoteRecordV1::has_spent_status(const SpEnoteSpentStatus test_s
     return m_spent_context.m_spent_status == test_status;
 }
 //-------------------------------------------------------------------------------------------------------------------
-const SpEnoteOriginContextV1& ContextualBasicRecordVariant::origin_context() const
+const SpEnoteOriginContextV1& origin_context_ref(const ContextualBasicRecordVariant &variant)
 {
-    if (this->is_type<LegacyContextualBasicEnoteRecordV1>())
-        return this->unwrap<LegacyContextualBasicEnoteRecordV1>().m_origin_context;
-    else if (this->is_type<SpContextualBasicEnoteRecordV1>())
-        return this->unwrap<SpContextualBasicEnoteRecordV1>().m_origin_context;
-    else
+    struct visitor : public SpVariantStaticVisitor<const SpEnoteOriginContextV1&>
     {
-        static const SpEnoteOriginContextV1 temp{};
-        return temp;
-    }
+        const SpEnoteOriginContextV1& operator()(const LegacyContextualBasicEnoteRecordV1 &record) const
+        { return record.m_origin_context; }
+        const SpEnoteOriginContextV1& operator()(const SpContextualBasicEnoteRecordV1 &record) const
+        { return record.m_origin_context; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::xmr_amount ContextualRecordVariant::amount() const
+rct::xmr_amount amount_ref(const ContextualRecordVariant &variant)
 {
-    if (this->is_type<LegacyContextualEnoteRecordV1>())
-        return this->unwrap<LegacyContextualEnoteRecordV1>().amount();
-    else if (this->is_type<SpContextualEnoteRecordV1>())
-        return this->unwrap<SpContextualEnoteRecordV1>().amount();
-    else
-        return 0;
+    struct visitor : public SpVariantStaticVisitor<rct::xmr_amount>
+    {
+        rct::xmr_amount operator()(const LegacyContextualEnoteRecordV1 &record) const { return record.amount(); }
+        rct::xmr_amount operator()(const SpContextualEnoteRecordV1 &record) const { return record.amount(); }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
-const SpEnoteOriginContextV1& ContextualRecordVariant::origin_context() const
+const SpEnoteOriginContextV1& origin_context_ref(const ContextualRecordVariant &variant)
 {
-    if (this->is_type<LegacyContextualEnoteRecordV1>())
-        return this->unwrap<LegacyContextualEnoteRecordV1>().m_origin_context;
-    else if (this->is_type<SpContextualEnoteRecordV1>())
-        return this->unwrap<SpContextualEnoteRecordV1>().m_origin_context;
-    else
+    struct visitor : public SpVariantStaticVisitor<const SpEnoteOriginContextV1&>
     {
-        static const SpEnoteOriginContextV1 temp{};
-        return temp;
-    }
+        const SpEnoteOriginContextV1& operator()(const LegacyContextualEnoteRecordV1 &record) const
+        { return record.m_origin_context; }
+        const SpEnoteOriginContextV1& operator()(const SpContextualEnoteRecordV1 &record) const
+        { return record.m_origin_context; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
-const SpEnoteSpentContextV1& ContextualRecordVariant::spent_context() const
+const SpEnoteSpentContextV1& spent_context_ref(const ContextualRecordVariant &variant)
 {
-    if (this->is_type<LegacyContextualEnoteRecordV1>())
-        return this->unwrap<LegacyContextualEnoteRecordV1>().m_spent_context;
-    else if (this->is_type<SpContextualEnoteRecordV1>())
-        return this->unwrap<SpContextualEnoteRecordV1>().m_spent_context;
-    else
+    struct visitor : public SpVariantStaticVisitor<const SpEnoteSpentContextV1&>
     {
-        static const SpEnoteSpentContextV1 temp{};
-        return temp;
-    }
+        const SpEnoteSpentContextV1& operator()(const LegacyContextualEnoteRecordV1 &record) const
+        { return record.m_spent_context; }
+        const SpEnoteSpentContextV1& operator()(const SpContextualEnoteRecordV1 &record) const
+        { return record.m_spent_context; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool SpContextualKeyImageSetV1::has_key_image(const crypto::key_image &test_key_image) const
