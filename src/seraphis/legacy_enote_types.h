@@ -148,6 +148,10 @@ struct LegacyEnoteV4 final
 ////
 // LegacyEnoteVariant
 // - variant of all legacy enote types
+//
+// onetime_address_ref(): get the enote's onetime address
+// amount_commitment_ref(): get the enote's amount commitment (this is a copy because V1 enotes need to
+//                          compute the commitment)
 ///
 using LegacyEnoteVariant = SpVariant<LegacyEnoteV1, LegacyEnoteV2, LegacyEnoteV3, LegacyEnoteV4>;
 const rct::key& onetime_address_ref(const LegacyEnoteVariant &variant);

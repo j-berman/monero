@@ -605,7 +605,7 @@ void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV
     // the partial signature map is well formed
     for (const auto &partial_sig : partial_sig_set.m_partial_signatures)
     {
-        CHECK_AND_ASSERT_THROW_MES(partial_sig.first == partial_sig.second.proof_key(),
+        CHECK_AND_ASSERT_THROW_MES(partial_sig.first == proof_key_ref(partial_sig.second),
             "multisig partial sig set semantics: a partial signature's mapped proof key does not match its stored key.");
     }
 
@@ -745,7 +745,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                     continue;
 
                 // skip sig sets with unexpected proof messages
-                if (!(allowed_proof_contexts.at(partial_sig.first) == partial_sig.second.message()))
+                if (!(allowed_proof_contexts.at(partial_sig.first) == message_ref(partial_sig.second)))
                     continue;
 
                 // skip partial sigs with unexpected internal variant type

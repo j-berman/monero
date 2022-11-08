@@ -40,6 +40,7 @@
 #include "multisig_nonce_record.h"
 #include "ringct/rctTypes.h"
 #include "sp_composition_proof.h"
+#include "sp_variant.h"
 
 //third party headers
 #include <boost/variant/get.hpp>
@@ -96,55 +97,13 @@ struct MultisigProofInitSetV1 final
 ////
 // MultisigPartialSigVariant
 // - type-erased multisig partial signature
+// 
+// message_ref(): get the partial signature's signed message
+// proof_key_ref(): get the partial signature's main proof key (there may be additional auxilliary proof keys)
 ///
-class MultisigPartialSigVariant final
-{
-    using VType = boost::variant<CLSAGMultisigPartial, SpCompositionProofMultisigPartial>;
-
-public:
-//constructors
-    MultisigPartialSigVariant() = default;
-    template <typename T>
-    MultisigPartialSigVariant(const T &partial_sig) : m_partial_sig{partial_sig} {}
-
-//member functions
-    /// get the partial sig's signed message
-    const rct::key& message() const;
-
-    /// get the partial sig's main proof key
-    const rct::key& proof_key() const;
-
-    /// interact with the variant
-    template <typename T>
-    bool is_type() const { return boost::strict_get<T>(&m_partial_sig) != nullptr; }
-
-    template <typename T>
-    const T& unwrap() const
-    {
-        static const T empty{};
-        return this->is_type<T>() ? boost::get<T>(m_partial_sig) : empty;
-    }
-
-    /// get the type index of the current partial signature
-    int type_index() const { return m_partial_sig.which(); }
-
-    /// get the type index of a requested type (compile error for invalid types)
-    template <typename T>
-    static int type_index_of()
-    {
-        static const int type_index_of_T{VType{T{}}.which()};
-        return type_index_of_T;
-    }
-
-    /// check if two variants have the same type
-    static bool same_type(const MultisigPartialSigVariant &v1, const MultisigPartialSigVariant &v2)
-    { return v1.type_index() == v2.type_index(); }
-
-private:
-//member variables
-    /// variant of all multisig partial signature types
-    VType m_partial_sig;
-};
+using MultisigPartialSigVariant = SpVariant<CLSAGMultisigPartial, SpCompositionProofMultisigPartial>;
+const rct::key& message_ref(const MultisigPartialSigVariant &variant);
+const rct::key& proof_key_ref(const MultisigPartialSigVariant &variant);
 
 ////
 // MultisigPartialSigSetV1

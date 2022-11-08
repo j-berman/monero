@@ -37,6 +37,7 @@
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "sp_composition_proof.h"
+#include "sp_variant.h"
 
 //third party headers
 
@@ -58,30 +59,30 @@ bool MultisigProofInitSetV1::try_get_nonces(const std::size_t filter_index, std:
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-const rct::key& MultisigPartialSigVariant::message() const
+const rct::key& message_ref(const MultisigPartialSigVariant &variant)
 {
-    if (this->is_type<CLSAGMultisigPartial>())
-        return this->unwrap<CLSAGMultisigPartial>().message;
-    else if (this->is_type<SpCompositionProofMultisigPartial>())
-        return this->unwrap<SpCompositionProofMultisigPartial>().message;
-    else
+    struct visitor : public SpVariantStaticVisitor<const rct::key&>
     {
-        static constexpr rct::key temp{};
-        return temp;
-    }
+        const rct::key& operator()(const CLSAGMultisigPartial &partial_sig) const
+        { return partial_sig.message; }
+        const rct::key& operator()(const SpCompositionProofMultisigPartial &partial_sig) const
+        { return partial_sig.message; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
-const rct::key& MultisigPartialSigVariant::proof_key() const
+const rct::key& proof_key_ref(const MultisigPartialSigVariant &variant)
 {
-    if (this->is_type<CLSAGMultisigPartial>())
-        return this->unwrap<CLSAGMultisigPartial>().main_proof_key_K;
-    else if (this->is_type<SpCompositionProofMultisigPartial>())
-        return this->unwrap<SpCompositionProofMultisigPartial>().K;
-    else
+    struct visitor : public SpVariantStaticVisitor<const rct::key&>
     {
-        static constexpr rct::key temp{};
-        return temp;
-    }
+        const rct::key& operator()(const CLSAGMultisigPartial &partial_sig) const
+        { return partial_sig.main_proof_key_K; }
+        const rct::key& operator()(const SpCompositionProofMultisigPartial &partial_sig) const
+        { return partial_sig.K; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

@@ -54,8 +54,8 @@ namespace sp
 // SpVariant: convenience wrapper around boost::variant with a cleaner interface
 // - the value may be assigned to but is otherwise read-only
 ///
-template<typename ReturnT>
-using SpVariantStaticVisitor = boost::static_visitor<ReturnT>;
+template<typename ResultT>
+using SpVariantStaticVisitor = boost::static_visitor<ResultT>;
 
 template<typename... Types>
 class SpVariant final
