@@ -179,7 +179,7 @@ bool InputSelectorMockV1::try_select_input_v1(const boost::multiprecision::uint1
                 mapped_enote_record.second.m_record.m_amount,
                 {SpEnoteOriginStatus::OFFCHAIN, SpEnoteOriginStatus::UNCONFIRMED, SpEnoteOriginStatus::ONCHAIN},
                 m_enote_store.m_tracked_legacy_onetime_address_duplicates.at(
-                    mapped_enote_record.second.m_record.m_enote.onetime_address()
+                    onetime_address_ref(mapped_enote_record.second.m_record.m_enote)
                 ),
                 [&mapped_legacy_contextual_enote_records](const rct::key &identifier) -> const SpEnoteOriginStatus&
                 {

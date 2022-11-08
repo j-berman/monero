@@ -87,24 +87,24 @@ bool SpEnoteSpentContextV1::is_older_than(const SpEnoteSpentContextV1 &other_con
 bool LegacyContextualBasicEnoteRecordV1::have_same_destination(const LegacyContextualBasicEnoteRecordV1 &record1,
     const LegacyContextualBasicEnoteRecordV1 &record2)
 {
-    return record1.m_record.m_enote.onetime_address() == record2.m_record.m_enote.onetime_address();
+    return onetime_address_ref(record1.m_record.m_enote) == onetime_address_ref(record2.m_record.m_enote);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void LegacyContextualIntermediateEnoteRecordV1::get_onetime_address(rct::key &onetime_address_out) const
 {
-    onetime_address_out = m_record.m_enote.onetime_address();
+    onetime_address_out = onetime_address_ref(m_record.m_enote);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool LegacyContextualIntermediateEnoteRecordV1::have_same_destination(const LegacyContextualIntermediateEnoteRecordV1 &record1,
     const LegacyContextualIntermediateEnoteRecordV1 &record2)
 {
-    return record1.m_record.m_enote.onetime_address() == record2.m_record.m_enote.onetime_address();
+    return onetime_address_ref(record1.m_record.m_enote) == onetime_address_ref(record2.m_record.m_enote);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool LegacyContextualEnoteRecordV1::have_same_destination(const LegacyContextualEnoteRecordV1 &record1,
     const LegacyContextualEnoteRecordV1 &record2)
 {
-    return record1.m_record.m_enote.onetime_address() == record2.m_record.m_enote.onetime_address();
+    return onetime_address_ref(record1.m_record.m_enote) == onetime_address_ref(record2.m_record.m_enote);
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool LegacyContextualEnoteRecordV1::has_origin_status(const SpEnoteOriginStatus test_status) const

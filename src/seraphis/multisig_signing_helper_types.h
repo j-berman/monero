@@ -107,7 +107,7 @@ public:
     template <typename T>
     MultisigPartialSigVariant(const T &partial_sig) : m_partial_sig{partial_sig} {}
 
-//accessors
+//member functions
     /// get the partial sig's signed message
     const rct::key& message() const;
 

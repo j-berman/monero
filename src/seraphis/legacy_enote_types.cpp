@@ -30,6 +30,7 @@
 
 //paired header
 #include "legacy_enote_types.h"
+#include "sp_variant.h"
 
 //local headers
 #include "crypto/crypto.h"
@@ -75,35 +76,30 @@ void LegacyEnoteV4::gen()
     m_view_tag.data = static_cast<char>(crypto::rand_idx(static_cast<unsigned char>(-1)));
 }
 //-------------------------------------------------------------------------------------------------------------------
-const rct::key& LegacyEnoteVariant::onetime_address() const
+const rct::key& onetime_address_ref(const LegacyEnoteVariant &variant)
 {
-    if (this->is_type<LegacyEnoteV1>())
-        return this->unwrap<LegacyEnoteV1>().m_onetime_address;
-    else if (this->is_type<LegacyEnoteV2>())
-        return this->unwrap<LegacyEnoteV2>().m_onetime_address;
-    else if (this->is_type<LegacyEnoteV3>())
-        return this->unwrap<LegacyEnoteV3>().m_onetime_address;
-    else if (this->is_type<LegacyEnoteV4>())
-        return this->unwrap<LegacyEnoteV4>().m_onetime_address;
-    else
+    struct visitor : public SpVariantStaticVisitor<const rct::key&>
     {
-        static constexpr rct::key temp{};
-        return temp;
-    }
+        const rct::key& operator()(const LegacyEnoteV1 &enote) const { return enote.m_onetime_address; }
+        const rct::key& operator()(const LegacyEnoteV2 &enote) const { return enote.m_onetime_address; }
+        const rct::key& operator()(const LegacyEnoteV3 &enote) const { return enote.m_onetime_address; }
+        const rct::key& operator()(const LegacyEnoteV4 &enote) const { return enote.m_onetime_address; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
-rct::key LegacyEnoteVariant::amount_commitment() const
+rct::key amount_commitment_ref(const LegacyEnoteVariant &variant)
 {
-    if (this->is_type<LegacyEnoteV1>())
-        return rct::zeroCommit(this->unwrap<LegacyEnoteV1>().m_amount);
-    else if (this->is_type<LegacyEnoteV2>())
-        return this->unwrap<LegacyEnoteV2>().m_amount_commitment;
-    else if (this->is_type<LegacyEnoteV3>())
-        return this->unwrap<LegacyEnoteV3>().m_amount_commitment;
-    else if (this->is_type<LegacyEnoteV4>())
-        return this->unwrap<LegacyEnoteV4>().m_amount_commitment;
-    else
-        return rct::key{};
+    struct visitor : public SpVariantStaticVisitor<rct::key>
+    {
+        rct::key operator()(const LegacyEnoteV1 &enote) const { return rct::zeroCommit(enote.m_amount); }
+        rct::key operator()(const LegacyEnoteV2 &enote) const { return enote.m_amount_commitment; }
+        rct::key operator()(const LegacyEnoteV3 &enote) const { return enote.m_amount_commitment; }
+        rct::key operator()(const LegacyEnoteV4 &enote) const { return enote.m_amount_commitment; }
+    };
+
+    return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

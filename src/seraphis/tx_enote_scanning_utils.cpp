@@ -75,7 +75,7 @@ static void process_chunk_new_intermediate_record_update_legacy(const LegacyInte
 {
     // 1. add new legacy record to found enotes (or refresh if already there)
     rct::key new_record_identifier;
-    get_legacy_enote_identifier(new_enote_record.m_enote.onetime_address(),
+    get_legacy_enote_identifier(onetime_address_ref(new_enote_record.m_enote),
         new_enote_record.m_amount,
         new_record_identifier);
 
@@ -110,7 +110,7 @@ static void process_chunk_new_record_update_legacy(const LegacyEnoteRecord &new_
 {
     // 1. add new legacy record to found enotes (or refresh if already there)
     rct::key new_record_identifier;
-    get_legacy_enote_identifier(new_enote_record.m_enote.onetime_address(),
+    get_legacy_enote_identifier(onetime_address_ref(new_enote_record.m_enote),
         new_enote_record.m_amount,
         new_record_identifier);
 

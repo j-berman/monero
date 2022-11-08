@@ -36,6 +36,7 @@
 //local headers
 #include "crypto/crypto.h"
 #include "ringct/rctTypes.h"
+#include "sp_variant.h"
 
 //third party headers
 #include <boost/variant/get.hpp>
@@ -148,33 +149,8 @@ struct LegacyEnoteV4 final
 // LegacyEnoteVariant
 // - variant of all legacy enote types
 ///
-class LegacyEnoteVariant final
-{
-    using VType = boost::variant<LegacyEnoteV1, LegacyEnoteV2, LegacyEnoteV3, LegacyEnoteV4>;
-
-public:
-//constructors
-    LegacyEnoteVariant() = default;
-    template <typename T>
-    LegacyEnoteVariant(const T &enote) : m_enote{enote} {}
-
-//accessors
-    /// get the enote's onetime address
-    const rct::key& onetime_address() const;
-    /// get the enote's amount commitment
-    rct::key amount_commitment() const;
-
-    /// interact with the variant
-    template <typename T>
-    bool is_type() const { return boost::strict_get<T>(&m_enote) != nullptr; }
-
-    template <typename T>
-    const T& unwrap() const { static constexpr T empty{}; return this->is_type<T>() ? boost::get<T>(m_enote) : empty; }
-
-private:
-//member variables
-    /// variant of all legacy enote types
-    VType m_enote;
-};
+using LegacyEnoteVariant = SpVariant<LegacyEnoteV1, LegacyEnoteV2, LegacyEnoteV3, LegacyEnoteV4>;
+const rct::key& onetime_address_ref(const LegacyEnoteVariant &variant);
+rct::key amount_commitment_ref(const LegacyEnoteVariant &variant);
 
 } //namespace sp

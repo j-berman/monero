@@ -246,7 +246,7 @@ static bool try_get_intermediate_legacy_enote_record_info(const LegacyEnoteVaria
         return false;
 
     // nominal spendkey check (and get subaddress index if applicable)
-    if (!try_check_legacy_nominal_spendkey(enote.onetime_address(),
+    if (!try_check_legacy_nominal_spendkey(onetime_address_ref(enote),
             tx_output_index,
             sender_receiver_DH_derivation,
             legacy_base_spend_pubkey,
@@ -292,7 +292,7 @@ bool try_get_legacy_basic_enote_record(const LegacyEnoteVariant &enote,
         return false;
 
     // nominal spendkey check (and get subaddress index if applicable)
-    if (!try_check_legacy_nominal_spendkey(enote.onetime_address(),
+    if (!try_check_legacy_nominal_spendkey(onetime_address_ref(enote),
             tx_output_index,
             sender_receiver_DH_derivation,
             legacy_base_spend_pubkey,
@@ -423,7 +423,7 @@ bool try_get_legacy_enote_record(const LegacyEnoteVariant &enote,
     // compute the key image
     make_legacy_key_image(record_out.m_enote_view_privkey,
         legacy_spend_privkey,
-        enote.onetime_address(),
+        onetime_address_ref(enote),
         record_out.m_key_image);
 
     // collect miscellaneous pieces
@@ -490,7 +490,7 @@ void get_legacy_enote_record(const LegacyIntermediateEnoteRecord &intermediate_r
     crypto::key_image key_image;
     make_legacy_key_image(intermediate_record.m_enote_view_privkey,
         legacy_spend_privkey,
-        intermediate_record.m_enote.onetime_address(),
+        onetime_address_ref(intermediate_record.m_enote),
         key_image);
 
     // assemble data

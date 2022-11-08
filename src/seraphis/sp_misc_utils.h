@@ -28,7 +28,7 @@
 
 // NOT FOR PRODUCTION
 
-// Miscellaneous utility functions for making Seraphis transactions.
+// Miscellaneous utility functions.
 
 
 #pragma once
@@ -110,6 +110,7 @@ void for_all_in_map_erase_if(std::unordered_map<KeyT, ValueT> &map_inout,
             ++map_it;
     }
 }
+
 /**
 * brief: ref_set_size_from_decomp - compute n^m from decomposition of a reference set
 * param: ref_set_decomp_n -

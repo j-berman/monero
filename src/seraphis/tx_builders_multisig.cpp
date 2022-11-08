@@ -90,7 +90,7 @@ static void get_legacy_proof_contexts_v1(const rct::key &tx_proposal_prefix,
     {
         make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
             input_proposal.m_reference_set,
-            proof_contexts_out[input_proposal.m_enote.onetime_address()]);
+            proof_contexts_out[onetime_address_ref(input_proposal.m_enote)]);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -387,10 +387,10 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
         make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
             legacy_multisig_input_proposal.m_reference_set,
             message_temp);
-        legacy_proof_contexts[legacy_multisig_input_proposal.m_enote.onetime_address()] = message_temp;
+        legacy_proof_contexts[onetime_address_ref(legacy_multisig_input_proposal.m_enote)] = message_temp;
 
         // [ proof key : reference set ]
-        mapped_reference_sets[legacy_multisig_input_proposal.m_enote.onetime_address()] =
+        mapped_reference_sets[onetime_address_ref(legacy_multisig_input_proposal.m_enote)] =
             legacy_multisig_input_proposal.m_reference_set;
     }
 
@@ -645,7 +645,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
     {
         make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix,
             legacy_multisig_input_proposal.m_reference_set,
-            legacy_proof_contexts[legacy_multisig_input_proposal.m_enote.onetime_address()]);
+            legacy_proof_contexts[onetime_address_ref(legacy_multisig_input_proposal.m_enote)]);
     }
 
 

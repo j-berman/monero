@@ -200,8 +200,8 @@ void make_v1_legacy_input_proposal_v1(const LegacyEnoteRecord &enote_record,
     LegacyInputProposalV1 &proposal_out)
 {
     // make input proposal from enote record
-    make_v1_legacy_input_proposal_v1(enote_record.m_enote.onetime_address(),
-        enote_record.m_enote.amount_commitment(),
+    make_v1_legacy_input_proposal_v1(onetime_address_ref(enote_record.m_enote),
+        amount_commitment_ref(enote_record.m_enote),
         enote_record.m_key_image,
         enote_record.m_enote_view_privkey,
         enote_record.m_amount_blinding_factor,

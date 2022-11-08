@@ -112,11 +112,11 @@ SpEnoteStoreMockV1::SpEnoteStoreMockV1(const std::uint64_t refresh_height,
 void SpEnoteStoreMockV1::add_record(const LegacyContextualIntermediateEnoteRecordV1 &new_record)
 {
     // 1. if key image is known, promote to a full enote record
-    if (m_tracked_legacy_onetime_address_duplicates.find(new_record.m_record.m_enote.onetime_address()) !=
+    if (m_tracked_legacy_onetime_address_duplicates.find(onetime_address_ref(new_record.m_record.m_enote)) !=
         m_tracked_legacy_onetime_address_duplicates.end())
     {
         const auto &identifiers_of_known_enotes =
-            m_tracked_legacy_onetime_address_duplicates.at(new_record.m_record.m_enote.onetime_address());
+            m_tracked_legacy_onetime_address_duplicates.at(onetime_address_ref(new_record.m_record.m_enote));
 
         CHECK_AND_ASSERT_THROW_MES(identifiers_of_known_enotes.size() > 0,
             "add intermediate record (mock enote store): record's onetime address is known, but there are no identifiers "
@@ -148,7 +148,7 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualIntermediateEnoteRecor
 
     // 2. else add the intermediate record or update an existing record's origin context
     rct::key new_record_identifier;
-    get_legacy_enote_identifier(new_record.m_record.m_enote.onetime_address(),
+    get_legacy_enote_identifier(onetime_address_ref(new_record.m_record.m_enote),
         new_record.m_record.m_amount,
         new_record_identifier);
 
@@ -166,14 +166,14 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualIntermediateEnoteRecor
     }
 
     // 3. save to the legacy duplicate tracker
-    m_tracked_legacy_onetime_address_duplicates[new_record.m_record.m_enote.onetime_address()]
+    m_tracked_legacy_onetime_address_duplicates[onetime_address_ref(new_record.m_record.m_enote)]
         .insert(new_record_identifier);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::add_record(const LegacyContextualEnoteRecordV1 &new_record)
 {
     rct::key new_record_identifier;
-    get_legacy_enote_identifier(new_record.m_record.m_enote.onetime_address(),
+    get_legacy_enote_identifier(onetime_address_ref(new_record.m_record.m_enote),
         new_record.m_record.m_amount,
         new_record_identifier);
 
@@ -218,7 +218,7 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualEnoteRecordV1 &new_rec
 
     // 4. there may be other full legacy enote records with this record's key image, use them to update the spent context
     for (const rct::key &legacy_enote_identifier :
-            m_tracked_legacy_onetime_address_duplicates[new_record.m_record.m_enote.onetime_address()])
+            m_tracked_legacy_onetime_address_duplicates[onetime_address_ref(new_record.m_record.m_enote)])
     {
         // a. skip identifiers not in the full legacy records map
         if (m_mapped_legacy_contextual_enote_records.find(legacy_enote_identifier) ==
@@ -236,14 +236,14 @@ void SpEnoteStoreMockV1::add_record(const LegacyContextualEnoteRecordV1 &new_rec
     m_mapped_legacy_intermediate_contextual_enote_records.erase(new_record_identifier);
 
     // 6. save to the legacy duplicate tracker
-    m_tracked_legacy_onetime_address_duplicates[new_record.m_record.m_enote.onetime_address()]
+    m_tracked_legacy_onetime_address_duplicates[onetime_address_ref(new_record.m_record.m_enote)]
         .insert(new_record_identifier);
 
     // 7. save to the legacy key image set
-    m_legacy_key_images[new_record.m_record.m_key_image] = new_record.m_record.m_enote.onetime_address();
+    m_legacy_key_images[new_record.m_record.m_key_image] = onetime_address_ref(new_record.m_record.m_enote);
 
     // 8. import this key image to force-promote all intermediate records with different identifiers to full records
-    this->import_legacy_key_image(new_record.m_record.m_key_image, new_record.m_record.m_enote.onetime_address());
+    this->import_legacy_key_image(new_record.m_record.m_key_image, onetime_address_ref(new_record.m_record.m_enote));
 }
 //-------------------------------------------------------------------------------------------------------------------
 void SpEnoteStoreMockV1::add_record(const SpContextualEnoteRecordV1 &new_record)
@@ -663,7 +663,7 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
                 mapped_contextual_enote_record.second.m_origin_context.m_block_height >= first_new_block)
             {
                 mapped_identifiers_of_removed_enotes[
-                        mapped_contextual_enote_record.second.m_record.m_enote.onetime_address()
+                        onetime_address_ref(mapped_contextual_enote_record.second.m_record.m_enote)
                     ].insert(mapped_contextual_enote_record.first);
 
                 return true;
@@ -674,7 +674,7 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
                     SpEnoteOriginStatus::UNCONFIRMED)
             {
                 mapped_identifiers_of_removed_enotes[
-                        mapped_contextual_enote_record.second.m_record.m_enote.onetime_address()
+                        onetime_address_ref(mapped_contextual_enote_record.second.m_record.m_enote)
                     ].insert(mapped_contextual_enote_record.first);
 
                 return true;
@@ -695,7 +695,7 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
 
                 // b. save key images of full records that are to be removed
                 mapped_key_images_of_removed_enotes[
-                        mapped_contextual_enote_record.second.m_record.m_enote.onetime_address()
+                        onetime_address_ref(mapped_contextual_enote_record.second.m_record.m_enote)
                     ] = mapped_contextual_enote_record.second.m_record.m_key_image;
 
                 // c. remove the record
@@ -971,7 +971,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_intermediate_le
 
         // c. ignore enotes that share onetime addresses with other enotes but don't have the highest amount among them
         CHECK_AND_ASSERT_THROW_MES(m_tracked_legacy_onetime_address_duplicates
-                    .find(current_contextual_record.m_record.m_enote.onetime_address()) !=
+                    .find(onetime_address_ref(current_contextual_record.m_record.m_enote)) !=
                 m_tracked_legacy_onetime_address_duplicates.end(),
             "enote store balance check (mock): tracked legacy duplicates is missing a onetime address (bug).");
 
@@ -979,7 +979,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_intermediate_le
                 current_contextual_record.m_record.m_amount,
                 origin_statuses,
                 m_tracked_legacy_onetime_address_duplicates.at(
-                    current_contextual_record.m_record.m_enote.onetime_address()
+                    onetime_address_ref(current_contextual_record.m_record.m_enote)
                 ),
                 [this](const rct::key &identifier) -> const SpEnoteOriginStatus&
                 {
@@ -1049,7 +1049,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_full_legacy(
 
         // d. ignore enotes that share onetime addresses with other enotes but don't have the highest amount among them
         CHECK_AND_ASSERT_THROW_MES(m_tracked_legacy_onetime_address_duplicates
-                    .find(current_contextual_record.m_record.m_enote.onetime_address()) !=
+                    .find(onetime_address_ref(current_contextual_record.m_record.m_enote)) !=
                 m_tracked_legacy_onetime_address_duplicates.end(),
             "enote store balance check (mock): tracked legacy duplicates is missing a onetime address (bug).");
 
@@ -1057,7 +1057,7 @@ boost::multiprecision::uint128_t SpEnoteStoreMockV1::get_balance_full_legacy(
                 current_contextual_record.m_record.m_amount,
                 origin_statuses,
                 m_tracked_legacy_onetime_address_duplicates.at(
-                    current_contextual_record.m_record.m_enote.onetime_address()
+                    onetime_address_ref(current_contextual_record.m_record.m_enote)
                 ),
                 [this](const rct::key &identifier) -> const SpEnoteOriginStatus&
                 {

@@ -663,7 +663,7 @@ std::uint64_t MockLedgerContext::add_legacy_coinbase_impl(const rct::key &tx_id,
     // b. insert all legacy enotes to the reference set
     for (const LegacyEnoteVariant &enote : output_enotes)
     {
-        m_legacy_enote_references[total_legacy_output_count] = {enote.onetime_address(), enote.amount_commitment()};
+        m_legacy_enote_references[total_legacy_output_count] = {onetime_address_ref(enote), amount_commitment_ref(enote)};
 
         ++total_legacy_output_count;
     }
