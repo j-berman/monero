@@ -70,78 +70,6 @@ namespace sp
 ///
 class SpTranscriptBuilder final
 {
-//member types
-    /// flags for separating items added to the transcript
-    enum SpTranscriptBuilderFlag : unsigned char
-    {
-        EXTERNAL_PREDICATE_CALL = 0,
-        UNSIGNED_INTEGER = 1,
-        SIGNED_INTEGER = 2,
-        BYTE_BUFFER = 3,
-        NAMED_CONTAINER = 4,
-        NAMED_CONTAINER_TERMINATOR = 5,
-        LIST_TYPE_CONTAINER = 6,
-        TRANSCRIPT_CLONE = 7
-    };
-
-//core member functions
-    void append_uint(const std::uint64_t unsigned_integer)
-    {
-        unsigned char v_variable[(sizeof(std::uint64_t) * 8 + 6) / 7];
-        unsigned char *v_variable_end = v_variable;
-
-        // append uint to string as a varint
-        v_variable_end = v_variable;
-        tools::write_varint(v_variable_end, unsigned_integer);
-        assert(v_variable_end <= v_variable + sizeof(v_variable));
-        m_transcript.append(reinterpret_cast<const char*>(v_variable), v_variable_end - v_variable);
-    }
-    void append_flag(const SpTranscriptBuilderFlag flag)
-    {
-        if (m_mode == Mode::SIMPLE)
-            return;
-
-        static_assert(sizeof(SpTranscriptBuilderFlag) <= sizeof(std::uint64_t),
-            "SpTranscriptBuilder: flag type greater than uint64_t.");
-        append_uint(static_cast<std::uint64_t>(flag));
-    }
-    void append_length(const std::size_t length)
-    {
-        if (m_mode == Mode::SIMPLE)
-            return;
-
-        static_assert(sizeof(std::size_t) <= sizeof(std::uint64_t), "SpTranscriptBuilder: size_t greater than uint64_t.");
-        append_uint(static_cast<std::uint64_t>(length));
-    }
-    void append_buffer(const void *data, const std::size_t length)
-    {
-        append_flag(SpTranscriptBuilderFlag::BYTE_BUFFER);
-        append_length(length);
-        m_transcript.append(reinterpret_cast<const char*>(data), length);
-    }
-    void append_label(const boost::string_ref label)
-    {
-        if (m_mode == Mode::SIMPLE ||
-            label.size() == 0)
-            return;
-
-        append_buffer(label.data(), label.size());
-    }
-    void begin_named_container(const boost::string_ref container_name)
-    {
-        append_flag(SpTranscriptBuilderFlag::NAMED_CONTAINER);
-        append_label(container_name);
-    }
-    void end_named_container()
-    {
-        append_flag(SpTranscriptBuilderFlag::NAMED_CONTAINER_TERMINATOR);
-    }
-    void begin_list_type_container(const std::size_t &list_length)
-    {
-        append_flag(SpTranscriptBuilderFlag::LIST_TYPE_CONTAINER);
-        append_length(list_length);
-    }
-
 public:
 //public member types
     /// transcript builder mode
@@ -164,148 +92,218 @@ public:
     SpTranscriptBuilder& operator=(SpTranscriptBuilder&&) = delete;
 
 //member functions
-    /// transcript builders
-    void append(const boost::string_ref label, const rct::key &key_buffer)
+    /// append a value to the transcript
+    template <typename T>
+    void append(const T &value)
     {
-        append_label(label);
-        append_buffer(key_buffer.bytes, sizeof(key_buffer));
-    }
-    void append(const boost::string_ref label, const crypto::secret_key &point_buffer)
-    {
-        append_label(label);
-        append_buffer(point_buffer.data, sizeof(point_buffer));
-    }
-    void append(const boost::string_ref label, const crypto::public_key &scalar_buffer)
-    {
-        append_label(label);
-        append_buffer(scalar_buffer.data, sizeof(scalar_buffer));
-    }
-    void append(const boost::string_ref label, const crypto::key_derivation &derivation_buffer)
-    {
-        append_label(label);
-        append_buffer(derivation_buffer.data, sizeof(derivation_buffer));
-    }
-    void append(const boost::string_ref label, const crypto::key_image &key_image_buffer)
-    {
-        append_label(label);
-        append_buffer(key_image_buffer.data, sizeof(key_image_buffer));
-    }
-    void append(const boost::string_ref label, const crypto::x25519_scalar &x25519_scalar_buffer)
-    {
-        append_label(label);
-        append_buffer(x25519_scalar_buffer.data, sizeof(x25519_scalar_buffer));
-    }
-    void append(const boost::string_ref label, const crypto::x25519_pubkey &x25519_pubkey_buffer)
-    {
-        append_label(label);
-        append_buffer(x25519_pubkey_buffer.data, sizeof(x25519_pubkey_buffer));
-    }
-    void append(const boost::string_ref label, const std::string &string_buffer)
-    {
-        append_label(label);
-        append_buffer(string_buffer.data(), string_buffer.size());
-    }
-    void append(const boost::string_ref label, const epee::wipeable_string &string_buffer)
-    {
-        append_label(label);
-        append_buffer(string_buffer.data(), string_buffer.size());
-    }
-    void append(const boost::string_ref label, const boost::string_ref string_buffer)
-    {
-        append_label(label);
-        append_buffer(string_buffer.data(), string_buffer.size());
-    }
-    template<std::size_t Sz>
-    void append(const boost::string_ref label, const unsigned char(&uchar_buffer)[Sz])
-    {
-        append_label(label);
-        append_buffer(uchar_buffer, Sz);
-    }
-    template<std::size_t Sz>
-    void append(const boost::string_ref label, const char(&char_buffer)[Sz])
-    {
-        append_label(label);
-        append_buffer(char_buffer, Sz);
-    }
-    void append(const boost::string_ref label, const std::vector<unsigned char> &vector_buffer)
-    {
-        append_label(label);
-        append_buffer(vector_buffer.data(), vector_buffer.size());
-    }
-    void append(const boost::string_ref label, const std::vector<char> &vector_buffer)
-    {
-        append_label(label);
-        append_buffer(vector_buffer.data(), vector_buffer.size());
-    }
-    template<typename T,
-        std::enable_if_t<std::is_unsigned<T>::value, bool> = true>
-    void append(const boost::string_ref label, const T unsigned_integer)
-    {
-        static_assert(sizeof(T) <= sizeof(std::uint64_t), "SpTranscriptBuilderFlag: unsupported unsigned integer type.");
-        append_label(label);
-        append_flag(SpTranscriptBuilderFlag::UNSIGNED_INTEGER);
-        append_uint(unsigned_integer);
-    }
-    template<typename T,
-        std::enable_if_t<std::is_integral<T>::value, bool> = true,
-        std::enable_if_t<!std::is_unsigned<T>::value, bool> = true>
-    void append(const boost::string_ref label, const T signed_integer)
-    {
-        static_assert(sizeof(T) <= sizeof(std::uint64_t), "SpTranscriptBuilderFlag: unsupported signed integer type.");
-        append_label(label);
-        append_flag(SpTranscriptBuilderFlag::SIGNED_INTEGER);
-        if (signed_integer >= 0)
-        {
-            // positive integer: byte{0} || varint(uint(int_variable))
-            append_uint(0);
-            append_uint(static_cast<std::uint64_t>(signed_integer));
-        }
-        else
-        {
-            // negative integer: byte{1} || varint(uint(abs(int_variable)))
-            append_uint(1);
-            append_uint(static_cast<std::uint64_t>(-signed_integer));
-        }
-    }
-    template<typename T,
-        std::enable_if_t<!std::is_integral<T>::value, bool> = true>
-    void append(const boost::string_ref label, const T &named_container)
-    {
-        // named containers must satisfy two concepts:
-        //   const boost::string_ref container_name(const T &container);
-        //   void append_to_transcript(const T &container, SpTranscriptBuilder &transcript_inout);
-        append_label(label);
-        begin_named_container(container_name(named_container));
-        append_to_transcript(named_container, *this);
-        end_named_container();
-    }
-    template<typename T>
-    void append(const boost::string_ref label, const std::vector<T> &list_container)
-    {
-        append_label(label);
-        begin_list_type_container(list_container.size());
-        for (const T &element : list_container)
-            append("", element);
-    }
-    template<typename T>
-    void append(const boost::string_ref label, const std::list<T> &list_container)
-    {
-        append_label(label);
-        begin_list_type_container(list_container.size());
-        for (const T &element : list_container)
-            append("", element);
+        this->append_impl(value);
     }
 
     /// access the transcript data
     const void* data() const { return m_transcript.data(); }
     std::size_t size() const { return m_transcript.size(); }
 
-//member variables
 private:
+//member variables
     /// if set, exclude: labels, flags, lengths
     Mode m_mode;
     /// the transcript itself (wipeable in case it contains sensitive data)
     epee::wipeable_string m_transcript;
+
+//private member types
+    /// flags for separating items added to the transcript
+    enum SpTranscriptBuilderFlag : unsigned char
+    {
+        EXTERNAL_PREDICATE_CALL = 0,
+        UNSIGNED_INTEGER = 1,
+        SIGNED_INTEGER = 2,
+        BYTE_BUFFER = 3,
+        NAMED_CONTAINER = 4,
+        NAMED_CONTAINER_TERMINATOR = 5,
+        LIST_TYPE_CONTAINER = 6,
+        TRANSCRIPT_CLONE = 7
+    };
+
+//transcript builders
+    void append_uint(const std::uint64_t unsigned_integer)
+    {
+        unsigned char v_variable[(sizeof(std::uint64_t) * 8 + 6) / 7];
+        unsigned char *v_variable_end = v_variable;
+
+        // append uint to string as a varint
+        v_variable_end = v_variable;
+        tools::write_varint(v_variable_end, unsigned_integer);
+        assert(v_variable_end <= v_variable + sizeof(v_variable));
+        m_transcript.append(reinterpret_cast<const char*>(v_variable), v_variable_end - v_variable);
+    }
+    void append_flag(const SpTranscriptBuilderFlag flag)
+    {
+        if (m_mode == Mode::SIMPLE)
+            return;
+
+        static_assert(sizeof(SpTranscriptBuilderFlag) <= sizeof(std::uint64_t),
+            "SpTranscriptBuilder: flag type greater than uint64_t.");
+        this->append_uint(static_cast<std::uint64_t>(flag));
+    }
+    void append_length(const std::size_t length)
+    {
+        if (m_mode == Mode::SIMPLE)
+            return;
+
+        static_assert(sizeof(std::size_t) <= sizeof(std::uint64_t), "SpTranscriptBuilder: size_t greater than uint64_t.");
+        this->append_uint(static_cast<std::uint64_t>(length));
+    }
+    void append_buffer(const void *data, const std::size_t length)
+    {
+        this->append_flag(SpTranscriptBuilderFlag::BYTE_BUFFER);
+        this->append_length(length);
+        m_transcript.append(reinterpret_cast<const char*>(data), length);
+    }
+    void append_label(const boost::string_ref label)
+    {
+        if (m_mode == Mode::SIMPLE ||
+            label.size() == 0)
+            return;
+
+        this->append_buffer(label.data(), label.size());
+    }
+    void append_labeled_buffer(const boost::string_ref label, const void *data, const std::size_t length)
+    {
+        this->append_label(label);
+        this->append_buffer(data, length);
+    }
+    void begin_named_container(const boost::string_ref container_name)
+    {
+        this->append_flag(SpTranscriptBuilderFlag::NAMED_CONTAINER);
+        this->append_label(container_name);
+    }
+    void end_named_container()
+    {
+        this->append_flag(SpTranscriptBuilderFlag::NAMED_CONTAINER_TERMINATOR);
+    }
+    void begin_list_type_container(const std::size_t &list_length)
+    {
+        this->append_flag(SpTranscriptBuilderFlag::LIST_TYPE_CONTAINER);
+        this->append_length(list_length);
+    }
+
+//append overloads
+    void append_impl(const boost::string_ref label, const rct::key &key_buffer)
+    {
+        this->append_labeled_buffer(label, key_buffer.bytes, sizeof(key_buffer));
+    }
+    void append_impl(const boost::string_ref label, const crypto::secret_key &point_buffer)
+    {
+        this->append_labeled_buffer(label, point_buffer.data, sizeof(point_buffer));
+    }
+    void append_impl(const boost::string_ref label, const crypto::public_key &scalar_buffer)
+    {
+        this->append_labeled_buffer(label, scalar_buffer.data, sizeof(scalar_buffer));
+    }
+    void append_impl(const boost::string_ref label, const crypto::key_derivation &derivation_buffer)
+    {
+        this->append_labeled_buffer(label, derivation_buffer.data, sizeof(derivation_buffer));
+    }
+    void append_impl(const boost::string_ref label, const crypto::key_image &key_image_buffer)
+    {
+        this->append_labeled_buffer(label, key_image_buffer.data, sizeof(key_image_buffer));
+    }
+    void append_impl(const boost::string_ref label, const crypto::x25519_scalar &x25519_scalar_buffer)
+    {
+        this->append_labeled_buffer(label, x25519_scalar_buffer.data, sizeof(x25519_scalar_buffer));
+    }
+    void append_impl(const boost::string_ref label, const crypto::x25519_pubkey &x25519_pubkey_buffer)
+    {
+        this->append_labeled_buffer(label, x25519_pubkey_buffer.data, sizeof(x25519_pubkey_buffer));
+    }
+    void append_impl(const boost::string_ref label, const std::string &string_buffer)
+    {
+        this->append_labeled_buffer(label, string_buffer.data(), string_buffer.size());
+    }
+    void append_impl(const boost::string_ref label, const epee::wipeable_string &string_buffer)
+    {
+        this->append_labeled_buffer(label, string_buffer.data(), string_buffer.size());
+    }
+    void append_impl(const boost::string_ref label, const boost::string_ref string_buffer)
+    {
+        this->append_labeled_buffer(label, string_buffer.data(), string_buffer.size());
+    }
+    template<std::size_t Sz>
+    void append_impl(const boost::string_ref label, const unsigned char(&uchar_buffer)[Sz])
+    {
+        this->append_labeled_buffer(label, uchar_buffer, Sz);
+    }
+    template<std::size_t Sz>
+    void append_impl(const boost::string_ref label, const char(&char_buffer)[Sz])
+    {
+        this->append_labeled_buffer(label, char_buffer, Sz);
+    }
+    void append_impl(const boost::string_ref label, const std::vector<unsigned char> &vector_buffer)
+    {
+        this->append_labeled_buffer(label, vector_buffer.data(), vector_buffer.size());
+    }
+    void append_impl(const boost::string_ref label, const std::vector<char> &vector_buffer)
+    {
+        this->append_labeled_buffer(label, vector_buffer.data(), vector_buffer.size());
+    }
+    template<typename T,
+        std::enable_if_t<std::is_unsigned<T>::value, bool> = true>
+    void append_impl(const boost::string_ref label, const T unsigned_integer)
+    {
+        static_assert(sizeof(T) <= sizeof(std::uint64_t), "SpTranscriptBuilderFlag: unsupported unsigned integer type.");
+        this->append_label(label);
+        this->append_flag(SpTranscriptBuilderFlag::UNSIGNED_INTEGER);
+        this->append_uint(unsigned_integer);
+    }
+    template<typename T,
+        std::enable_if_t<std::is_integral<T>::value, bool> = true,
+        std::enable_if_t<!std::is_unsigned<T>::value, bool> = true>
+    void append_impl(const boost::string_ref label, const T signed_integer)
+    {
+        static_assert(sizeof(T) <= sizeof(std::uint64_t), "SpTranscriptBuilderFlag: unsupported signed integer type.");
+        this->append_label(label);
+        this->append_flag(SpTranscriptBuilderFlag::SIGNED_INTEGER);
+        if (signed_integer >= 0)
+        {
+            // positive integer: byte{0} || varint(uint(int_variable))
+            this->append_uint(0);
+            this->append_uint(static_cast<std::uint64_t>(signed_integer));
+        }
+        else
+        {
+            // negative integer: byte{1} || varint(uint(abs(int_variable)))
+            this->append_uint(1);
+            this->append_uint(static_cast<std::uint64_t>(-signed_integer));
+        }
+    }
+    template<typename T,
+        std::enable_if_t<!std::is_integral<T>::value, bool> = true>
+    void append_impl(const boost::string_ref label, const T &named_container)
+    {
+        // named containers must satisfy two concepts:
+        //   const boost::string_ref container_name(const T &container);
+        //   void append_to_transcript(const T &container, SpTranscriptBuilder &transcript_inout);
+        this->append_label(label);
+        this->begin_named_container(container_name(named_container));
+        this->append_to_transcript(named_container, *this);
+        this->end_named_container();
+    }
+    template<typename T>
+    void append_impl(const boost::string_ref label, const std::vector<T> &list_container)
+    {
+        this->append_label(label);
+        this->begin_list_type_container(list_container.size());
+        for (const T &element : list_container)
+            this->append_impl("", element);
+    }
+    template<typename T>
+    void append_impl(const boost::string_ref label, const std::list<T> &list_container)
+    {
+        this->append_label(label);
+        this->begin_list_type_container(list_container.size());
+        for (const T &element : list_container)
+            this->append_impl("", element);
+    }
 };
 
 ////
@@ -331,7 +329,7 @@ public:
     SpFSTranscript& operator=(SpFSTranscript&&) = delete;
 
 //member functions
-    /// transcript builders
+    /// build the transcript
     template<typename T>
     void append(const boost::string_ref label, const T &value)
     {
@@ -371,7 +369,7 @@ public:
     SpKDFTranscript& operator=(SpKDFTranscript&&) = delete;
 
 //member functions
-    /// transcript builders
+    /// build the transcript
     template<typename T>
     void append(const boost::string_ref, const T &value)
     {
