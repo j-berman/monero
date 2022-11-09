@@ -248,7 +248,7 @@ static MultisigSigningErrorVariant try_make_v1_multisig_partial_signatures_v1(
             {
                 return MultisigSigningErrorBadInitSetCollection{
                         .m_error_code = MultisigSigningErrorBadInitSetCollection::ErrorCode::GET_NONCES_FAIL,
-                        .m_signer_id = init_set_collection.second.at(proof_context.first).m_signer_id,
+                        .m_signer_id  = init_set_collection.second.at(proof_context.first).m_signer_id,
                     };
             }
 
@@ -257,7 +257,7 @@ static MultisigSigningErrorVariant try_make_v1_multisig_partial_signatures_v1(
             {
                 return MultisigSigningErrorBadInitSetCollection{
                         .m_error_code = MultisigSigningErrorBadInitSetCollection::ErrorCode::INVALID_NONCES_SET_SIZE,
-                        .m_signer_id = init_set_collection.second.at(proof_context.first).m_signer_id,
+                        .m_signer_id  = init_set_collection.second.at(proof_context.first).m_signer_id,
                     };
             }
 
@@ -297,16 +297,16 @@ static MultisigSigningErrorVariant try_make_v1_multisig_partial_signatures_v1(
         {
             return MultisigSigningErrorMakePartialSigSet{
                     .m_error_code = MultisigSigningErrorMakePartialSigSet::ErrorCode::MAKE_SIGNATURE_EXCEPTION,
-                    .m_error_message = exception.what(),
-                    .m_signature_set_filter = filter
+                    .m_signature_set_filter = filter,
+                    .m_error_message        = exception.what()
                 };
         }
         catch (...)
         {
             return MultisigSigningErrorMakePartialSigSet{
                     .m_error_code = MultisigSigningErrorMakePartialSigSet::ErrorCode::MAKE_SIGNATURE_EXCEPTION,
-                    .m_error_message = "unknown exception",
-                    .m_signature_set_filter = filter
+                    .m_signature_set_filter = filter,
+                    .m_error_message        = "unknown exception"
                 };
         }
     }
@@ -416,8 +416,8 @@ static void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_accoun
                 multisig_errors_inout.emplace_back(
                         MultisigSigningErrorMakePartialSigSet{
                                 .m_error_code = MultisigSigningErrorMakePartialSigSet::ErrorCode::MAKE_SET_EXCEPTION,
-                                .m_error_message = exception.what(),
-                                .m_signature_set_filter = filter
+                                .m_signature_set_filter = filter,
+                                .m_error_message        = exception.what()
                             }
                     );
 
@@ -429,8 +429,8 @@ static void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_accoun
                 multisig_errors_inout.emplace_back(
                         MultisigSigningErrorMakePartialSigSet{
                                 .m_error_code = MultisigSigningErrorMakePartialSigSet::ErrorCode::MAKE_SET_EXCEPTION,
-                                .m_error_message = "unknown exception",
-                                .m_signature_set_filter = filter
+                                .m_signature_set_filter = filter,
+                                .m_error_message        = "unknown exception"
                             }
                     );
 
@@ -569,22 +569,22 @@ MultisigSigningErrorVariant validate_v1_multisig_init_set_v1(const MultisigProof
     {
         return MultisigSigningErrorBadInitSet{
                 .m_error_code = MultisigSigningErrorBadInitSet::ErrorCode::SEMANTICS_EXCEPTION,
-                .m_error_message = exception.what(),
                 .m_aggregate_signer_set_filter = init_set.m_aggregate_signer_set_filter,
                 .m_signer_id                   = init_set.m_signer_id,
                 .m_proof_message               = init_set.m_proof_message,
-                .m_proof_key                   = init_set.m_proof_key
+                .m_proof_key                   = init_set.m_proof_key,
+                .m_error_message               = exception.what()
             };
     }
     catch (...)
     {
         return MultisigSigningErrorBadInitSet{
                 .m_error_code = MultisigSigningErrorBadInitSet::ErrorCode::SEMANTICS_EXCEPTION,
-                .m_error_message = "unknown exception",
                 .m_aggregate_signer_set_filter = init_set.m_aggregate_signer_set_filter,
                 .m_signer_id                   = init_set.m_signer_id,
                 .m_proof_message               = init_set.m_proof_message,
-                .m_proof_key                   = init_set.m_proof_key
+                .m_proof_key                   = init_set.m_proof_key,
+                .m_error_message               = "unknown exception"
             };
     }
 
@@ -923,9 +923,9 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                 multisig_errors_inout.emplace_back(
                         MultisigSigningErrorBadPartialSigSet{
                                 .m_error_code = MultisigSigningErrorBadPartialSigSet::ErrorCode::SEMANTICS_EXCEPTION,
-                                .m_error_message = exception.what(),
                                 .m_signature_set_filter = partial_sig_set.m_signer_set_filter,
-                                .m_signer_id = partial_sig_set.m_signer_id
+                                .m_signer_id            = partial_sig_set.m_signer_id,
+                                .m_error_message        = exception.what()
                             }
                     );
 
@@ -936,9 +936,9 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                 multisig_errors_inout.emplace_back(
                         MultisigSigningErrorBadPartialSigSet{
                                 .m_error_code = MultisigSigningErrorBadPartialSigSet::ErrorCode::SEMANTICS_EXCEPTION,
-                                .m_error_message = "unknown exception",
                                 .m_signature_set_filter = partial_sig_set.m_signer_set_filter,
-                                .m_signer_id = partial_sig_set.m_signer_id
+                                .m_signer_id            = partial_sig_set.m_signer_id,
+                                .m_error_message        = "unknown exception"
                             }
                     );
 
@@ -952,7 +952,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                         MultisigSigningErrorBadPartialSigSet{
                                 .m_error_code = MultisigSigningErrorBadPartialSigSet::ErrorCode::INVALID_MAPPING,
                                 .m_signature_set_filter = partial_sig_set.m_signer_set_filter,
-                                .m_signer_id = partial_sig_set.m_signer_id
+                                .m_signer_id            = partial_sig_set.m_signer_id
                             }
                     );
 
@@ -976,7 +976,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                             MultisigSigningErrorBadPartialSig{
                                     .m_error_code =
                                         MultisigSigningErrorBadPartialSig::ErrorCode::UNEXPECTED_MAIN_PROOF_KEY,
-                                    .m_proof_key = proof_key_ref(partial_sig.second),
+                                    .m_proof_key     = proof_key_ref(partial_sig.second),
                                     .m_proof_message = message_ref(partial_sig.second)
                                 }
                         );
@@ -991,7 +991,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                             MultisigSigningErrorBadPartialSig{
                                     .m_error_code =
                                         MultisigSigningErrorBadPartialSig::ErrorCode::UNEXPECTED_PROOF_MESSAGE,
-                                    .m_proof_key = proof_key_ref(partial_sig.second),
+                                    .m_proof_key     = proof_key_ref(partial_sig.second),
                                     .m_proof_message = message_ref(partial_sig.second)
                                 }
                         );
@@ -1006,7 +1006,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
                             MultisigSigningErrorBadPartialSig{
                                     .m_error_code =
                                         MultisigSigningErrorBadPartialSig::ErrorCode::UNEXPECTED_VARIANT_TYPE,
-                                    .m_proof_key = proof_key_ref(partial_sig.second),
+                                    .m_proof_key     = proof_key_ref(partial_sig.second),
                                     .m_proof_message = message_ref(partial_sig.second)
                                 }
                         );

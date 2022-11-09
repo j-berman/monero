@@ -29,6 +29,9 @@
 // NOT FOR PRODUCTION
 
 // Utilities to assist with multisig signing ceremonies.
+// IMPORTANT: These utilities should have strong guarantees about signer ID consistency. It is imperative that
+//            a malicious signer not be allowed to pretend they are a different signer or part of signer subgroup
+//            they aren't actually a member of.
 
 
 #pragma once
