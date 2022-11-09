@@ -45,6 +45,7 @@ set(seraphis_sources
   mock_offchain_context.cpp
   multisig_nonce_record.cpp
   multisig_partial_sig_makers.cpp
+  multisig_signing_errors.cpp
   multisig_signing_helper_types.cpp
   multisig_signing_helper_utils.cpp
   serialization_demo_utils.cpp

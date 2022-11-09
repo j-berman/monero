@@ -98,12 +98,12 @@ struct MultisigProofInitSetV1 final
 // MultisigPartialSigVariant
 // - type-erased multisig partial signature
 // 
-// message_ref(): get the partial signature's signed message
 // proof_key_ref(): get the partial signature's main proof key (there may be additional auxilliary proof keys)
+// message_ref(): get the partial signature's signed message
 ///
 using MultisigPartialSigVariant = SpVariant<CLSAGMultisigPartial, SpCompositionProofMultisigPartial>;
-const rct::key& message_ref(const MultisigPartialSigVariant &variant);
 const rct::key& proof_key_ref(const MultisigPartialSigVariant &variant);
+const rct::key& message_ref(const MultisigPartialSigVariant &variant);
 
 ////
 // MultisigPartialSigSetV1

@@ -358,6 +358,7 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
     const std::vector<crypto::public_key> &multisig_signers,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
     const rct::key &legacy_spend_pubkey,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<LegacyInputV1> &legacy_inputs_out)
 {
     // 1. process input proposals
@@ -409,6 +410,7 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
         legacy_proof_contexts,
         MultisigPartialSigVariant::type_index_of<CLSAGMultisigPartial>(),
         legacy_input_partial_sigs_per_signer,
+        multisig_errors_inout,
         collected_sigs_per_key_per_filter);
 
     // 5. try to make one legacy input per input proposal, using the partial signatures from as many signing groups as
@@ -434,6 +436,7 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
                         legacy_spend_pubkey,
                         contextual_sig_out);
                 },
+                multisig_errors_inout,
                 legacy_inputs_out
             ))
         return false;
@@ -447,6 +450,7 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
     const std::vector<crypto::public_key> &multisig_signers,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
     const rct::key &sp_spend_pubkey,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out)
 {
     // 1. collect seraphis masked addresses of input images and map seraphis input proposals to their masked addresses
@@ -470,6 +474,7 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
         sp_proof_contexts,
         MultisigPartialSigVariant::type_index_of<SpCompositionProofMultisigPartial>(),
         sp_input_partial_sigs_per_signer,
+        multisig_errors_inout,
         collected_sigs_per_key_per_filter);
 
     // 3. try to make one seraphis partial input per input proposal
@@ -491,6 +496,7 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
                         sp_spend_pubkey,
                         sp_partial_input_out);
                 },
+                multisig_errors_inout,
                 sp_partial_inputs_out
             ))
         return false;
@@ -1051,6 +1057,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     //[ signer id : [ proof key : init set ] ]
     std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         other_input_init_set_collections,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out)
 {
@@ -1128,6 +1135,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
             partial_sig_maker,
             std::move(local_input_init_set_collection),
             std::move(other_input_init_set_collections),
+            multisig_errors_inout,
             nonce_record_inout,
             legacy_input_partial_sig_sets_out))
         return false;
@@ -1146,6 +1154,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     //[ signer id : [ proof key : init set ] ]
     std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         other_input_init_set_collections,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out)
 {
@@ -1230,6 +1239,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
             partial_sig_maker,
             std::move(local_input_init_set_collection),
             std::move(other_input_init_set_collections),
+            multisig_errors_inout,
             nonce_record_inout,
             sp_input_partial_sig_sets_out))
         return false;
@@ -1246,6 +1256,7 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
     const crypto::secret_key &k_view_balance,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<LegacyInputV1> &legacy_inputs_out,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out)
 {
@@ -1273,6 +1284,7 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
             multisig_signers,
             legacy_input_partial_sigs_per_signer,
             legacy_spend_pubkey,
+            multisig_errors_inout,
             legacy_inputs_out))
         return false;
 
@@ -1285,6 +1297,7 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
             multisig_signers,
             sp_input_partial_sigs_per_signer,
             sp_spend_pubkey,
+            multisig_errors_inout,
             sp_partial_inputs_out))
         return false;
 

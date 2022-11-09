@@ -47,6 +47,8 @@
 #include "seraphis/legacy_core_utils.h"
 #include "seraphis/legacy_enote_utils.h"
 #include "seraphis/mock_ledger_context.h"
+#include "seraphis/multisig_signing_errors.h"
+#include "seraphis/multisig_signing_helper_types.h"
 #include "seraphis/sp_composition_proof.h"
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/sp_crypto_utils.h"
@@ -746,6 +748,13 @@ static void refresh_user_enote_store(const sp::jamtis::jamtis_mock_keys &user_ke
     ASSERT_NO_THROW(refresh_enote_store_ledger(refresh_config, enote_scanning_context, enote_store_updater));
 }
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void print_multisig_errors(const std::list<sp::MultisigSigningErrorVariant> &multisig_errors)
+{
+    for (const sp::MultisigSigningErrorVariant &error : multisig_errors)
+        std::cout << "Multisig Signing Error: " << error_message_ref(error) << '\n';
+}
+//-------------------------------------------------------------------------------------------------------------------
 // v1: SpTxSquashedV1
 //-------------------------------------------------------------------------------------------------------------------
 static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
@@ -1032,9 +1041,12 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     /// 5) get partial signatures from all requested signers
     std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> legacy_input_partial_sigs_per_signer;
     std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> sp_input_partial_sigs_per_signer;
+    std::list<MultisigSigningErrorVariant> multisig_make_partial_sig_errors;
 
     for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
+        multisig_make_partial_sig_errors.clear();
+
         if (std::find(requested_signers.begin(), requested_signers.end(), signer_index) != requested_signers.end())
         {
             ASSERT_NO_THROW(ASSERT_TRUE(try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(
@@ -1047,6 +1059,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 legacy_input_init_collections_per_signer[legacy_accounts[signer_index].get_base_pubkey()],
                 //don't need to remove the local init (will be filtered out internally)
                 legacy_input_init_collections_per_signer,
+                multisig_make_partial_sig_errors,
                 signer_nonce_records[signer_index],
                 legacy_input_partial_sigs_per_signer[legacy_accounts[signer_index].get_base_pubkey()])));
 
@@ -1060,8 +1073,11 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 sp_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()],
                 //don't need to remove the local init (will be filtered out internally)
                 sp_input_init_collections_per_signer,
+                multisig_make_partial_sig_errors,
                 signer_nonce_records[signer_index],
                 sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])));
+
+            print_multisig_errors(multisig_make_partial_sig_errors);
         }
         else
         {
@@ -1075,6 +1091,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                         legacy_input_init_collections_per_signer[legacy_accounts[signer_index].get_base_pubkey()],
                         //don't need to remove the local init (will be filtered out internally)
                         legacy_input_init_collections_per_signer,
+                        multisig_make_partial_sig_errors,
                         signer_nonce_records[signer_index],
                         legacy_input_partial_sigs_per_signer[legacy_accounts[signer_index].get_base_pubkey()])
                     &&
@@ -1087,9 +1104,12 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                         sp_input_init_collections_per_signer[seraphis_accounts[signer_index].get_base_pubkey()],
                         //don't need to remove the local init (will be filtered out internally)
                         sp_input_init_collections_per_signer,
+                        multisig_make_partial_sig_errors,
                         signer_nonce_records[signer_index],
                         sp_input_partial_sigs_per_signer[seraphis_accounts[signer_index].get_base_pubkey()])
                 );
+
+            print_multisig_errors(multisig_make_partial_sig_errors);
         }
     }
 
@@ -1100,6 +1120,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // a) get legacy inputs and seraphis partial inputs
     std::vector<LegacyInputV1> legacy_inputs;
     std::vector<SpPartialInputV1> sp_partial_inputs;
+    std::list<MultisigSigningErrorVariant> multisig_make_inputs_errors;
 
     ASSERT_NO_THROW(
             ASSERT_TRUE(try_make_inputs_for_multisig_v1(multisig_tx_proposal,
@@ -1111,9 +1132,11 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
                 shared_sp_keys.k_vb,
                 legacy_input_partial_sigs_per_signer,
                 sp_input_partial_sigs_per_signer,
+                multisig_make_inputs_errors,
                 legacy_inputs,
                 sp_partial_inputs))
         );
+    print_multisig_errors(multisig_make_inputs_errors);
 
     // b) build partial tx
     SpTxProposalV1 tx_proposal;

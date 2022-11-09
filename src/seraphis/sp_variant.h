@@ -36,12 +36,15 @@
 //local headers
 
 //third party headers
+#include <boost/blank.hpp>
+#include <boost/none_t.hpp>
 #include <boost/variant/apply_visitor.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/variant/static_visitor.hpp>
 #include <boost/variant/variant.hpp>
 
 //standard headers
+#include <stdexcept>
 #include <type_traits>
 
 //forward declarations
@@ -53,22 +56,44 @@ namespace sp
 ////
 // SpVariant: convenience wrapper around boost::variant with a cleaner interface
 // - the value may be assigned to but is otherwise read-only
+// - the variant is 'optional' - an empty variant will evaluate to 'false' and an initialized variant will be 'true'
 ///
 template<typename ResultT>
-using SpVariantStaticVisitor = boost::static_visitor<ResultT>;
+struct SpVariantStaticVisitor : public boost::static_visitor<ResultT>
+{
+    /// provide visitation for empty variants by default (can write your own visitor from scratch if you want custom
+    ///   behavior for empty variants)
+    ResultT operator()(const boost::blank) const
+    {
+        throw std::runtime_error("SpVariant: tried to visit an empty variant.");
+        static const ResultT dummy{};
+        return dummy;
+    }
+};
 
 template<typename... Types>
 class SpVariant final
 {
-    using VType = boost::variant<Types...>;
+    using VType = boost::variant<boost::blank, Types...>;
 
 public:
 //constructors
+    /// default constructor
     SpVariant() = default;
+    SpVariant(boost::none_t) : SpVariant{} {}  //act like boost::optional
+
+    /// construct from variant type
     template <typename T>
     SpVariant(const T &value) : m_value{value} {}
 
+//overloaded operators
+    /// boolean operator: true if the variant isn't empty/uninitialized
+    operator bool() const { return m_value.which() != 0; }
+
 //member functions
+    /// check if empty/uninitialized
+    bool is_empty() const { return !static_cast<bool>(*this); }
+
     /// check the variant type
     template <typename T>
     bool is_type() const { return boost::strict_get<T>(&m_value) != nullptr; }
@@ -78,7 +103,7 @@ public:
     const T& unwrap() const
     {
         const T *value_ptr{boost::strict_get<T>(&m_value)};
-        if (!value_ptr) throw std::runtime_error("SpVariant tried to access value of incorrect type.");
+        if (!value_ptr) throw std::runtime_error("SpVariant: tried to access value of incorrect type.");
         return *value_ptr;
     }
 

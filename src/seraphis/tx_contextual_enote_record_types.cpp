@@ -161,6 +161,7 @@ const SpEnoteOriginContextV1& origin_context_ref(const ContextualBasicRecordVari
 {
     struct visitor : public SpVariantStaticVisitor<const SpEnoteOriginContextV1&>
     {
+        using SpVariantStaticVisitor::operator();  //for blank overload
         const SpEnoteOriginContextV1& operator()(const LegacyContextualBasicEnoteRecordV1 &record) const
         { return record.m_origin_context; }
         const SpEnoteOriginContextV1& operator()(const SpContextualBasicEnoteRecordV1 &record) const
@@ -174,6 +175,7 @@ rct::xmr_amount amount_ref(const ContextualRecordVariant &variant)
 {
     struct visitor : public SpVariantStaticVisitor<rct::xmr_amount>
     {
+        using SpVariantStaticVisitor::operator();  //for blank overload
         rct::xmr_amount operator()(const LegacyContextualEnoteRecordV1 &record) const { return record.amount(); }
         rct::xmr_amount operator()(const SpContextualEnoteRecordV1 &record) const { return record.amount(); }
     };
@@ -185,6 +187,7 @@ const SpEnoteOriginContextV1& origin_context_ref(const ContextualRecordVariant &
 {
     struct visitor : public SpVariantStaticVisitor<const SpEnoteOriginContextV1&>
     {
+        using SpVariantStaticVisitor::operator();  //for blank overload
         const SpEnoteOriginContextV1& operator()(const LegacyContextualEnoteRecordV1 &record) const
         { return record.m_origin_context; }
         const SpEnoteOriginContextV1& operator()(const SpContextualEnoteRecordV1 &record) const
@@ -198,6 +201,7 @@ const SpEnoteSpentContextV1& spent_context_ref(const ContextualRecordVariant &va
 {
     struct visitor : public SpVariantStaticVisitor<const SpEnoteSpentContextV1&>
     {
+        using SpVariantStaticVisitor::operator();  //for blank overload
         const SpEnoteSpentContextV1& operator()(const LegacyContextualEnoteRecordV1 &record) const
         { return record.m_spent_context; }
         const SpEnoteSpentContextV1& operator()(const SpContextualEnoteRecordV1 &record) const

@@ -51,6 +51,7 @@
 #include "jamtis_payment_proposal.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig_signing_errors.h"
 #include "multisig_signing_helper_types.h"
 #include "ringct/rctTypes.h"
 #include "sp_core_types.h"
@@ -248,6 +249,7 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
 * param: expected_version_string -
 * param: local_input_init_set_collection -
 * param: other_input_init_set_collections -
+* inoutparam: multisig_errors_inout -
 * inoutparam: nonce_record_inout -
 * outparam: legacy_input_partial_sig_sets_out -
 * return: true if at least one set of partial signatures was created (one set will contain a partial sig for each input)
@@ -263,6 +265,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     //[ signer id : [ proof key : init set ] ]
     std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         other_input_init_set_collections,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out);
 /**
@@ -279,6 +282,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
 * param: expected_version_string -
 * param: local_input_init_set_collection -
 * param: other_input_init_set_collections -
+* inoutparam: multisig_errors_inout -
 * inoutparam: nonce_record_inout -
 * outparam: sp_input_partial_sig_sets_out -
 * return: true if at least one set of partial signatures was created (one set will contain a partial sig for each input)
@@ -294,6 +298,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     //[ signer id : [ proof key : init set ] ]
     std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         other_input_init_set_collections,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out);
 /**
@@ -311,6 +316,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
 * param: k_view_balance -
 * param: legacy_input_partial_sigs_per_signer -
 * param: sp_input_partial_sigs_per_signer -
+* inoutparam: multisig_errors_inout -
 * outparam: legacy_inputs_out -
 * outparam: sp_partial_inputs_out -
 * return: true if legacy_inputs_out and sp_partial_inputs_out contain inputs/partial inputs corresponding to each input
@@ -325,6 +331,7 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
     const crypto::secret_key &k_view_balance,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<LegacyInputV1> &legacy_inputs_out,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out);
 

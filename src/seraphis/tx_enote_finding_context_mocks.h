@@ -56,7 +56,7 @@ namespace sp
 ////
 // EnoteFindingContextLedgerMockLegacy
 // - wraps a mock ledger context, produces chunks of potentially owned enotes (from legacy view scanning)
-// - note: if the legacy view privkey is set to boost::none, then chunks found will contain only key images (kludge)
+// - note: if the legacy_scan_mode is set to KEY_IMAGES_ONLY, then chunks found will contain only key images
 ///
 class EnoteFindingContextLedgerMockLegacy final : public EnoteFindingContextLedger
 {

@@ -37,10 +37,12 @@
 #include "crypto/crypto.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig_signing_errors.h"
 #include "multisig_signing_helper_types.h"
 #include "ringct/rctTypes.h"
 
 //third party headers
+#include <boost/optional/optional.hpp>
 
 //standard headers
 #include <functional>
@@ -82,9 +84,9 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
 * param: expected_proof_message -
 * param: expected_main_proof_key -
 * param: num_expected_nonce_sets_per_proofkey -
-* return: true if the init set is valid
+* return: boost::none if the init set is valid, otherwise a multisig error
 */
-bool validate_v1_multisig_init_set_v1(const MultisigProofInitSetV1 &init_set,
+MultisigSigningErrorVariant validate_v1_multisig_init_set_v1(const MultisigProofInitSetV1 &init_set,
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
     const multisig::signer_set_filter expected_aggregate_signer_set_filter,
@@ -92,7 +94,7 @@ bool validate_v1_multisig_init_set_v1(const MultisigProofInitSetV1 &init_set,
     const rct::key &expected_proof_message,
     const rct::key &expected_main_proof_key,
     const std::size_t num_expected_nonce_sets_per_proofkey);
-bool validate_v1_multisig_init_set_collection_v1(
+MultisigSigningErrorVariant validate_v1_multisig_init_set_collection_v1(
     const std::unordered_map<rct::key, MultisigProofInitSetV1> &init_set_collection, //[ proof key : init set ]
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
@@ -152,6 +154,7 @@ void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV
 * param: partial_sig_maker -
 * param: local_init_set_collection -
 * param: other_init_set_collections -
+* inoutparam: multisig_errors_inout -
 * inoutparam: nonce_record_inout -
 * outparam: partial_sig_sets_out -
 */
@@ -166,6 +169,7 @@ bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &
     //[ signer id : [ proof key : init set ] ]
     std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         other_init_set_collections,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     MultisigNonceRecord &nonce_record_inout,
     std::vector<MultisigPartialSigSetV1> &partial_sig_sets_out);
 /**
@@ -176,12 +180,14 @@ bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &
 * param: allowed_proof_contexts -
 * param: expected_partial_sig_variant_index -
 * param: partial_sigs_per_signer -
+* inoutparam: multisig_errors_inout -
 * outparam: collected_sigs_per_key_per_filter_out -
 */
 void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypto::public_key> &multisig_signers,
     const std::unordered_map<rct::key, rct::key> &allowed_proof_contexts,  //[ proof key : proof message ]
     const int expected_partial_sig_variant_index,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &partial_sigs_per_signer,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     std::unordered_map<multisig::signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter_out);
@@ -258,6 +264,7 @@ bool try_assemble_multisig_partial_sigs(
 * param: num_expected_completed_sigs -
 * param: collected_sigs_per_key_per_filter -
 * param: try_assemble_partial_sigs_func -
+* inoutparam: multisig_errors_inout -
 * outparam: contextual_sigs_out -
 * return: true if the requested number of signatures were assembled (e.g. one per proof key represented in the
 *         collected_sigs_per_key_per_filter input)
@@ -269,6 +276,7 @@ bool try_assemble_multisig_partial_sigs_signer_group_attempts(const std::size_t 
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter,
     const std::function<bool(const rct::key&, const std::vector<PartialSigT>&, ContextualSigT&)>
         &try_assemble_partial_sigs_func,
+    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<ContextualSigT> &contextual_sigs_out)
 {
     // try to assemble a collection of signatures from partial signatures provided by different signer groups
@@ -280,17 +288,43 @@ bool try_assemble_multisig_partial_sigs_signer_group_attempts(const std::size_t 
     {
         // a. skip this signer group if it doesn't have enough proof keys
         if (signer_group_partial_sigs.second.size() != num_expected_completed_sigs)
+        {
+            multisig_errors_inout.emplace_back(
+                    MultisigSigningErrorBadSigAssembly{
+                            .m_error_code = MultisigSigningErrorBadSigAssembly::ErrorCode::PROOF_KEYS_MISMATCH,
+                            .m_signer_set_filter = signer_group_partial_sigs.first
+                        }
+                );
             continue;
+        }
 
         // b. try to assemble the set of signatures that this signer group is working on
         if (try_assemble_multisig_partial_sigs<PartialSigT, ContextualSigT>(signer_group_partial_sigs.second,
                 try_assemble_partial_sigs_func,
-                contextual_sigs_out))
+                contextual_sigs_out)
+            &&
+            contextual_sigs_out.size() == num_expected_completed_sigs)
             break;
+        else
+        {
+            multisig_errors_inout.emplace_back(
+                    MultisigSigningErrorBadSigAssembly{
+                            .m_error_code = MultisigSigningErrorBadSigAssembly::ErrorCode::SIG_ASSEMBLY_FAIL,
+                            .m_signer_set_filter = signer_group_partial_sigs.first
+                        }
+                );
+        }
     }
 
     if (contextual_sigs_out.size() != num_expected_completed_sigs)
+    {
+        multisig_errors_inout.emplace_back(
+                MultisigSigningErrorBadSigSet{
+                        .m_error_code = MultisigSigningErrorBadSigSet::ErrorCode::INVALID_SIG_SET
+                    }
+            );
         return false;
+    }
 
     return true;
 }
