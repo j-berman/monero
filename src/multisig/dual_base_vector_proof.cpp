@@ -216,6 +216,11 @@ DualBaseVectorProof dual_base_vector_prove(const rct::key &message,
     DualBaseVectorProof proof;
     proof.m = message;
 
+    crypto::secret_key k_i_inv8_temp;
+    std::vector<crypto::public_key> V_1_mul8;
+    std::vector<crypto::public_key> V_2_mul8;
+    V_1_mul8.reserve(num_keys);
+    V_2_mul8.reserve(num_keys);
     proof.V_1.reserve(num_keys);
     proof.V_2.reserve(num_keys);
 
@@ -224,12 +229,19 @@ DualBaseVectorProof dual_base_vector_prove(const rct::key &message,
         CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(to_bytes(k[i])), "Bad private key (k[i] zero)!");
         CHECK_AND_ASSERT_THROW_MES(sc_check(to_bytes(k[i])) == 0, "Bad private key (k[i])!");
 
-        // create the pubkey vectors
-        proof.V_1.emplace_back(rct::rct2pk(rct::scalarmultKey(rct::pk2rct(G_1), rct::sk2rct(k[i]))));
-        proof.V_2.emplace_back(rct::rct2pk(rct::scalarmultKey(rct::pk2rct(G_2), rct::sk2rct(k[i]))));
+        // k[i] * (1/8)
+        sc_mul(to_bytes(k_i_inv8_temp), to_bytes(k[i]), rct::INV_EIGHT.bytes);
 
-        CHECK_AND_ASSERT_THROW_MES(!(rct::pk2rct(proof.V_1.back()) == rct::identity()), "Bad proof key (V_1[i] identity)!");
-        CHECK_AND_ASSERT_THROW_MES(!(rct::pk2rct(proof.V_2.back()) == rct::identity()), "Bad proof key (V_2[i] identity)!");
+        // create the pubkey vectors
+        proof.V_1.emplace_back(rct::rct2pk(rct::scalarmultKey(rct::pk2rct(G_1), rct::sk2rct(k_i_inv8_temp))));
+        proof.V_2.emplace_back(rct::rct2pk(rct::scalarmultKey(rct::pk2rct(G_2), rct::sk2rct(k_i_inv8_temp))));
+        V_1_mul8.emplace_back(rct::rct2pk(rct::scalarmult8(rct::pk2rct(proof.V_1.back()))));
+        V_2_mul8.emplace_back(rct::rct2pk(rct::scalarmult8(rct::pk2rct(proof.V_2.back()))));
+
+        CHECK_AND_ASSERT_THROW_MES(!(rct::pk2rct(V_1_mul8.back()) == rct::identity()),
+            "Bad proof key (V_1[i] identity)!");
+        CHECK_AND_ASSERT_THROW_MES(!(rct::pk2rct(V_2_mul8.back()) == rct::identity()),
+            "Bad proof key (V_2[i] identity)!");
     }
 
 
@@ -240,7 +252,7 @@ DualBaseVectorProof dual_base_vector_prove(const rct::key &message,
 
 
     /// challenge message and aggregation coefficient
-    const rct::key mu{compute_base_aggregation_coefficient(proof.m, G_1, G_2, proof.V_1, proof.V_2)};
+    const rct::key mu{compute_base_aggregation_coefficient(proof.m, G_1, G_2, V_1_mul8, V_2_mul8)};
     const rct::keyV mu_pows{powers_of_scalar(mu, num_keys)};
 
     const rct::key m{compute_challenge_message(mu)};
@@ -271,9 +283,21 @@ bool dual_base_vector_verify(const DualBaseVectorProof &proof,
     CHECK_AND_ASSERT_THROW_MES(sc_isnonzero(proof.r.bytes), "Bad response (r zero)!");
     CHECK_AND_ASSERT_THROW_MES(sc_check(proof.r.bytes) == 0, "Bad resonse (r)!");
 
+    // recover the proof keys
+    std::vector<crypto::public_key> V_1_mul8;
+    std::vector<crypto::public_key> V_2_mul8;
+    V_1_mul8.reserve(num_keys);
+    V_2_mul8.reserve(num_keys);
+
+    for (std::size_t key_index{0}; key_index < num_keys; ++key_index)
+    {
+        V_1_mul8.emplace_back(rct::rct2pk(rct::scalarmult8(rct::pk2rct(proof.V_1[key_index]))));
+        V_2_mul8.emplace_back(rct::rct2pk(rct::scalarmult8(rct::pk2rct(proof.V_2[key_index]))));
+    }
+
 
     /// challenge message and aggregation coefficient
-    const rct::key mu{compute_base_aggregation_coefficient(proof.m, G_1, G_2, proof.V_1, proof.V_2)};
+    const rct::key mu{compute_base_aggregation_coefficient(proof.m, G_1, G_2, V_1_mul8, V_2_mul8)};
     const rct::keyV mu_pows{powers_of_scalar(mu, num_keys)};
 
     const rct::key m{compute_challenge_message(mu)};
@@ -284,7 +308,8 @@ bool dual_base_vector_verify(const DualBaseVectorProof &proof,
     // V_1 part: [r G_1 + c * sum_i(mu^i * V_1[i])]
     // V_2 part: [r G_2 + c * sum_i(mu^i * V_2[i])]
     ge_p3 V_1_part_p3;
-    CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&V_1_part_p3, rct::identity().bytes) == 0, "ge_frombytes_vartime failed!");
+    CHECK_AND_ASSERT_THROW_MES(ge_frombytes_vartime(&V_1_part_p3, rct::identity().bytes) == 0,
+        "ge_frombytes_vartime failed!");
     ge_p3 V_2_part_p3{V_1_part_p3};
 
     rct::key coeff_temp;
@@ -296,10 +321,10 @@ bool dual_base_vector_verify(const DualBaseVectorProof &proof,
         sc_mul(coeff_temp.bytes, coeff_temp.bytes, mu_pows[i].bytes);
 
         // V_1_part: + c * mu^i * V_1[i]
-        mul_add(coeff_temp, proof.V_1[i], V_1_part_p3);
+        mul_add(coeff_temp, V_1_mul8[i], V_1_part_p3);
 
         // V_2_part: + c * mu^i * V_2[i]
-        mul_add(coeff_temp, proof.V_2[i], V_2_part_p3);
+        mul_add(coeff_temp, V_2_mul8[i], V_2_part_p3);
     }
 
     // r G_1 + V_1_part

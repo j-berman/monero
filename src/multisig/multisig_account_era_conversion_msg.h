@@ -48,6 +48,7 @@ namespace multisig
   // - In an M-of-N multisig, if M players send each other account conversion messages, that set of messages can be used
   //   to trustlessly convert an old account to one with a new account_generator_era.
   //   See the multisig::get_multisig_account_with_new_generator_era() method for more information.
+  // - INVARIANT: keyshares stored here are canonical prime-order subgroup points.
   //
   // dualbase_proof_msg = versioning-domain-sep || signing_pubkey || old_era || new_era
   //

@@ -30,6 +30,8 @@
 // Schnorr-like dual-base proof for a pair of vectors: V_1 = {k_1 G1, k_2 G1, ...}, V_2 = {k_1 G2, k_2 G2, ...}
 // - demonstrates knowledge of all k_1, k_2, k_3, ...
 // - demonstrates that members of V_1 have a 1:1 discrete-log equivalence with the members of V_2, across base keys G1, G2
+// - guarantees that V_1 and V_2 are canonical prime-order subgroup group elements (they are stored multiplied by (1/8) then
+//   multiplied by 8 before verification)
 //
 // proof outline
 // 0. preliminaries
@@ -87,7 +89,7 @@ struct DualBaseVectorProof
     rct::key c;
     // response
     rct::key r;
-    // pubkeys
+    // pubkeys (stored multiplied by (1/8))
     std::vector<crypto::public_key> V_1;
     std::vector<crypto::public_key> V_2;
 };

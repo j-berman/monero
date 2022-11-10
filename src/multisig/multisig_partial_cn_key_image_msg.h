@@ -41,20 +41,23 @@ namespace multisig
 {
   ////
   // multisig partial cryptonote key image msg
-  // - This message contains a proof that a set of public keys on generator G have 1:1 discrete log relations with a set
-  //   of partial key images on base key Hp(Ko) for hash-to-point algorithm Hp() and some onetime address Ko.
-  // - A multisig group member (for an M-of-N multisig) can recover the key image KI for a cryptonote onetime address Ko owned
-  //   by the group by collecting messages from M group members (where the private signing keys are shares of the group key
-  //   held by each group member). Once at least M messages are collected, sum together unique partial KI keys plus the
-  //   onetime address's view component times Hp(Ko) to get the actual key image KI. Verify the key image by summing the unique
-  //   multisig public keyshares and expecting it to equal the group's base spend key.
+  // - This message contains a proof that a set of public keys on generator G have 1:1 discrete log relations with a
+  //    set of partial key images on base key Hp(Ko) for hash-to-point algorithm Hp() and some onetime address Ko.
+  // - A multisig group member (for an M-of-N multisig) can recover the key image KI for a cryptonote onetime address
+  //   Ko owned by the group by collecting messages from M group members (where the private signing keys are shares
+  //   of the group key held by each group member). Once at least M messages are collected, sum together unique
+  //   partial KI keys plus the onetime address's view component times Hp(Ko) to get the actual key image KI. Verify
+  //   the key image by summing the unique multisig public keyshares and expecting it to equal the group's base spend
+  //   key.
+  // - INVARIANT: keyshares stored here are canonical prime-order subgroup points.
   //
   // dualbase_proof_msg = domain-sep || signing_pubkey || Ko
   //
   // msg = versioning-domain-sep ||
   //       b58(signing_pubkey || Ko || {multisig_keyshares} || {partial_KI} || dualbase_proof_challenge ||
   //           dualbase_proof_response ||
-  //           crypto_sig[signing_privkey](Ko || dualbase_proof_challenge || dualbase_proof_response))  ///
+  //           crypto_sig[signing_privkey](Ko || dualbase_proof_challenge || dualbase_proof_response))
+  ///
   class multisig_partial_cn_key_image_msg final
   {
   //constructors

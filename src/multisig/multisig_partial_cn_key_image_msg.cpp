@@ -59,6 +59,16 @@ namespace multisig
   //----------------------------------------------------------------------------------------------------------------------
   // INTERNAL
   //----------------------------------------------------------------------------------------------------------------------
+  static std::vector<crypto::public_key> pubkeys_mul8(std::vector<crypto::public_key> keys)
+  {
+    for (crypto::public_key &key : keys)
+      key = rct::rct2pk(rct::scalarmult8(rct::pk2rct(key)));
+
+    return keys;
+  }
+  //----------------------------------------------------------------------------------------------------------------------
+  // INTERNAL
+  //----------------------------------------------------------------------------------------------------------------------
   static void set_msg_magic(std::string &msg_out)
   {
     msg_out.clear();
@@ -154,8 +164,8 @@ namespace multisig
     this->construct_msg(signing_privkey, proof);
 
     // set keyshares
-    m_multisig_keyshares = std::move(proof.V_1);
-    m_partial_key_images = std::move(proof.V_2);
+    m_multisig_keyshares = pubkeys_mul8(std::move(proof.V_1));
+    m_partial_key_images = pubkeys_mul8(std::move(proof.V_2));
   }
   //----------------------------------------------------------------------------------------------------------------------
   // multisig_partial_cn_key_image_msg: EXTERNAL
@@ -270,8 +280,8 @@ namespace multisig
 
     // save keyshares (note: saving these after checking the signature ensures if the signature is invalid then the 
     //   message's internal state won't be usable even if the invalid-signature exception is caught)
-    m_multisig_keyshares = std::move(dualbase_proof.V_1);
-    m_partial_key_images = std::move(dualbase_proof.V_2);
+    m_multisig_keyshares = pubkeys_mul8(std::move(dualbase_proof.V_1));
+    m_partial_key_images = pubkeys_mul8(std::move(dualbase_proof.V_2));
   }
   //----------------------------------------------------------------------------------------------------------------------
 } //namespace multisig

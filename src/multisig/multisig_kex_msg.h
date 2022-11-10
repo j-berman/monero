@@ -42,6 +42,7 @@ namespace multisig
   // multisig key exchange message
   // - can parse and validate an input message
   // - can construct and sign a new message
+  // - INVARIANT: message pubkeys are in the prime subgroup
   //
   // msg_content = kex_round || signing_pubkey || expand(msg_pubkeys) || OPTIONAL msg_privkey
   // msg_to_sign = versioning-domain-sep || msg_content

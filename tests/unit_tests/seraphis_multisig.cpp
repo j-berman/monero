@@ -206,35 +206,35 @@ static void multisig_cn_key_image_recovery(const std::vector<multisig::multisig_
     }
 
     // 2. process the messages
-    std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_bases;
-    std::unordered_set<crypto::public_key> onetime_addresses_with_insufficient_partial_kis;
-    std::unordered_set<crypto::public_key> onetime_addresses_with_invalid_partial_kis;
+    std::unordered_map<crypto::public_key, multisig::signer_set_filter> onetime_addresses_with_insufficient_partial_kis;
+    std::unordered_map<crypto::public_key, multisig::signer_set_filter> onetime_addresses_with_invalid_partial_kis;
+    std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_cores;
 
-    EXPECT_NO_THROW(multisig::multisig_recover_cn_keyimage_bases(accounts[0].get_signers(),
-        accounts[0].get_threshold(),
+    EXPECT_NO_THROW(multisig::multisig_recover_cn_keyimage_cores(accounts[0].get_threshold(),
+        accounts[0].get_signers(),
         accounts[0].get_multisig_pubkey(),
         partial_ki_msgs,
-        recovered_key_image_bases,
         onetime_addresses_with_insufficient_partial_kis,
-        onetime_addresses_with_invalid_partial_kis));
+        onetime_addresses_with_invalid_partial_kis,
+        recovered_key_image_cores));
 
     EXPECT_TRUE(onetime_addresses_with_insufficient_partial_kis.size() == 0);
     EXPECT_TRUE(onetime_addresses_with_invalid_partial_kis.size() == 0);
 
-    // 3. add the shared offset component to each key image base
-    for (const auto &recovered_key_image_base : recovered_key_image_bases)
+    // 3. add the shared offset component to each key image core
+    for (const auto &recovered_key_image_core : recovered_key_image_cores)
     {
-        EXPECT_TRUE(saved_key_components.find(recovered_key_image_base.first) != saved_key_components.end());
+        EXPECT_TRUE(saved_key_components.find(recovered_key_image_core.first) != saved_key_components.end());
 
-        // KI_shared_piece = shared_offset * Hp(base key)
+        // KI_shared_piece = shared_offset * Hp(core key)
         crypto::key_image KI_shared_piece;
-        crypto::generate_key_image(recovered_key_image_base.first,
-            saved_key_components.at(recovered_key_image_base.first),
+        crypto::generate_key_image(recovered_key_image_core.first,
+            saved_key_components.at(recovered_key_image_core.first),
             KI_shared_piece);
 
-        // KI = shared_offset * Hp(base key) + k_multisig * Hp(base key)
-        recovered_key_images_out[recovered_key_image_base.first] =
-            rct::rct2ki(rct::addKeys(rct::ki2rct(KI_shared_piece), rct::pk2rct(recovered_key_image_base.second)));
+        // KI = shared_offset * Hp(core key) + k_multisig * Hp(core key)
+        recovered_key_images_out[recovered_key_image_core.first] =
+            rct::rct2ki(rct::addKeys(rct::ki2rct(KI_shared_piece), rct::pk2rct(recovered_key_image_core.second)));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------

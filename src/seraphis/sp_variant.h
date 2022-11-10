@@ -61,8 +61,8 @@ namespace sp
 template<typename ResultT>
 struct SpVariantStaticVisitor : public boost::static_visitor<ResultT>
 {
-    /// provide visitation for empty variants by default (can write your own visitor from scratch if you want custom
-    ///   behavior for empty variants)
+    /// provide visitation for empty variants
+    /// - add to your visitor with: using SpVariantStaticVisitor::operator();
     ResultT operator()(const boost::blank) const
     {
         throw std::runtime_error("SpVariant: tried to visit an empty variant.");

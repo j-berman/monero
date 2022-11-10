@@ -252,6 +252,10 @@ namespace multisig
       rct::addKeys(aggregate_key, aggregate_key, converted_pubkey);
     }
 
+    // sanity check (this should never fail because multisig kex messages internally prevent non-prime message keys)
+    CHECK_AND_ASSERT_THROW_MES(rct::isInMainSubgroup(aggregate_key),
+      "Multisig pubkey is not in the main subgroup.");
+
     return rct::rct2pk(aggregate_key);
   }
   //----------------------------------------------------------------------------------------------------------------------

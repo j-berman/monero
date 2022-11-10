@@ -378,7 +378,7 @@ static void test_multisig_cn_key_image_recovery(const std::uint32_t M, const std
   for (const crypto::secret_key &k_s_partial : collected_multisig_privkeys)
     sc_add(to_bytes(k_s), to_bytes(k_s), to_bytes(k_s_partial));
 
-  // santity check: multisig pubkey from private keys
+  // sanity check: multisig pubkey from private keys
   const crypto::public_key recomputed_multisig_pubkey{rct::rct2pk(rct::scalarmultBase(rct::sk2rct(k_s)))};
   ASSERT_TRUE(recomputed_multisig_pubkey == accounts[0].get_multisig_pubkey());
 
@@ -391,18 +391,18 @@ static void test_multisig_cn_key_image_recovery(const std::uint32_t M, const std
   for (crypto::public_key &rand_Ko : rand_Kos)
     rand_Ko = rct::rct2pk(rct::pkGen());
 
-  // compute expected key image bases k^s Hp(Ko)
-  std::vector<crypto::key_image> expected_KI_bases;
-  expected_KI_bases.resize(num_Kos);
+  // compute expected key image cores k^s Hp(Ko)
+  std::vector<crypto::key_image> expected_KI_cores;
+  expected_KI_cores.resize(num_Kos);
 
   for (std::size_t i{0}; i < num_Kos; ++i)
-    crypto::generate_key_image(rand_Kos[i], k_s, expected_KI_bases[i]);
+    crypto::generate_key_image(rand_Kos[i], k_s, expected_KI_cores[i]);
 
-  // save Kos and key image bases in a map for convenience
-  std::unordered_map<crypto::public_key, crypto::public_key> expected_recovered_key_image_bases;
+  // save Kos and key image cores in a map for convenience
+  std::unordered_map<crypto::public_key, crypto::public_key> expected_recovered_key_image_cores;
 
   for (std::size_t i{0}; i < num_Kos; ++i)
-    expected_recovered_key_image_bases[rand_Kos[i]] = rct::rct2pk(rct::ki2rct(expected_KI_bases[i]));
+    expected_recovered_key_image_cores[rand_Kos[i]] = rct::rct2pk(rct::ki2rct(expected_KI_cores[i]));
 
   // each account makes partial KI messages for each Ko
   std::unordered_map<crypto::public_key,
@@ -417,31 +417,31 @@ static void test_multisig_cn_key_image_recovery(const std::uint32_t M, const std
     }
   }
 
-  // recover the key image bases
-  std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_bases;
-  std::unordered_set<crypto::public_key> onetime_addresses_with_insufficient_partial_kis;
-  std::unordered_set<crypto::public_key> onetime_addresses_with_invalid_partial_kis;
+  // recover the key image cores
+  std::unordered_map<crypto::public_key, signer_set_filter> onetime_addresses_with_insufficient_partial_kis;
+  std::unordered_map<crypto::public_key, signer_set_filter> onetime_addresses_with_invalid_partial_kis;
+  std::unordered_map<crypto::public_key, crypto::public_key> recovered_key_image_cores;
 
-  EXPECT_NO_THROW(multisig_recover_cn_keyimage_bases(accounts[0].get_signers(),
-    accounts[0].get_threshold(),
+  EXPECT_NO_THROW(multisig_recover_cn_keyimage_cores(accounts[0].get_threshold(),
+    accounts[0].get_signers(),
     accounts[0].get_multisig_pubkey(),
     partial_ki_msgs,
-    recovered_key_image_bases,
     onetime_addresses_with_insufficient_partial_kis,
-    onetime_addresses_with_invalid_partial_kis));
+    onetime_addresses_with_invalid_partial_kis,
+    recovered_key_image_cores));
 
-  // check that key image bases were recovered
-  EXPECT_TRUE(expected_recovered_key_image_bases.size() == recovered_key_image_bases.size());
+  // check that key image cores were recovered
+  EXPECT_TRUE(expected_recovered_key_image_cores.size() == recovered_key_image_cores.size());
   EXPECT_TRUE(onetime_addresses_with_insufficient_partial_kis.size() == 0);
   EXPECT_TRUE(onetime_addresses_with_invalid_partial_kis.size() == 0);
 
-  for (const auto &recovered_key_image_base : recovered_key_image_bases)
+  for (const auto &recovered_key_image_core : recovered_key_image_cores)
   {
-    EXPECT_TRUE(expected_recovered_key_image_bases.find(recovered_key_image_base.first) != 
-      expected_recovered_key_image_bases.end());
+    EXPECT_TRUE(expected_recovered_key_image_cores.find(recovered_key_image_core.first) != 
+      expected_recovered_key_image_cores.end());
 
-    EXPECT_TRUE(expected_recovered_key_image_bases.at(recovered_key_image_base.first) == 
-      recovered_key_image_base.second);
+    EXPECT_TRUE(expected_recovered_key_image_cores.at(recovered_key_image_core.first) == 
+      recovered_key_image_core.second);
   }
 }
 //----------------------------------------------------------------------------------------------------------------------

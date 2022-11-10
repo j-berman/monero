@@ -162,6 +162,10 @@ namespace multisig
     {
       CHECK_AND_ASSERT_THROW_MES(!(m_multisig_pubkey == crypto::null_pkey),
         "multisig account: tried to reconstruct a finalized account, but the multisig pubkey is null");
+      CHECK_AND_ASSERT_THROW_MES(!(m_multisig_pubkey == rct::rct2pk(rct::identity())),
+        "multisig account: tried to reconstruct a finalized account, but the multisig pubkey is identity");
+      CHECK_AND_ASSERT_THROW_MES(rct::isInMainSubgroup(rct::pk2rct(m_multisig_pubkey)),
+        "multisig account: tried to reconstruct account, but multisig pubkey is not in the main subgroup.");
     }
   }
   //----------------------------------------------------------------------------------------------------------------------
