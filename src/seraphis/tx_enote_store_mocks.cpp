@@ -687,7 +687,7 @@ void SpEnoteStoreMockV1::clean_maps_for_legacy_ledger_update(const std::uint64_t
     std::unordered_map<rct::key, crypto::key_image> mapped_key_images_of_removed_enotes;  //mapped to onetime address
 
     for_all_in_map_erase_if(m_mapped_legacy_contextual_enote_records,
-            [&](const std::pair<rct::key, LegacyContextualEnoteRecordV1> &mapped_contextual_enote_record) -> bool
+            [&](const auto &mapped_contextual_enote_record) -> bool
             {
                 // a. check if the record is removable
                 if (!legacy_contextual_record_is_removable_func(mapped_contextual_enote_record))
@@ -807,8 +807,7 @@ void SpEnoteStoreMockV1::clean_maps_for_removed_sp_enotes(const std::unordered_s
 
     // 3. remove legacy key images found in removed txs
     for_all_in_map_erase_if(m_legacy_key_images_in_sp_selfsends,
-            [&tx_ids_of_removed_enotes](const std::pair<crypto::key_image, SpEnoteSpentContextV1> &mapped_legacy_key_images)
-            -> bool
+            [&tx_ids_of_removed_enotes](const auto &mapped_legacy_key_images) -> bool
             {
                 return tx_ids_of_removed_enotes.find(mapped_legacy_key_images.second.m_transaction_id) !=
                     tx_ids_of_removed_enotes.end();
@@ -822,7 +821,7 @@ void SpEnoteStoreMockV1::clean_maps_for_sp_ledger_update(const std::uint64_t fir
     std::unordered_set<rct::key> tx_ids_of_removed_enotes;  //note: only txs with selfsends are needed in practice
 
     for_all_in_map_erase_if(m_mapped_sp_contextual_enote_records,
-            [&](const std::pair<crypto::key_image, SpContextualEnoteRecordV1> &mapped_contextual_enote_record) -> bool
+            [&](const auto &mapped_contextual_enote_record) -> bool
             {
                 // a. remove onchain enotes in range [first_new_block, end of chain]
                 if (mapped_contextual_enote_record.second.m_origin_context.m_origin_status ==
@@ -859,8 +858,7 @@ void SpEnoteStoreMockV1::clean_maps_for_sp_offchain_update()
     std::unordered_set<rct::key> tx_ids_of_removed_enotes;  //note: only txs with selfsends are needed in practice
 
     for_all_in_map_erase_if(m_mapped_sp_contextual_enote_records,
-            [&tx_ids_of_removed_enotes](const std::pair<crypto::key_image,
-                SpContextualEnoteRecordV1> &mapped_contextual_enote_record) -> bool
+            [&tx_ids_of_removed_enotes](const auto &mapped_contextual_enote_record) -> bool
             {
                 // remove all offchain enotes
                 if (mapped_contextual_enote_record.second.m_origin_context.m_origin_status ==
@@ -1168,8 +1166,7 @@ void SpEnoteStoreMockPaymentValidatorV1::update_with_sp_records_from_ledger(cons
 
     // 2. remove records that will be replaced
     for_all_in_map_erase_if(m_mapped_sp_contextual_enote_records,
-            [first_new_block](
-                const std::pair<rct::key, SpContextualIntermediateEnoteRecordV1> &mapped_contextual_enote_record) -> bool
+            [first_new_block](const auto &mapped_contextual_enote_record) -> bool
             {
                 // a. remove onchain enotes in range [first_new_block, end of chain]
                 if (mapped_contextual_enote_record.second.m_origin_context.m_origin_status ==
@@ -1198,7 +1195,7 @@ void SpEnoteStoreMockPaymentValidatorV1::update_with_sp_records_from_offchain(
 {
     // 1. remove records that will be replaced
     for_all_in_map_erase_if(m_mapped_sp_contextual_enote_records,
-            [](const std::pair<rct::key, SpContextualIntermediateEnoteRecordV1> &mapped_contextual_enote_record) -> bool
+            [](const auto &mapped_contextual_enote_record) -> bool
             {
                 // remove all offchain enotes
                 if (mapped_contextual_enote_record.second.m_origin_context.m_origin_status ==

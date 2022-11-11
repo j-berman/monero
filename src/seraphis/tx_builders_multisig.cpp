@@ -666,7 +666,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
             multisig_tx_proposal.m_sp_input_proof_proposals.size(),
         "multisig tx proposal: sp input proposals don't line up with input proposal proofs.");
 
-    // 2. assess each legacy input proof proposal (iterate through sorted legacy input vectors; note that multisig input
+    // 2. assess each legacy input proof proposal (iterate through sorted input vectors; note that multisig input
     //    proposals are NOT sorted)
     LegacyEnoteImageV2 legacy_enote_image_temp;
     crypto::key_image auxilliary_key_image_temp;
@@ -721,7 +721,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
             "multisig tx proposal: legacy input proof proposal has out-of-range real index.");
     }
 
-    // 3. assess each seraphis input proof proposal (iterate through sorted legacy input vectors; note that multisig
+    // 3. assess each seraphis input proof proposal (iterate through sorted input vectors; note that multisig
     //    input proposals are NOT sorted)
     SpEnoteImageV1 sp_enote_image_temp;
 

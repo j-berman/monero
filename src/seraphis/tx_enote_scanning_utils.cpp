@@ -591,7 +591,7 @@ void process_chunk_full_legacy(const rct::key &legacy_base_spend_pubkey,
             // b. check if owned enotes acquired earlier in this scan process (before this chunk) have this key image
             if (check_key_image_is_known_func(key_image) ||
                 std::find_if(found_enote_records_inout.begin(), found_enote_records_inout.end(),
-                    [&key_image](const std::pair<rct::key, LegacyContextualEnoteRecordV1> &mapped_legacy_record) -> bool
+                    [&key_image](const auto &mapped_legacy_record) -> bool
                     {
                         return mapped_legacy_record.second.m_record.m_key_image == key_image;
                     }) != found_enote_records_inout.end()

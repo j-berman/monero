@@ -230,9 +230,9 @@ bool balance_check_in_out_amnts_v1(const std::vector<LegacyInputProposalV1> &leg
     const std::vector<SpOutputProposalV1> &output_proposals,
     const DiscretizedFee &discretized_transaction_fee);
 /**
-* brief: check_v1_partial_tx_semantics_v1 - check the semantics of a partial tx
+* brief: check_v1_partial_tx_semantics_v1 - check the semantics of a partial tx against SpTxSquashedV1 validation rules
 *   - throws if a check fails
-*   - should be able to make a mock tx and validate it using the specified semantics rules version
+*   - makes a mock tx and validates it using the specified SpTxSquashedV1 semantics rules version
 * param: partial_tx -
 * param: semantic_rules_version -
 */
