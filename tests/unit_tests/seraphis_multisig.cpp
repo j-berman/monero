@@ -990,6 +990,18 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     ASSERT_TRUE(multisig_tx_proposal.m_tx_fee == fee);
 
+    // f) prove the multisig tx proposal is valid (this should be done by every signer who receives a multisig tx proposal
+    //    from another group member)
+    ASSERT_TRUE(try_simulate_tx_from_multisig_tx_proposal_v1(multisig_tx_proposal,
+        semantic_rules_version,
+        seraphis_accounts[0].get_threshold(),
+        seraphis_accounts[0].get_signers().size(),
+        rct::pk2rct(legacy_accounts[0].get_multisig_pubkey()),
+        legacy_subaddress_map,
+        legacy_accounts[0].get_common_privkey(),
+        shared_sp_keys.K_1_base,
+        shared_sp_keys.k_vb));
+
 
     /// 4) get seraphis input proof inits from all requested signers
     std::vector<MultisigNonceRecord> signer_nonce_records;
@@ -1289,7 +1301,8 @@ TEST(seraphis_multisig, txtype_squashed_v1)
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {4},   {}, {1},   {1},   fee_one,  semantic_rules_version));
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {4},   {}, {1},   {1},   fee_one,  semantic_rules_version));
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {4},   {}, {1},   {0},   fee_one,  semantic_rules_version));
-    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {6,6}, {}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
+    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {4,4}, {}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
+    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {2,2,2}, {}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
 
 
     /// seraphis inputs only
@@ -1317,7 +1330,7 @@ TEST(seraphis_multisig, txtype_squashed_v1)
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {}, {4},   {1},   {1},   fee_one,  semantic_rules_version));
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {}, {4},   {1},   {1},   fee_one,  semantic_rules_version));
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {}, {4},   {1},   {0},   fee_one,  semantic_rules_version));
-    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {}, {6,6}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
+    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {}, {4,4}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
 
 
     /// both seraphis and legacy inputs
@@ -1345,6 +1358,6 @@ TEST(seraphis_multisig, txtype_squashed_v1)
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {1},   {3},   {1},   {1},   fee_one,  semantic_rules_version));
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {1},   {3},   {1},   {1},   fee_one,  semantic_rules_version));
     EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {1},   {3},   {1},   {0},   fee_one,  semantic_rules_version));
-    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {1,1}, {5,5}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
+    EXPECT_NO_THROW(seraphis_multisig_tx_v1_test(1, 2, {0}, {1,1}, {2,2}, {1,1}, {1,1}, fee_one,  semantic_rules_version));
 }
 //-------------------------------------------------------------------------------------------------------------------

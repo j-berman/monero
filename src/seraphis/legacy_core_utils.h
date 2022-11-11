@@ -118,6 +118,9 @@ void make_legacy_onetime_address(const rct::key &destination_spendkey,
 /**
 * brief: make_legacy_key_image - make a legacy cryptonote-style key image
 *   - (k^{o,v} + k^s) * Hp(Ko)
+* 
+*   - note: we pass Ko by value instead of computing it (Ko = (k^{o,v} + k^s) G) for performance reasons (even though
+*     doing so is less robust)
 * param: enote_view_privkey - k^{o,v}
 * param: legacy_spend_privkey - k^s
 * param: onetime_address - Ko

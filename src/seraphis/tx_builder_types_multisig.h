@@ -84,6 +84,12 @@ struct LegacyMultisigInputProposalV1 final
     /// cached legacy enote indices for a legacy ring signature (should include a reference to this input proposal's enote)
     std::vector<std::uint64_t> m_reference_set;
 
+    /// less-than operator for sorting
+    bool operator<(const LegacyMultisigInputProposalV1 &other_proposal) const
+    {
+        return m_key_image < other_proposal.m_key_image;
+    }
+
     /**
     * brief: get_input_proposal_v1 - convert this input to a legacy input proposal (throws on failure to convert)
     * param: legacy_spend_pubkey -
@@ -159,7 +165,7 @@ struct SpMultisigTxProposalV1 final
     TxExtra m_partial_memo;
     /// proposed transaction fee
     DiscretizedFee m_tx_fee;
-    /// legacy tx inputs to sign with multisig (NOT SORTED)
+    /// legacy tx inputs to sign with multisig (SORTED)
     std::vector<LegacyMultisigInputProposalV1> m_legacy_multisig_input_proposals;
     /// seraphis tx inputs to sign with multisig (NOT SORTED)
     std::vector<SpMultisigInputProposalV1> m_sp_multisig_input_proposals;

@@ -115,7 +115,7 @@ void make_v1_legacy_input_v1(const rct::key &proposal_prefix,
     LegacyInputV1 &input_out);
 void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
     const std::vector<LegacyInputProposalV1> &input_proposals,
-    std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,
+    std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,  //must align with input_proposals
     const crypto::secret_key &legacy_spend_privkey,
     std::vector<LegacyInputV1> &inputs_out);
 //todo

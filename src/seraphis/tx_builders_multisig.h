@@ -158,6 +158,16 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
     const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance);
+//todo
+bool try_simulate_tx_from_multisig_tx_proposal_v1(const SpMultisigTxProposalV1 &multisig_tx_proposal,
+    const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const std::uint32_t threshold,
+    const std::uint32_t num_signers,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
+    const rct::key &jamtis_spend_pubkey,
+    const crypto::secret_key &k_view_balance);
 /**
 * brief: make_v1_multisig_tx_proposal_v1 - make a multisig tx proposal
 * param: normal_payment_proposals -
