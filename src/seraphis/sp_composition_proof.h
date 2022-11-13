@@ -80,10 +80,6 @@
 // - MuSig2 (Nick): https://eprint.iacr.org/2020/1261
 // - FROST (Komlo): https://eprint.iacr.org/2020/852
 // - Multisig/threshold security (Crites): https://eprint.iacr.org/2021/1375
-// - MRL-0009 (Brandon Goodell and Sarang Noether): https://web.getmonero.org/resources/research-lab/pubs/MRL-0009.pdf
-// - Zero to Monero: 2nd Edition Chapter 9 (UkoeHB): https://web.getmonero.org/library/Zero-to-Monero-2-0-0.pdf
-// - (Technical Note) Multisig - Defeating Drijvers with Bi-Nonce Signing (UkoeHB):
-//     https://github.com/UkoeHB/drijvers-multisig-tech-note
 ///
 
 
@@ -212,6 +208,9 @@ bool verify_sp_composition_proof(const SpCompositionProof &proof,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////// Multisig ///////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//todo: place challenge and response calculations in a detail namespace so multisig stuff can be moved to a separate
+//      file without duplication
 
 /**
 * brief: make_sp_composition_multisig_proposal - propose to make a multisig Seraphis composition proof

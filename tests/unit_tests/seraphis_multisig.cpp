@@ -749,6 +749,56 @@ static void refresh_user_enote_store(const sp::jamtis::jamtis_mock_keys &user_ke
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void validate_multisig_tx_proposal(const sp::SpMultisigTxProposalV1 &multisig_tx_proposal,
+    const sp::SpTxSquashedV1::SemanticRulesVersion semantic_rules_version,
+    const std::uint32_t threshold,
+    const std::size_t num_signers,
+    const rct::key &legacy_spend_pubkey,
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+    const crypto::secret_key &legacy_view_privkey,
+    const rct::key &jamtis_spend_pubkey,
+    const crypto::secret_key &k_view_balance)
+{
+    using namespace sp;
+
+    // 1. check that the multisig tx proposal is well-formed
+    ASSERT_TRUE(try_simulate_tx_from_multisig_tx_proposal_v1(multisig_tx_proposal,
+        semantic_rules_version,
+        threshold,
+        num_signers,
+        legacy_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
+        jamtis_spend_pubkey,
+        k_view_balance));
+
+/*
+    // 2. check that the proposal inputs are known by our enote store, are unspent, and will be unlocked by a specified
+    //    block height
+    // note: could also check if the proposed inputs have been confirmed up to N blocks
+    // note2: these checks are only 'temporary' because the specified enotes may be spent at any time (or be reorged)
+    for (const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal :
+        multisig_tx_proposal.m_legacy_multisig_input_proposals)
+    {
+        ASSERT_TRUE(legacy_multisig_input_is_ready_to_spend(legacy_multisig_input_proposal,
+            enote_store,
+            enote_store.top_legacy_fullscanned_block_height()));
+    }
+
+    for (const SpMultisigInputProposalV1 &sp_multisig_input_proposal :
+        multisig_tx_proposal.m_sp_multisig_input_proposals)
+    {
+        ASSERT_TRUE(sp_multisig_input_is_ready_to_spend(sp_multisig_input_proposal,
+            enote_store,
+            {SpEnoteOriginStatus::ONCHAIN, SpEnoteOriginStatus::UNCONFIRMED, SpEnoteOriginStatus::OFFCHAIN},
+            enote_store.top_sp_scanned_block_height()));
+    }
+*/
+    // 3. check that the legacy inputs' ring members are valid references from the ledger
+    // note: a reorg can invalidate the result of this check
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void print_multisig_errors(const std::list<sp::MultisigSigningErrorVariant> &multisig_errors)
 {
     for (const sp::MultisigSigningErrorVariant &error : multisig_errors)
@@ -992,7 +1042,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
     // f) prove the multisig tx proposal is valid (this should be done by every signer who receives a multisig tx proposal
     //    from another group member)
-    ASSERT_TRUE(try_simulate_tx_from_multisig_tx_proposal_v1(multisig_tx_proposal,
+    validate_multisig_tx_proposal(multisig_tx_proposal,
         semantic_rules_version,
         seraphis_accounts[0].get_threshold(),
         seraphis_accounts[0].get_signers().size(),
@@ -1000,7 +1050,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
         legacy_subaddress_map,
         legacy_accounts[0].get_common_privkey(),
         shared_sp_keys.K_1_base,
-        shared_sp_keys.k_vb));
+        shared_sp_keys.k_vb);
 
 
     /// 4) get seraphis input proof inits from all requested signers

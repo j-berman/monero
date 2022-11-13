@@ -56,6 +56,11 @@
 #include <vector>
 
 //forward declarations
+namespace sp
+{
+    struct CLSAGMultisigProposal;
+    struct LegacyEnoteRecord;
+}
 
 
 namespace sp
@@ -101,6 +106,14 @@ struct LegacyMultisigInputProposalV1 final
         const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
         const crypto::secret_key &legacy_view_privkey,
         LegacyInputProposalV1 &input_proposal_out) const;
+
+    /**
+    * brief: matches_with - check if this input proposal matches against other data types
+    * ...
+    * return: true if all alignment checks pass
+    */
+    bool matches_with(const CLSAGMultisigProposal &proof_proposal) const;
+    bool matches_with(const LegacyEnoteRecord &enote_record) const;
 };
 
 ////

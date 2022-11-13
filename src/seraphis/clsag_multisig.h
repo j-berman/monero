@@ -29,61 +29,17 @@
 // NOT FOR PRODUCTION
 
 ////
-// Schnorr-like composition proof for a secret key of the form K = x*G + y*X + z*U
-// - demonstrates knowledge of x, y, z
-//   - x >= 0
-//   - y, z > 0
-// - shows that key image KI = (z/y)*U
-//
-// proof outline
-// 0. preliminaries
-//    H_32(...) = blake2b(...) -> 32 bytes    hash to 32 bytes
-//    H_n(...)  = H_64(...) mod l             hash to ed25519 scalar
-//    G, X, U: ed25519 generators
-// 1. pubkeys
-//    K    = x*G + y*X + z*U
-//    K_t1 = (x/y)*G + X + (z/y)*U
-//    K_t2 = (x/y)*G            = K_t1 - X - KI
-//    KI   = (z/y)*U
-// 2. proof nonces and challenge
-//    cm = H_32(X, U, m, K, KI, K_t1)   challenge message
-//    a_t1, a_t2, a_ki = rand()                       prover nonces
-//    c = H_n(cm, [a_t1 K], [a_t2 G], [a_ki U])       challenge
-// 3. responses
-//    r_t1 = a_t1 - c*(1/y)
-//    r_t2 = a_t2 - c*(x/y)
-//    r_ki = a_ki - c*(z/y)
-// 4. proof: {m, c, r_t1, r_t2, r_ki, K, K_t1, KI}
-//
-// verification
-// 1. K_t2 = K_t1 - X - KI, cm = ...
-// 2. c' = H_n(cm, [r_t1*K + c*K_t1], [r_t2*G + c*K_t2], [r_ki*U + c*KI])
-// 3. if (c' == c) then the proof is valid
-//
-// note: G_0 = G, G_1 = X, G_2 = U (for Seraphis paper notation)
-// note: in practice, K is a masked address from a Seraphis enote image, and KI is the corresponding linking tag
-// note: assume key image KI is in the prime subgroup (canonical bytes) and non-identity
-//   - WARNING: the caller must validate KI (and check non-identity); either...
-//     - 1) l*KI == identity
-//     - 2) store (1/8)*KI with proof material (e.g. in a transaction); pass 8*[(1/8)*KI] as input to composition proof
-//          validation
-//
-// multisig notation: alpha_{a,n,e}
-// - a: indicates which part of the proof this is for
-// - n: for MuSig2-style bi-nonce signing, alpha_{b,1,e} is nonce 'D', alpha_{b,2,e} is nonce 'E' (in their notation)
+// multisig notation: alpha_{n,e}
+// - n: for MuSig2-style bi-nonce signing, alpha_{1,e} is nonce 'D', alpha_{2,e} is nonce 'E' (in their notation)
 // - e: multisig signer index
 //
 // References:
-// - Seraphis (UkoeHB): https://github.com/UkoeHB/Seraphis (temporary reference)
 //
 // Multisig references:
 // - MuSig2 (Nick): https://eprint.iacr.org/2020/1261
 // - FROST (Komlo): https://eprint.iacr.org/2020/852
 // - Multisig/threshold security (Crites): https://eprint.iacr.org/2021/1375
 // - MRL-0009 (Brandon Goodell and Sarang Noether): https://web.getmonero.org/resources/research-lab/pubs/MRL-0009.pdf
-// - Zero to Monero: 2nd Edition Chapter 9 (UkoeHB): https://web.getmonero.org/library/Zero-to-Monero-2-0-0.pdf
-// - (Technical Note) Multisig - Defeating Drijvers with Bi-Nonce Signing (UkoeHB):
-//     https://github.com/UkoeHB/drijvers-multisig-tech-note
 ///
 
 

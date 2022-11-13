@@ -131,6 +131,19 @@ void make_legacy_key_image(const crypto::secret_key &enote_view_privkey,
     const rct::key &onetime_address,
     crypto::key_image &key_image_out);
 /**
+* brief: make_legacy_auxilliary_key_image_v1 - make a legacy cryptonote-style auxilliary key image (e.g. for use in a
+*      CLSAG proof)
+*   - (-z) * Hp(Ko)
+* 
+*   - note: in CLSAG proofs, the commitment to zero is computed as 'C - C_offset = z G', where 'C_offset = z G + C'
+* param: commitment_mask - z
+* param: onetime_address - Ko
+* outparam: auxilliary_key_image_out - (-z) * Hp(Ko)
+*/
+void make_legacy_auxilliary_key_image_v1(const crypto::secret_key &commitment_mask,
+    const rct::key &onetime_address,
+    crypto::key_image &auxilliary_key_image_out);
+/**
 * brief: make_legacy_amount_blinding_factor_v2 - make a legacy amount blinding factor (v2 is deterministic)
 *   - Hn("commitment_mask", Hn(r K^v, t))
 * param: sender_receiver_secret - Hn(r K^v, t)

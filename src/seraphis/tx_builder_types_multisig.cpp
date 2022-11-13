@@ -32,8 +32,10 @@
 #include "tx_builder_types_multisig.h"
 
 //local headers
+#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "cryptonote_basic/subaddress_index.h"
+#include "legacy_core_utils.h"
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
@@ -46,6 +48,7 @@
 #include "tx_builders_legacy_inputs.h"
 #include "tx_builders_mixed.h"
 #include "tx_component_types_legacy.h"
+#include "tx_enote_record_types.h"
 #include "tx_enote_record_utils_legacy.h"
 #include "tx_extra.h"
 
@@ -72,7 +75,7 @@ void LegacyMultisigInputProposalV1::get_input_proposal_v1(const rct::key &legacy
     CHECK_AND_ASSERT_THROW_MES(try_get_legacy_intermediate_enote_record(m_enote,
             m_enote_ephemeral_pubkey,
             m_tx_output_index,
-            m_tx_output_index,
+            m_unlock_time,
             legacy_spend_pubkey,
             legacy_subaddress_map,
             legacy_view_privkey,
@@ -86,6 +89,66 @@ void LegacyMultisigInputProposalV1::get_input_proposal_v1(const rct::key &legacy
 
     // make the legacy input proposal
     make_v1_legacy_input_proposal_v1(legacy_enote_record, m_commitment_mask, input_proposal_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool LegacyMultisigInputProposalV1::matches_with(const CLSAGMultisigProposal &proof_proposal) const
+{
+    // onetime address to sign
+    if (!(proof_proposal.main_proof_key() == onetime_address_ref(m_enote)))
+        return false;
+
+    // amount commitment to sign
+    const rct::key amount_commitment{amount_commitment_ref(m_enote)};
+    if (!(proof_proposal.auxilliary_proof_key() == amount_commitment))
+        return false;
+
+    // pseudo-output commitment
+    rct::key masked_commitment;
+    mask_key(m_commitment_mask, amount_commitment, masked_commitment);
+    if (!(proof_proposal.masked_C == masked_commitment))
+        return false;
+
+    // key image
+    if (!(proof_proposal.KI == m_key_image))
+        return false;
+
+    // auxilliary key image
+    crypto::key_image auxilliary_key_image;
+    make_legacy_auxilliary_key_image_v1(m_commitment_mask, onetime_address_ref(m_enote), auxilliary_key_image);
+
+    if (!(proof_proposal.D == auxilliary_key_image))
+        return false;
+
+    // references line up 1:1
+    if (m_reference_set.size() != proof_proposal.ring_members.size())
+        return false;
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool LegacyMultisigInputProposalV1::matches_with(const LegacyEnoteRecord &enote_record) const
+{
+    // onetime address
+    if (!(onetime_address_ref(enote_record.m_enote) == onetime_address_ref(m_enote)))
+        return false;
+
+    // amount commitment
+    if (!(amount_commitment_ref(enote_record.m_enote) == amount_commitment_ref(m_enote)))
+        return false;
+
+    // key image
+    if (!(enote_record.m_key_image == m_key_image))
+        return false;
+
+    // misc
+    if (!(enote_record.m_enote_ephemeral_pubkey == m_enote_ephemeral_pubkey))
+        return false;
+    if (!(enote_record.m_tx_output_index == m_tx_output_index))
+        return false;
+    if (!(enote_record.m_unlock_time >= m_unlock_time))  //>= in case of duplicate enotes
+        return false;
+
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void SpMultisigInputProposalV1::get_input_proposal_v1(const rct::key &jamtis_spend_pubkey,

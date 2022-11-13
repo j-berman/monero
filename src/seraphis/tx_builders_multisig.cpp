@@ -150,20 +150,6 @@ static void get_sp_proof_base_keys_v1(const std::vector<SpInputProposalV1> &sp_i
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void make_legacy_auxilliary_key_image_v1(const crypto::secret_key &commitment_mask,
-    const rct::key &onetime_address,
-    crypto::key_image &auxilliary_key_image_out)
-{
-    // z = - commitment mask
-    crypto::secret_key z;
-    sc_0(to_bytes(z));
-    sc_sub(to_bytes(z), to_bytes(z), to_bytes(commitment_mask));
-
-    // z Hp(Ko)
-    crypto::generate_key_image(rct::rct2pk(onetime_address), z, auxilliary_key_image_out);
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
 static void prepare_legacy_clsag_privkeys_for_multisig(const crypto::secret_key &enote_view_privkey,
     const crypto::secret_key &commitment_mask,
     crypto::secret_key &k_offset_out,
@@ -673,54 +659,31 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
             multisig_tx_proposal.m_sp_input_proof_proposals.size(),
         "multisig tx proposal: sp input proposals don't line up with input proposal proofs.");
 
-    // 2. assess each legacy input proof proposal (iterate through sorted input vectors; note that multisig input
-    //    proposals are NOT sorted)
-    LegacyEnoteImageV2 legacy_enote_image_temp;
-    crypto::key_image auxilliary_key_image_temp;
-
+    // 2. assess each legacy input proof proposal (iterate through input vectors)
     for (std::size_t legacy_input_index{0};
         legacy_input_index < multisig_tx_proposal.m_legacy_input_proof_proposals.size();
         ++legacy_input_index)
     {
-        const LegacyInputProposalV1 &input_proposal{
-                tx_proposal.m_legacy_input_proposals[legacy_input_index]
+        const LegacyMultisigInputProposalV1 &multisig_input_proposal{
+                multisig_tx_proposal.m_legacy_multisig_input_proposals[legacy_input_index]
             };
         const CLSAGMultisigProposal &input_proof_proposal{
                 multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index]
             };
 
         // a. input proof proposal messages all equal expected values
-        CHECK_AND_ASSERT_THROW_MES(legacy_proof_contexts.find(input_proposal.m_onetime_address) !=
+        CHECK_AND_ASSERT_THROW_MES(legacy_proof_contexts.find(onetime_address_ref(multisig_input_proposal.m_enote)) !=
                 legacy_proof_contexts.end(),
             "multisig tx proposal: legacy input proof contexts is missing a proof key (bug).");
         CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.message ==
-                legacy_proof_contexts.at(input_proposal.m_onetime_address),
+                legacy_proof_contexts.at(onetime_address_ref(multisig_input_proposal.m_enote)),
             "multisig tx proposal: legacy input proof proposal does not match the tx proposal (unknown proof message).");
 
-        // b. input proof proposal keys line up 1:1 and match with input proposals
-        input_proposal.get_enote_image_v2(legacy_enote_image_temp);
+        // b. input proof proposals should match with multisig input proposals
+        CHECK_AND_ASSERT_THROW_MES(multisig_input_proposal.matches_with(input_proof_proposal),
+            "multisig tx proposal: legacy multisig input proposal does not match input proof proposal.");
 
-        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.main_proof_key() == input_proposal.m_onetime_address,
-            "multisig tx proposal: legacy input proof proposal does not match input proposal (different proof keys).");
-        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.auxilliary_proof_key() == input_proposal.m_amount_commitment,
-            "multisig tx proposal: legacy input proof proposal does not match input proposal (different amount "
-            "commitments).");
-        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.masked_C == legacy_enote_image_temp.m_masked_commitment,
-            "multisig tx proposal: legacy input proof proposal does not match input proposal (different masked "
-            "commitments).");
-
-        // c. input proof proposal key images line up 1:1 and match with input proposals
-        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.KI == legacy_enote_image_temp.m_key_image,
-            "multisig tx proposal: legacy input proof proposal does not match input proposal (different KI).");
-
-        make_legacy_auxilliary_key_image_v1(input_proposal.m_commitment_mask,
-                input_proposal.m_onetime_address,
-                auxilliary_key_image_temp);
-
-        CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.D == auxilliary_key_image_temp,
-            "multisig tx proposal: legacy input proof proposal does not match input proposal (different D).");
-
-        // d. ring-related information is aligned
+        // c. input proof proposals should be well formed
         CHECK_AND_ASSERT_THROW_MES(input_proof_proposal.ring_members.size() ==
                 input_proof_proposal.decoy_responses.size(),
             "multisig tx proposal: legacy input proof proposal has invalid number of decoy responses.");

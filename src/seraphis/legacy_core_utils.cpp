@@ -143,6 +143,19 @@ void make_legacy_key_image(const crypto::secret_key &enote_view_privkey,
     crypto::generate_key_image(rct::rct2pk(onetime_address), onetime_address_privkey, key_image_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_legacy_auxilliary_key_image_v1(const crypto::secret_key &commitment_mask,
+    const rct::key &onetime_address,
+    crypto::key_image &auxilliary_key_image_out)
+{
+    // z = - commitment mask
+    crypto::secret_key z;
+    sc_0(to_bytes(z));
+    sc_sub(to_bytes(z), to_bytes(z), to_bytes(commitment_mask));
+
+    // z Hp(Ko)
+    crypto::generate_key_image(rct::rct2pk(onetime_address), z, auxilliary_key_image_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_legacy_amount_blinding_factor_v2(const crypto::secret_key &sender_receiver_secret,
     crypto::secret_key &amount_blinding_factor_out)
 {
