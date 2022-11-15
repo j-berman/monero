@@ -39,8 +39,8 @@
 #include "multisig/multisig_signer_set_filter.h"
 #include "multisig_nonce_record.h"
 #include "ringct/rctTypes.h"
-#include "sp_composition_proof.h"
-#include "sp_variant.h"
+#include "seraphis_crypto/sp_variant.h"
+#include "sp_composition_proof_multisig.h"
 
 //third party headers
 #include <boost/variant/get.hpp>

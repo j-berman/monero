@@ -29,8 +29,8 @@
 #pragma once
 
 #include "crypto/crypto.h"
-#include "seraphis/grootle.h"
-#include "seraphis/sp_crypto_utils.h"
+#include "seraphis_crypto/grootle.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 

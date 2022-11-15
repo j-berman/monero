@@ -32,8 +32,8 @@
 #include "tx_binned_reference_set.h"
 
 //local headers
-#include "sp_misc_utils.h"
-#include "sp_transcript.h"
+#include "seraphis_crypto/sp_misc_utils.h"
+#include "seraphis_crypto/sp_transcript.h"
 
 //third party headers
 

@@ -37,9 +37,9 @@ extern "C"
 #include "crypto/crypto-ops.h"
 }
 #include "crypto/hash.h"
+#include "cryptonote_config.h"
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
-#include "seraphis_config_temp.h"
 #include "sp_hash_functions.h"
 #include "sp_transcript.h"
 

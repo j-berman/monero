@@ -39,7 +39,7 @@
 #include "multisig/multisig_signer_set_filter.h"
 #include "multisig_signing_helper_types.h"
 #include "ringct/rctTypes.h"
-#include "sp_composition_proof.h"
+#include "seraphis_crypto/sp_composition_proof.h"
 
 //third party headers
 

@@ -36,8 +36,8 @@
 #include "crypto/crypto.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_composition_proof.h"
-#include "sp_variant.h"
+#include "seraphis_crypto/sp_variant.h"
+#include "sp_composition_proof_multisig.h"
 
 //third party headers
 

@@ -34,13 +34,13 @@
 #pragma once
 
 //local headers
-#include "bulletproofs_plus2.h"
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
-#include "grootle.h"
 #include "jamtis_support_types.h"
 #include "ringct/rctTypes.h"
-#include "sp_composition_proof.h"
+#include "seraphis_crypto/bulletproofs_plus2.h"
+#include "seraphis_crypto/grootle.h"
+#include "seraphis_crypto/sp_composition_proof.h"
 #include "sp_core_types.h"
 #include "tx_binned_reference_set.h"
 #include "tx_extra.h"

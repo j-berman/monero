@@ -42,7 +42,7 @@
 #include "legacy_enote_types.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
 #include "tx_component_types.h"
 
 //third party headers

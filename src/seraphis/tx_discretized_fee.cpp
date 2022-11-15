@@ -32,9 +32,9 @@
 #include "tx_discretized_fee.h"
 
 //local headers
+#include "cryptonote_config.h"
 #include "misc_log_ex.h"
-#include "seraphis_config_temp.h"
-#include "sp_transcript.h"
+#include "seraphis_crypto/sp_transcript.h"
 
 //third party headers
 

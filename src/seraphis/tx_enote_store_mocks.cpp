@@ -35,7 +35,7 @@
 #include "cryptonote_config.h"
 #include "legacy_enote_utils.h"
 #include "misc_log_ex.h"
-#include "sp_misc_utils.h"
+#include "seraphis_crypto/sp_misc_utils.h"
 #include "tx_contextual_enote_record_types.h"
 #include "tx_contextual_enote_record_utils.h"
 #include "tx_enote_record_utils_legacy.h"

@@ -32,14 +32,14 @@
 #include "serialization_demo_utils.h"
 
 //local headers
-#include "bulletproofs_plus2.h"
 #include "crypto/crypto.h"
-#include "grootle.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "seraphis_crypto/bulletproofs_plus2.h"
+#include "seraphis_crypto/grootle.h"
+#include "seraphis_crypto/sp_composition_proof.h"
+#include "seraphis_crypto/sp_misc_utils.h"
 #include "serialization_demo_types.h"
-#include "sp_composition_proof.h"
-#include "sp_misc_utils.h"
 #include "tx_binned_reference_set.h"
 #include "tx_builders_inputs.h"
 #include "tx_component_types.h"

@@ -39,7 +39,7 @@
 #include "crypto/crypto.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctTypes.h"
-#include "sp_variant.h"
+#include "seraphis_crypto/sp_variant.h"
 
 //third party headers
 

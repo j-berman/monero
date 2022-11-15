@@ -28,8 +28,8 @@
 
 #include "crypto/crypto.h"
 #include "ringct/rctOps.h"
-#include "seraphis/grootle.h"
-#include "seraphis/sp_crypto_utils.h"
+#include "seraphis_crypto/grootle.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
 
 #include "gtest/gtest.h"
 

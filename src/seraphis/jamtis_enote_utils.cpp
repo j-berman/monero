@@ -39,17 +39,16 @@ extern "C"
 #include "crypto/crypto-ops.h"
 }
 #include "cryptonote_config.h"
-#include "seraphis_config_temp.h"
 #include "int-util.h"
 #include "jamtis_support_types.h"
 #include "misc_language.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
+#include "seraphis_crypto/sp_hash_functions.h"
+#include "seraphis_crypto/sp_misc_utils.h"
+#include "seraphis_crypto/sp_transcript.h"
 #include "sp_core_enote_utils.h"
-#include "sp_crypto_utils.h"
-#include "sp_hash_functions.h"
-#include "sp_misc_utils.h"
-#include "sp_transcript.h"
 
 //third party headers
 

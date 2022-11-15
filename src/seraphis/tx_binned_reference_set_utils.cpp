@@ -37,10 +37,9 @@
 #include "int-util.h"
 #include "misc_log_ex.h"
 #include "ringct/rctTypes.h"
-#include "seraphis_config_temp.h"
-#include "sp_hash_functions.h"
-#include "sp_misc_utils.h"
-#include "sp_transcript.h"
+#include "seraphis_crypto/sp_hash_functions.h"
+#include "seraphis_crypto/sp_misc_utils.h"
+#include "seraphis_crypto/sp_transcript.h"
 #include "tx_binned_reference_set.h"
 #include "tx_ref_set_index_mapper.h"
 

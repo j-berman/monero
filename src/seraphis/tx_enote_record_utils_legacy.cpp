@@ -46,7 +46,7 @@ extern "C"
 #include "legacy_enote_utils.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
 #include "tx_contextual_enote_record_types.h"
 #include "tx_enote_record_types.h"
 

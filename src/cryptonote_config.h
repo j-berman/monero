@@ -231,6 +231,13 @@ namespace config
   const constexpr uint16_t SP_MAX_OUTPUTS_V1 = BULLETPROOF_MAX_OUTPUTS;
   const constexpr uint16_t SP_GROOTLE_N_V1 = 2;
   const constexpr uint16_t SP_GROOTLE_M_V1 = 7;  //v1: 2^7 = 128
+  // note: SP_REF_SET_* version number should line up with intended grootle n^m decomposition
+  const constexpr std::uint64_t LEGACY_RING_SIZE_V1 = 16;
+  const constexpr std::uint64_t SP_REF_SET_BIN_RADIUS_V1 = 127;
+  const constexpr std::uint64_t SP_REF_SET_NUM_BIN_MEMBERS_V1 = 8;
+  const constexpr std::uint64_t DISCRETIZED_FEE_LEVEL_NUMERATOR_X100 = 150;  //fee level factor = 1.5
+  const constexpr std::uint64_t DISCRETIZED_FEE_SIG_FIGS = 1;
+  const constexpr std::uint64_t BULLETPROOF_PLUS2_MAX_COMMITMENTS = 128;
 
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
@@ -256,6 +263,53 @@ namespace config
   const constexpr char HASH_KEY_MULTISIG_TX_PRIVKEYS[] = "multisig_tx_privkeys";
   const constexpr char HASH_KEY_SERAPHIS_U[] = "seraphis_U";
   const constexpr char HASH_KEY_SERAPHIS_X[] = "seraphis_X";
+
+  const constexpr char SERAPHIS_FS_TRANSCRIPT_PREFIX[] = "sp_FS_transcript";
+
+  const constexpr char HASH_KEY_LEGACY_ENOTE_IDENTIFIER[] = "legacy_enote_identifier";
+  const constexpr char HASH_KEY_LEGACY_RING_SIGNATURES_MESSAGE_V1[] = "legacy_ring_signatures_message_v1";
+
+  const constexpr char HASH_KEY_SERAPHIS_GENERATOR_FACTORY[] = "sp_generator_factory";
+  const constexpr char HASH_KEY_SERAPHIS_SQUASHED_ENOTE[] = "sp_squashed_enote";
+  const constexpr char HASH_KEY_SERAPHIS_TX_PROPOSAL_MESSAGE_V1[] = "sp_tx_proposal_message_v1";
+  const constexpr char HASH_KEY_SERAPHIS_MEMBERSHIP_PROOF_MESSAGE_V1[] = "sp_membership_proof_message_v1";
+  const constexpr char HASH_KEY_SERAPHIS_INPUT_IMAGES_PREFIX_V1[] = "sp_input_images_prefix_v1";
+  const constexpr char HASH_KEY_SERAPHIS_TRANSACTION_PROOFS_PREFIX_V1[] = "sp_transaction_proofs_prefix_v1";
+  const constexpr char HASH_KEY_SERAPHIS_TRANSACTION_TYPE_SQUASHED_V1[] = "sp_transaction_type_squashed_v1";
+
+  const constexpr char HASH_KEY_BULLETPROOF_PLUS2_TRANSCRIPT[] = "bpp2_transcript";
+  const constexpr char HASH_KEY_BULLETPROOF_PLUS2_TRANSCRIPT_UPDATE[] = "bpp2_tupdate";
+  const constexpr char HASH_KEY_GROOTLE_Hi_A[] = "grootle_Hi_A";
+  const constexpr char HASH_KEY_GROOTLE_Hi_B[] = "grootle_Hi_B";
+  const constexpr char HASH_KEY_GROOTLE_CHALLENGE[] = "grootle_challenge";
+  const constexpr char HASH_KEY_SP_COMPOSITION_PROOF_CHALLENGE_MESSAGE[] = "sp_composition_proof_challenge_message";
+  const constexpr char HASH_KEY_SP_COMPOSITION_PROOF_CHALLENGE[] = "sp_composition_proof_challenge";
+  const constexpr char HASH_KEY_BINNED_REF_SET_GENERATOR_SEED[] = "binned_refset_generator_seed";
+  const constexpr char HASH_KEY_BINNED_REF_SET_MEMBER[] = "binned_refset_member";
+  const constexpr char HASH_KEY_MULTISIG_BINONCE_MERGE_FACTOR[] = "multisig_binonce_merge_factor";
+
+  const constexpr char HASH_KEY_JAMTIS_UNLOCKAMOUNTS_KEY[] = "jamtis_unlock_amounts_key";
+  const constexpr char HASH_KEY_JAMTIS_GENERATEADDRESS_SECRET[] = "jamtis_generate_address_secret";
+  const constexpr char HASH_KEY_JAMTIS_CIPHERTAG_SECRET[] = "jamtis_cipher_tag_secret";
+  const constexpr char HASH_KEY_JAMTIS_FINDRECEIVED_KEY[] = "jamtis_find_received_key";
+  const constexpr char HASH_KEY_JAMTIS_ADDRESS_PRIVKEY[] = "jamtis_address_privkey";
+  const constexpr char HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_G[] = "jamtis_spendkey_extension_g";
+  const constexpr char HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_X[] = "jamtis_spendkey_extension_x";
+  const constexpr char HASH_KEY_JAMTIS_SPENDKEY_EXTENSION_U[] = "jamtis_spendkey_extension_u";
+  const constexpr char HASH_KEY_JAMTIS_ENCRYPTED_ADDRESS_TAG[] = "jamtis_encrypted_address_tag";
+  const constexpr char HASH_KEY_JAMTIS_VIEW_TAG[] = "jamtis_view_tag";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_RECEIVER_SECRET_PLAIN[] = "jamtis_sender_receiver_secret_plain";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_ONETIME_ADDRESS_EXTENSION_G[] = "jamtis_sender_onetime_address_extension_g";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_ONETIME_ADDRESS_EXTENSION_X[] = "jamtis_sender_onetime_address_extension_x";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_ONETIME_ADDRESS_EXTENSION_U[] = "jamtis_sender_onetime_address_extension_u";
+  const constexpr char HASH_KEY_JAMTIS_AMOUNT_BLINDING_FACTOR_PLAIN[] = "jamtis_enote_amount_commitment_blinding_factor_plain";
+  const constexpr char HASH_KEY_JAMTIS_AMOUNT_BLINDING_FACTOR_SELF[] = "jamtis_enote_amount_commitment_blinding_factor_self";
+  const constexpr char HASH_KEY_JAMTIS_AMOUNT_ENC[] = "jamtis_enote_amount_encoding";
+  const constexpr char HASH_KEY_JAMTIS_INPUT_CONTEXT_COINBASE[] = "jamtis_input_context_coinbase";
+  const constexpr char HASH_KEY_JAMTIS_INPUT_CONTEXT_STANDARD[] = "jamtis_input_context_standard";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_RECEIVER_SECRET_SELF_SEND_ENOTE_DUMMY[] = "jamtis_self_send_enote_dummy";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_RECEIVER_SECRET_SELF_SEND_ENOTE_CHANGE[] = "jamtis_self_send_enote_change";
+  const constexpr char HASH_KEY_JAMTIS_SENDER_RECEIVER_SECRET_SELF_SEND_ENOTE_SELF_SPEND[] = "jamtis_self_send_enote_self_spend";
 
   // Multisig
   const uint32_t MULTISIG_MAX_SIGNERS{16};

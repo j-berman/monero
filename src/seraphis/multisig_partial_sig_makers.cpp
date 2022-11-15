@@ -44,8 +44,8 @@ extern "C"
 #include "multisig_signing_helper_types.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_composition_proof.h"
-#include "sp_crypto_utils.h"
+#include "seraphis_crypto/sp_composition_proof.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
 
 //third party headers
 

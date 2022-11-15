@@ -32,12 +32,12 @@
 #include "legacy_enote_utils.h"
 
 //local headers
+#include "cryptonote_config.h"
 #include "legacy_core_utils.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "seraphis_config_temp.h"
-#include "sp_hash_functions.h"
-#include "sp_transcript.h"
+#include "seraphis_crypto/sp_hash_functions.h"
+#include "seraphis_crypto/sp_transcript.h"
 
 //third party headers
 

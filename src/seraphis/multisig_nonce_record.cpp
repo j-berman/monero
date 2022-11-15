@@ -35,9 +35,9 @@
 #include "crypto/crypto.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "sp_crypto_utils.h"
-#include "sp_misc_utils.h"  //for equals_from_less
-#include "sp_transcript.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
+#include "seraphis_crypto/sp_misc_utils.h"  //for equals_from_less
+#include "seraphis_crypto/sp_transcript.h"
 
 //third party headers
 #include <boost/utility/string_ref.hpp>

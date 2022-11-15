@@ -40,7 +40,6 @@ extern "C"
 }
 #include "crypto/generators.h"
 #include "cryptonote_config.h"
-#include "seraphis_config_temp.h"
 #include "misc_log_ex.h"
 #include "ringct/multiexp.h"
 #include "ringct/rctOps.h"

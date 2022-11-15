@@ -36,8 +36,8 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
+#include "cryptonote_config.h"
 #include "ringct/rctTypes.h"
-#include "seraphis_config_temp.h"
 #include "wipeable_string.h"
 
 //third party headers

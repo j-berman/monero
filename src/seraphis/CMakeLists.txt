@@ -27,9 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set(seraphis_sources
-  bulletproofs_plus2.cpp
   clsag_multisig.cpp
-  grootle.cpp
   jamtis_address_tag_utils.cpp
   jamtis_address_utils.cpp
   jamtis_core_utils.cpp
@@ -49,14 +47,9 @@ set(seraphis_sources
   multisig_signing_helper_types.cpp
   multisig_signing_helper_utils.cpp
   serialization_demo_utils.cpp
-  sp_composition_proof.cpp
+  sp_composition_proof_multisig.cpp
   sp_core_enote_utils.cpp
   sp_core_types.cpp
-  sp_crypto_utils.cpp
-  sp_generator_factory.cpp
-  sp_hash_functions.cpp
-  sp_misc_utils.cpp
-  sp_multiexp.cpp
   tx_base.cpp
   tx_binned_reference_set.cpp
   tx_binned_reference_set_utils.cpp

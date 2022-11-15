@@ -37,7 +37,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "device/device.hpp"
 #include "misc_log_ex.h"
-#include "seraphis/bulletproofs_plus2.h"
+#include "seraphis_crypto/bulletproofs_plus2.h"
 
 TEST(bulletproofs_plus2, valid_zero)
 {

@@ -41,8 +41,8 @@
 #include "legacy_enote_types.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "seraphis_crypto/sp_crypto_utils.h"
 #include "sp_core_types.h"
-#include "sp_crypto_utils.h"
 #include "tx_component_types.h"
 #include "tx_extra.h"
 

@@ -30,7 +30,7 @@
 
 //paired header
 #include "legacy_enote_types.h"
-#include "sp_variant.h"
+#include "seraphis_crypto/sp_variant.h"
 
 //local headers
 #include "crypto/crypto.h"

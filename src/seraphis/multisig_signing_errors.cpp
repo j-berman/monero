@@ -32,7 +32,7 @@
 #include "multisig_signing_errors.h"
 
 //local headers
-#include "sp_variant.h"
+#include "seraphis_crypto/sp_variant.h"
 
 //third party headers
 

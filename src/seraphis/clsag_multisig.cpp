@@ -44,7 +44,7 @@ extern "C"
 #include "ringct/rctOps.h"
 #include "ringct/rctSigs.h"
 #include "ringct/rctTypes.h"
-#include "sp_misc_utils.h"
+#include "seraphis_crypto/sp_misc_utils.h"
 
 //third party headers
 
