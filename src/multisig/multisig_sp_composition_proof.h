@@ -59,7 +59,7 @@
 //forward declarations
 
 
-namespace sp
+namespace multisig
 {
 
 ////
@@ -161,7 +161,7 @@ bool try_make_sp_composition_multisig_partial_sig(const SpCompositionProofMultis
     const crypto::secret_key &y,
     const crypto::secret_key &z_e,
     const std::vector<MultisigPubNonces> &signer_pub_nonces,
-    const multisig::signer_set_filter filter,
+    const signer_set_filter filter,
     MultisigNonceRecord &nonce_record_inout,
     SpCompositionProofMultisigPartial &partial_sig_out);
 /**
@@ -170,6 +170,6 @@ bool try_make_sp_composition_multisig_partial_sig(const SpCompositionProofMultis
 * outparam: proof_out - Seraphis composition proof
 */
 void finalize_sp_composition_multisig_proof(const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
-    SpCompositionProof &proof_out);
+    sp::SpCompositionProof &proof_out);
 
-} //namespace sp
+} //namespace multisig

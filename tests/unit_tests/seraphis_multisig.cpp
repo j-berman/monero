@@ -34,12 +34,16 @@
 #include "multisig/multisig.h"
 #include "multisig/multisig_account.h"
 #include "multisig/multisig_account_era_conversion_msg.h"
+#include "multisig/multisig_clsag.h"
+#include "multisig/multisig_nonce_record.h"
 #include "multisig/multisig_partial_cn_key_image_msg.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig/multisig_signing_errors.h"
+#include "multisig/multisig_signing_helper_types.h"
+#include "multisig/multisig_sp_composition_proof.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctSigs.h"
 #include "ringct/rctTypes.h"
-#include "seraphis/clsag_multisig.h"
 #include "seraphis/jamtis_core_utils.h"
 #include "seraphis/jamtis_destination.h"
 #include "seraphis/jamtis_payment_proposal.h"
@@ -47,8 +51,6 @@
 #include "seraphis/legacy_core_utils.h"
 #include "seraphis/legacy_enote_utils.h"
 #include "seraphis/mock_ledger_context.h"
-#include "seraphis/multisig_signing_errors.h"
-#include "seraphis/multisig_signing_helper_types.h"
 #include "seraphis/sp_core_enote_utils.h"
 #include "seraphis/tx_binned_reference_set.h"
 #include "seraphis/tx_binned_reference_set_utils.h"
@@ -310,8 +312,8 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
 
         // tx proposer: make proposal and specify which other signers should try to co-sign (all of them)
         const rct::key message{rct::zero()};
-        sp::CLSAGMultisigProposal proposal;
-        sp::make_clsag_multisig_proposal(message, ring_members, masked_C, KI, D, l, proposal);
+        multisig::CLSAGMultisigProposal proposal;
+        multisig::make_clsag_multisig_proposal(message, ring_members, masked_C, KI, D, l, proposal);
 
         multisig::signer_set_filter aggregate_filter;
         multisig::multisig_signers_to_filter(accounts[0].get_signers(), accounts[0].get_signers(), aggregate_filter);
@@ -324,7 +326,7 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
             filter_permutations);
 
         // each signer prepares for each signer group it is a member of
-        std::vector<sp::MultisigNonceRecord> signer_nonce_records(num_signers);
+        std::vector<multisig::MultisigNonceRecord> signer_nonce_records(num_signers);
 
         for (std::size_t signer_index{0}; signer_index < num_signers; ++signer_index)
         {
@@ -342,9 +344,9 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
         }
 
         // complete and validate each signature attempt
-        std::vector<sp::CLSAGMultisigPartial> partial_sigs;
-        std::vector<sp::MultisigPubNonces> signer_pub_nonces_G;  //stored with *(1/8)
-        std::vector<sp::MultisigPubNonces> signer_pub_nonces_Hp;  //stored with *(1/8)
+        std::vector<multisig::CLSAGMultisigPartial> partial_sigs;
+        std::vector<multisig::MultisigPubNonces> signer_pub_nonces_G;  //stored with *(1/8)
+        std::vector<multisig::MultisigPubNonces> signer_pub_nonces_Hp;  //stored with *(1/8)
         crypto::secret_key k_e_temp;
         rct::clsag proof;
 
@@ -369,12 +371,12 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
                     proposal.main_proof_key(),
                     filter,
                     rct::G,
-                    add_element(signer_pub_nonces_G)));
+                    sp::add_element(signer_pub_nonces_G)));
                 EXPECT_TRUE(signer_nonce_records[signer_index].try_get_nonce_pubkeys_for_base(proposal.message,
                     proposal.main_proof_key(),
                     filter,
                     rct::ki2rct(KI_base),
-                    add_element(signer_pub_nonces_Hp)));
+                    sp::add_element(signer_pub_nonces_Hp)));
             }
 
             // each signer partially signs for this attempt
@@ -388,7 +390,7 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
                 sc_add(to_bytes(k_e_temp), k_common_chunk.bytes, to_bytes(k_e_temp));
 
                 // make partial signature
-                EXPECT_TRUE(try_make_clsag_multisig_partial_sig(
+                EXPECT_TRUE(multisig::try_make_clsag_multisig_partial_sig(
                     proposal,
                     k_e_temp,
                     rct::rct2sk(z_chunk),
@@ -396,7 +398,7 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
                     signer_pub_nonces_Hp,
                     filter,
                     signer_nonce_records[signer_index],
-                    add_element(partial_sigs)));
+                    sp::add_element(partial_sigs)));
             }
 
             // sanity checks
@@ -405,7 +407,7 @@ static bool clsag_multisig_test(const std::uint32_t threshold,
             EXPECT_TRUE(partial_sigs.size() == threshold);
 
             // make proof
-            sp::finalize_clsag_multisig_proof(partial_sigs, ring_members, masked_C, proof);
+            multisig::finalize_clsag_multisig_proof(partial_sigs, ring_members, masked_C, proof);
 
             // verify proof
             if (!rct::verRctCLSAGSimple(message, proof, ring_members, masked_C))
@@ -443,8 +445,8 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
 
         // tx proposer: make proposal and specify which other signers should try to co-sign (all of them)
         const rct::key message{rct::zero()};
-        sp::SpCompositionProofMultisigProposal proposal;
-        sp::make_sp_composition_multisig_proposal(message, K, KI, proposal);
+        multisig::SpCompositionProofMultisigProposal proposal;
+        multisig::make_sp_composition_multisig_proposal(message, K, KI, proposal);
         multisig::signer_set_filter aggregate_filter;
         multisig::multisig_signers_to_filter(accounts[0].get_signers(), accounts[0].get_signers(), aggregate_filter);
 
@@ -456,7 +458,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
             filter_permutations);
 
         // each signer prepares for each signer group it is a member of
-        std::vector<sp::MultisigNonceRecord> signer_nonce_records(num_signers);
+        std::vector<multisig::MultisigNonceRecord> signer_nonce_records(num_signers);
 
         for (std::size_t signer_index{0}; signer_index < num_signers; ++signer_index)
         {
@@ -474,8 +476,8 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
         }
 
         // complete and validate each signature attempt
-        std::vector<sp::SpCompositionProofMultisigPartial> partial_sigs;
-        std::vector<sp::MultisigPubNonces> signer_pub_nonces;  //stored with *(1/8)
+        std::vector<multisig::SpCompositionProofMultisigPartial> partial_sigs;
+        std::vector<multisig::MultisigPubNonces> signer_pub_nonces;  //stored with *(1/8)
         crypto::secret_key z_temp;
         sp::SpCompositionProof proof;
 
@@ -498,7 +500,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                     proposal.K,
                     filter,
                     rct::pk2rct(crypto::get_U()),
-                    add_element(signer_pub_nonces)));
+                    sp::add_element(signer_pub_nonces)));
             }
 
             // each signer partially signs for this attempt
@@ -507,7 +509,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                 if (!accounts[signer_index].try_get_aggregate_signing_key(filter, z_temp))
                     continue;
 
-                EXPECT_TRUE(try_make_sp_composition_multisig_partial_sig(
+                EXPECT_TRUE(multisig::try_make_sp_composition_multisig_partial_sig(
                     proposal,
                     x,
                     accounts[signer_index].get_common_privkey(),
@@ -515,7 +517,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
                     signer_pub_nonces,
                     filter,
                     signer_nonce_records[signer_index],
-                    add_element(partial_sigs)));
+                    sp::add_element(partial_sigs)));
             }
 
             // sanity checks
@@ -523,7 +525,7 @@ static bool composition_proof_multisig_test(const std::uint32_t threshold,
             EXPECT_TRUE(partial_sigs.size() == threshold);
 
             // make proof
-            sp::finalize_sp_composition_multisig_proof(partial_sigs, proof);
+            multisig::finalize_sp_composition_multisig_proof(partial_sigs, proof);
 
             // verify proof
             if (!sp::verify_sp_composition_proof(proof, message, K, KI))
@@ -799,9 +801,9 @@ static void validate_multisig_tx_proposal(const sp::SpMultisigTxProposalV1 &mult
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void print_multisig_errors(const std::list<sp::MultisigSigningErrorVariant> &multisig_errors)
+static void print_multisig_errors(const std::list<multisig::MultisigSigningErrorVariant> &multisig_errors)
 {
-    for (const sp::MultisigSigningErrorVariant &error : multisig_errors)
+    for (const multisig::MultisigSigningErrorVariant &error : multisig_errors)
         std::cout << "Multisig Signing Error: " << error_message_ref(error) << '\n';
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -1054,10 +1056,10 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
 
     /// 4) get seraphis input proof inits from all requested signers
-    std::vector<MultisigNonceRecord> signer_nonce_records;
-    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+    std::vector<multisig::MultisigNonceRecord> signer_nonce_records;
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, multisig::MultisigProofInitSetV1>>
         legacy_input_init_collections_per_signer;
-    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, multisig::MultisigProofInitSetV1>>
         sp_input_init_collections_per_signer;
     //signer_nonce_records.reserve(seraphis_accounts.size());  //nonce records are non-copyable, so .reserve() doesn't work
 
@@ -1101,9 +1103,11 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
 
 
     /// 5) get partial signatures from all requested signers
-    std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> legacy_input_partial_sigs_per_signer;
-    std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> sp_input_partial_sigs_per_signer;
-    std::list<MultisigSigningErrorVariant> multisig_make_partial_sig_errors;
+    std::unordered_map<crypto::public_key, std::vector<multisig::MultisigPartialSigSetV1>>
+        legacy_input_partial_sigs_per_signer;
+    std::unordered_map<crypto::public_key, std::vector<multisig::MultisigPartialSigSetV1>>
+        sp_input_partial_sigs_per_signer;
+    std::list<multisig::MultisigSigningErrorVariant> multisig_make_partial_sig_errors;
 
     for (std::size_t signer_index{0}; signer_index < seraphis_accounts.size(); ++signer_index)
     {
@@ -1182,7 +1186,7 @@ static void seraphis_multisig_tx_v1_test(const std::uint32_t threshold,
     // a) get legacy inputs and seraphis partial inputs
     std::vector<LegacyInputV1> legacy_inputs;
     std::vector<SpPartialInputV1> sp_partial_inputs;
-    std::list<MultisigSigningErrorVariant> multisig_make_inputs_errors;
+    std::list<multisig::MultisigSigningErrorVariant> multisig_make_inputs_errors;
 
     ASSERT_NO_THROW(
             ASSERT_TRUE(try_make_inputs_for_multisig_v1(multisig_tx_proposal,

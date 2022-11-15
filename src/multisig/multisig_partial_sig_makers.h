@@ -34,21 +34,21 @@
 #pragma once
 
 //local headers
-#include "clsag_multisig.h"
 #include "crypto/crypto.h"
-#include "multisig/multisig_signer_set_filter.h"
+#include "multisig_clsag.h"
+#include "multisig_signer_set_filter.h"
 #include "multisig_signing_helper_types.h"
+#include "multisig_sp_composition_proof.h"
 #include "ringct/rctTypes.h"
-#include "seraphis_crypto/sp_composition_proof.h"
 
 //third party headers
 
 //standard headers
 
 //forward declarations
-namespace sp { class MultisigNonceRecord; }
+namespace multisig { class MultisigNonceRecord; }
 
-namespace sp
+namespace multisig
 {
 
 ////
@@ -90,7 +90,7 @@ public:
     */
     virtual void attempt_make_partial_sig(const rct::key &proof_message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter signer_group_filter,
+        const signer_set_filter signer_group_filter,
         const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
         MultisigNonceRecord &nonce_record_inout,
@@ -116,7 +116,7 @@ public:
 //member functions
     void attempt_make_partial_sig(const rct::key &proof_message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter signer_group_filter,
+        const signer_set_filter signer_group_filter,
         const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
         MultisigNonceRecord &nonce_record_inout,
@@ -154,7 +154,7 @@ public:
 //member functions
     void attempt_make_partial_sig(const rct::key &proof_message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter signer_group_filter,
+        const signer_set_filter signer_group_filter,
         const std::vector<std::vector<MultisigPubNonces>> &signer_group_pub_nonces,
         const crypto::secret_key &local_multisig_signing_key,
         MultisigNonceRecord &nonce_record_inout,
@@ -173,4 +173,4 @@ private:
     std::unordered_map<rct::key, std::size_t> m_cached_proof_keys;
 };
 
-} //namespace sp
+} //namespace multisig

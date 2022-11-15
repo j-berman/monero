@@ -29,7 +29,7 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "clsag_multisig.h"
+#include "multisig_clsag.h"
 
 //local headers
 #include "crypto/crypto.h"
@@ -39,7 +39,7 @@ extern "C"
 }
 #include "misc_language.h"
 #include "misc_log_ex.h"
-#include "multisig/multisig_clsag_context.h"
+#include "multisig_clsag_context.h"
 #include "multisig_nonce_record.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctSigs.h"
@@ -54,7 +54,7 @@ extern "C"
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
 
-namespace sp
+namespace multisig
 {
 //-------------------------------------------------------------------------------------------------------------------
 // CLSAG proof response
@@ -200,9 +200,9 @@ void make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
     signer_pub_nonces_Hp_mul8.reserve(num_signers);
 
     for (const MultisigPubNonces &signer_pub_nonce_pair : signer_pub_nonces_G)
-        signer_nonces_mul8(signer_pub_nonce_pair, add_element(signer_pub_nonces_G_mul8));
+        signer_nonces_mul8(signer_pub_nonce_pair, sp::add_element(signer_pub_nonces_G_mul8));
     for (const MultisigPubNonces &signer_pub_nonce_pair : signer_pub_nonces_Hp)
-        signer_nonces_mul8(signer_pub_nonce_pair, add_element(signer_pub_nonces_Hp_mul8));
+        signer_nonces_mul8(signer_pub_nonce_pair, sp::add_element(signer_pub_nonces_Hp_mul8));
 
     // check that the local signer's signature opening is in the input set of opening nonces (for both G and Hp versions)
     MultisigPubNonces local_pub_nonces_G;
@@ -252,7 +252,7 @@ void make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
 
 
     /// prepare CLSAG context
-    multisig::signing::CLSAG_context_t CLSAG_context;
+    signing::CLSAG_context_t CLSAG_context;
 
     CLSAG_context.init(nominal_proof_Ks,
         nominal_pedersen_Cs,
@@ -317,7 +317,7 @@ bool try_make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
     const crypto::secret_key &z_e,
     const std::vector<MultisigPubNonces> &signer_pub_nonces_G,
     const std::vector<MultisigPubNonces> &signer_pub_nonces_Hp,
-    const multisig::signer_set_filter filter,
+    const signer_set_filter filter,
     MultisigNonceRecord &nonce_record_inout,
     CLSAGMultisigPartial &partial_sig_out)
 {
@@ -430,4 +430,4 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
         "Multisig CLSAG failed to verify on assembly!");
 }
 //-------------------------------------------------------------------------------------------------------------------
-} //namespace sp
+} //namespace multisig

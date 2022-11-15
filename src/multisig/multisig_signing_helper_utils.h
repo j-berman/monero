@@ -55,14 +55,14 @@
 #include <vector>
 
 //forward declarations
-namespace sp
+namespace multisig
 {
     class MultisigNonceRecord;
     class MultisigPartialSigMaker;
 }
 
 
-namespace sp
+namespace multisig
 {
 
 /**
@@ -92,7 +92,7 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
 MultisigSigningErrorVariant validate_v1_multisig_init_set_v1(const MultisigProofInitSetV1 &init_set,
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter expected_aggregate_signer_set_filter,
+    const signer_set_filter expected_aggregate_signer_set_filter,
     const crypto::public_key &expected_signer_id,
     const rct::key &expected_proof_message,
     const rct::key &expected_main_proof_key,
@@ -101,7 +101,7 @@ MultisigSigningErrorVariant validate_v1_multisig_init_set_collection_v1(
     const std::unordered_map<rct::key, MultisigProofInitSetV1> &init_set_collection, //[ proof key : init set ]
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter expected_aggregate_signer_set_filter,
+    const signer_set_filter expected_aggregate_signer_set_filter,
     const crypto::public_key &expected_signer_id,
     const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_nonce_sets_per_proofkey);
@@ -119,7 +119,7 @@ MultisigSigningErrorVariant validate_v1_multisig_init_set_collection_v1(
 */
 void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const crypto::public_key &local_signer_id,
     const rct::key &proof_message,
     const rct::key &main_proof_key,
@@ -128,7 +128,7 @@ void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
     MultisigProofInitSetV1 &init_set_out);
 void make_v1_multisig_init_set_collection_v1(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const crypto::public_key &local_signer_id,
     const std::unordered_map<rct::key, rct::key> &proof_contexts,  //[ proof key : proof message ]
     const std::unordered_map<rct::key, rct::keyV> &proof_key_base_points,  //[ proof key : {proof key base points} ]
@@ -161,9 +161,9 @@ void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV
 * inoutparam: nonce_record_inout -
 * outparam: partial_sig_sets_out -
 */
-bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &signer_account,
+bool try_make_v1_multisig_partial_sig_sets_v1(const multisig_account &signer_account,
     const cryptonote::account_generator_era expected_multisig_account_era,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_proof_basekeys,
     const MultisigPartialSigMaker &partial_sig_maker,
@@ -191,7 +191,7 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
     const int expected_partial_sig_variant_index,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &partial_sigs_per_signer,
     std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
-    std::unordered_map<multisig::signer_set_filter,  //signing group
+    std::unordered_map<signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter_out);
 /**
@@ -274,8 +274,8 @@ bool try_assemble_multisig_partial_sigs(
 */
 template <typename PartialSigT, typename ContextualSigT>
 bool try_assemble_multisig_partial_sigs_signer_group_attempts(const std::size_t num_expected_completed_sigs,
-    const std::unordered_map<multisig::signer_set_filter,  //signing group
-        std::unordered_map<rct::key,                       //proof key 
+    const std::unordered_map<signer_set_filter,  //signing group
+        std::unordered_map<rct::key,             //proof key 
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter,
     const std::function<bool(const rct::key&, const std::vector<PartialSigT>&, ContextualSigT&)>
         &try_assemble_partial_sigs_func,
@@ -332,4 +332,4 @@ bool try_assemble_multisig_partial_sigs_signer_group_attempts(const std::size_t 
     return true;
 }
 
-} //namespace sp
+} //namespace multisig

@@ -43,11 +43,13 @@
 #include "legacy_core_utils.h"
 #include "misc_language.h"
 #include "misc_log_ex.h"
+#include "multisig/multisig_clsag.h"
+#include "multisig/multisig_nonce_record.h"
+#include "multisig/multisig_partial_sig_makers.h"
 #include "multisig/multisig_signer_set_filter.h"
-#include "multisig_nonce_record.h"
-#include "multisig_partial_sig_makers.h"
-#include "multisig_signing_helper_types.h"
-#include "multisig_signing_helper_utils.h"
+#include "multisig/multisig_signing_helper_types.h"
+#include "multisig/multisig_signing_helper_utils.h"
+#include "multisig/multisig_sp_composition_proof.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "seraphis_crypto/sp_crypto_utils.h"
@@ -261,7 +263,7 @@ static bool try_make_v1_legacy_input_v1(const rct::key &tx_proposal_prefix,
     std::vector<std::uint64_t> reference_set,
     rct::ctkeyV referenced_enotes,
     const rct::key &masked_commitment,
-    const std::vector<CLSAGMultisigPartial> &input_proof_partial_sigs,
+    const std::vector<multisig::CLSAGMultisigPartial> &input_proof_partial_sigs,
     const rct::key &legacy_spend_pubkey,
     LegacyInputV1 &input_out)
 {
@@ -272,7 +274,7 @@ static bool try_make_v1_legacy_input_v1(const rct::key &tx_proposal_prefix,
         make_tx_legacy_ring_signature_message_v1(tx_proposal_prefix, reference_set, ring_signature_message);
 
         // 2. all partial sigs must sign the expected message
-        for (const CLSAGMultisigPartial &partial_sig : input_proof_partial_sigs)
+        for (const multisig::CLSAGMultisigPartial &partial_sig : input_proof_partial_sigs)
         {
             CHECK_AND_ASSERT_THROW_MES(partial_sig.message == ring_signature_message,
                 "multisig make partial input: a partial signature's message does not match the expected message.");
@@ -280,7 +282,7 @@ static bool try_make_v1_legacy_input_v1(const rct::key &tx_proposal_prefix,
 
         // 3. assemble proof (will throw if partial sig assembly doesn't produce a valid proof)
         LegacyRingSignatureV3 ring_signature;
-        finalize_clsag_multisig_proof(input_proof_partial_sigs,
+        multisig::finalize_clsag_multisig_proof(input_proof_partial_sigs,
             referenced_enotes,
             masked_commitment,
             ring_signature.m_clsag_proof);
@@ -306,14 +308,14 @@ static bool try_make_v1_legacy_input_v1(const rct::key &tx_proposal_prefix,
 //-------------------------------------------------------------------------------------------------------------------
 static bool try_make_v1_sp_partial_input_v1(const rct::key &expected_proposal_prefix,
     const SpInputProposalV1 &input_proposal,
-    const std::vector<SpCompositionProofMultisigPartial> &input_proof_partial_sigs,
+    const std::vector<multisig::SpCompositionProofMultisigPartial> &input_proof_partial_sigs,
     const rct::key &sp_spend_pubkey,
     SpPartialInputV1 &partial_input_out)
 {
     try
     {
         // all partial sigs must sign the expected message
-        for (const SpCompositionProofMultisigPartial &partial_sig : input_proof_partial_sigs)
+        for (const multisig::SpCompositionProofMultisigPartial &partial_sig : input_proof_partial_sigs)
         {
             CHECK_AND_ASSERT_THROW_MES(partial_sig.message == expected_proposal_prefix,
                 "multisig make partial input: a partial signature's message does not match the expected proposal prefix.");
@@ -321,7 +323,7 @@ static bool try_make_v1_sp_partial_input_v1(const rct::key &expected_proposal_pr
 
         // assemble proof (will throw if partial sig assembly doesn't produce a valid proof)
         SpImageProofV1 sp_image_proof;
-        finalize_sp_composition_multisig_proof(input_proof_partial_sigs, sp_image_proof.m_composition_proof);
+        multisig::finalize_sp_composition_multisig_proof(input_proof_partial_sigs, sp_image_proof.m_composition_proof);
 
         // make the partial input
         make_v1_partial_input_v1(input_proposal,
@@ -342,11 +344,12 @@ static bool try_make_v1_sp_partial_input_v1(const rct::key &expected_proposal_pr
 static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
     const std::vector<LegacyInputProposalV1> &legacy_input_proposals,
     const std::vector<LegacyMultisigInputProposalV1> &legacy_multisig_input_proposals,
-    const std::vector<CLSAGMultisigProposal> &legacy_input_proof_proposals,
+    const std::vector<multisig::CLSAGMultisigProposal> &legacy_input_proof_proposals,
     const std::vector<crypto::public_key> &multisig_signers,
-    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
+    const std::unordered_map<crypto::public_key, std::vector<multisig::MultisigPartialSigSetV1>>
+        &legacy_input_partial_sigs_per_signer,
     const rct::key &legacy_spend_pubkey,
-    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
+    std::list<multisig::MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<LegacyInputV1> &legacy_inputs_out)
 {
     // 1. process input proposals
@@ -386,28 +389,28 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
     // 3. map legacy ring members to onetime addresses
     std::unordered_map<rct::key, rct::ctkeyV> mapped_ring_members;
 
-    for (const CLSAGMultisigProposal &legacy_input_proof_proposal : legacy_input_proof_proposals)
+    for (const multisig::CLSAGMultisigProposal &legacy_input_proof_proposal : legacy_input_proof_proposals)
         mapped_ring_members[legacy_input_proof_proposal.main_proof_key()] = legacy_input_proof_proposal.ring_members;
 
     // 4. filter the legacy partial signatures into a map
     std::unordered_map<multisig::signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key (onetime address)
-            std::vector<MultisigPartialSigVariant>>> collected_sigs_per_key_per_filter;
+            std::vector<multisig::MultisigPartialSigVariant>>> collected_sigs_per_key_per_filter;
 
-    filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
+    multisig::filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
         legacy_proof_contexts,
-        MultisigPartialSigVariant::type_index_of<CLSAGMultisigPartial>(),
+        multisig::MultisigPartialSigVariant::type_index_of<multisig::CLSAGMultisigPartial>(),
         legacy_input_partial_sigs_per_signer,
         multisig_errors_inout,
         collected_sigs_per_key_per_filter);
 
     // 5. try to make one legacy input per input proposal, using the partial signatures from as many signing groups as
     //    necessary
-    if (!try_assemble_multisig_partial_sigs_signer_group_attempts<CLSAGMultisigPartial, LegacyInputV1>(
+    if (!multisig::try_assemble_multisig_partial_sigs_signer_group_attempts<multisig::CLSAGMultisigPartial, LegacyInputV1>(
                 legacy_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
                 [&](const rct::key &proof_key,
-                    const std::vector<CLSAGMultisigPartial> &partial_sigs,
+                    const std::vector<multisig::CLSAGMultisigPartial> &partial_sigs,
                     LegacyInputV1 &contextual_sig_out) -> bool
                 {
                     // sanity check
@@ -436,9 +439,10 @@ static bool try_make_legacy_inputs_for_multisig_v1(const rct::key &tx_proposal_p
 static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_proposal_prefix,
     const std::vector<SpInputProposalV1> &sp_input_proposals,
     const std::vector<crypto::public_key> &multisig_signers,
-    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
+    const std::unordered_map<crypto::public_key, std::vector<multisig::MultisigPartialSigSetV1>>
+        &sp_input_partial_sigs_per_signer,
     const rct::key &sp_spend_pubkey,
-    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
+    std::list<multisig::MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out)
 {
     // 1. collect seraphis masked addresses of input images and map seraphis input proposals to their masked addresses
@@ -456,21 +460,22 @@ static bool try_make_sp_partial_inputs_for_multisig_v1(const rct::key &tx_propos
     // 2. filter the seraphis partial signatures into a map
     std::unordered_map<multisig::signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key (masked address)
-            std::vector<MultisigPartialSigVariant>>> collected_sigs_per_key_per_filter;
+            std::vector<multisig::MultisigPartialSigVariant>>> collected_sigs_per_key_per_filter;
 
-    filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
+    multisig::filter_multisig_partial_signatures_for_combining_v1(multisig_signers,
         sp_proof_contexts,
-        MultisigPartialSigVariant::type_index_of<SpCompositionProofMultisigPartial>(),
+        multisig::MultisigPartialSigVariant::type_index_of<multisig::SpCompositionProofMultisigPartial>(),
         sp_input_partial_sigs_per_signer,
         multisig_errors_inout,
         collected_sigs_per_key_per_filter);
 
     // 3. try to make one seraphis partial input per input proposal
-    if (!try_assemble_multisig_partial_sigs_signer_group_attempts<SpCompositionProofMultisigPartial, SpPartialInputV1>(
+    if (!multisig::try_assemble_multisig_partial_sigs_signer_group_attempts<multisig::SpCompositionProofMultisigPartial,
+            SpPartialInputV1>(
                 sp_input_proposals.size(),
                 collected_sigs_per_key_per_filter,
                 [&](const rct::key &proof_key,
-                    const std::vector<SpCompositionProofMultisigPartial> &partial_sigs,
+                    const std::vector<multisig::SpCompositionProofMultisigPartial> &partial_sigs,
                     SpPartialInputV1 &sp_partial_input_out) -> bool
                 {
                     // sanity check
@@ -667,7 +672,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
         const LegacyMultisigInputProposalV1 &multisig_input_proposal{
                 multisig_tx_proposal.m_legacy_multisig_input_proposals[legacy_input_index]
             };
-        const CLSAGMultisigProposal &input_proof_proposal{
+        const multisig::CLSAGMultisigProposal &input_proof_proposal{
                 multisig_tx_proposal.m_legacy_input_proof_proposals[legacy_input_index]
             };
 
@@ -702,7 +707,7 @@ void check_v1_multisig_tx_proposal_semantics_v1(const SpMultisigTxProposalV1 &mu
         const SpInputProposalV1 &input_proposal{
                 tx_proposal.m_sp_input_proposals[sp_input_index]
             };
-        const SpCompositionProofMultisigProposal &input_proof_proposal{
+        const multisig::SpCompositionProofMultisigProposal &input_proof_proposal{
                 multisig_tx_proposal.m_sp_input_proof_proposals[sp_input_index]
             };
 
@@ -783,7 +788,7 @@ bool try_simulate_tx_from_multisig_tx_proposal_v1(const SpMultisigTxProposalV1 &
             LegacyInputProposalV1 &legacy_input_proposal = tx_proposal.m_legacy_input_proposals.at(legacy_input_index);
             const LegacyMultisigInputProposalV1 &legacy_multisig_input_proposal =
                 multisig_tx_proposal.m_legacy_multisig_input_proposals.at(legacy_input_index);
-            const CLSAGMultisigProposal &legacy_multisig_input_proof_proposal =
+            const multisig::CLSAGMultisigProposal &legacy_multisig_input_proof_proposal =
                 multisig_tx_proposal.m_legacy_input_proof_proposals.at(legacy_input_index);
 
             // new onetime address privkey: k_view_stuff + k^s_mock
@@ -1030,7 +1035,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
             auxilliary_key_image_temp);
 
         // legacy multisig proof proposal
-        make_clsag_multisig_proposal(legacy_ring_signature_message_temp,
+        multisig::make_clsag_multisig_proposal(legacy_ring_signature_message_temp,
             std::move(legacy_multisig_ring_signature_preps[legacy_input_proposal.m_key_image].m_referenced_enotes),
             legacy_enote_image_temp.m_masked_commitment,
             legacy_enote_image_temp.m_key_image,
@@ -1049,7 +1054,7 @@ void make_v1_multisig_tx_proposal_v1(std::vector<jamtis::JamtisPaymentProposalV1
     {
         sp_input_proposal.get_enote_image_v1(sp_enote_image_temp);
 
-        make_sp_composition_multisig_proposal(tx_proposal_prefix,
+        multisig::make_sp_composition_multisig_proposal(tx_proposal_prefix,
             sp_enote_image_temp.m_core.m_masked_address,
             sp_enote_image_temp.m_core.m_key_image,
             add_element(proposal_out.m_sp_input_proof_proposals));
@@ -1157,9 +1162,9 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
     const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    MultisigNonceRecord &nonce_record_inout,
-    std::unordered_map<rct::key, MultisigProofInitSetV1> &legacy_input_init_set_collection_out,
-    std::unordered_map<rct::key, MultisigProofInitSetV1> &sp_input_init_set_collection_out)
+    multisig::MultisigNonceRecord &nonce_record_inout,
+    std::unordered_map<rct::key, multisig::MultisigProofInitSetV1> &legacy_input_init_set_collection_out,
+    std::unordered_map<rct::key, multisig::MultisigProofInitSetV1> &sp_input_init_set_collection_out)
 {
     // 1. validate multisig tx proposal
     check_v1_multisig_tx_proposal_semantics_v1(multisig_tx_proposal,
@@ -1208,7 +1213,7 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
 
     // 5. finish making multisig input init sets
     // a. legacy input init set
-    make_v1_multisig_init_set_collection_v1(threshold,
+    multisig::make_v1_multisig_init_set_collection_v1(threshold,
         multisig_signers,
         multisig_tx_proposal.m_aggregate_signer_set_filter,
         signer_id,
@@ -1218,7 +1223,7 @@ void make_v1_multisig_init_sets_for_inputs_v1(const crypto::public_key &signer_i
         legacy_input_init_set_collection_out);
 
     // b. seraphis input init set
-    make_v1_multisig_init_set_collection_v1(threshold,
+    multisig::make_v1_multisig_init_set_collection_v1(threshold,
         multisig_signers,
         multisig_tx_proposal.m_aggregate_signer_set_filter,
         signer_id,
@@ -1235,13 +1240,13 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
     const crypto::secret_key &k_view_balance,
     const std::string &expected_version_string,
     //[ proof key : init set ]
-    std::unordered_map<rct::key, MultisigProofInitSetV1> local_input_init_set_collection,
+    std::unordered_map<rct::key, multisig::MultisigProofInitSetV1> local_input_init_set_collection,
     //[ signer id : [ proof key : init set ] ]
-    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, multisig::MultisigProofInitSetV1>>
         other_input_init_set_collections,
-    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
-    MultisigNonceRecord &nonce_record_inout,
-    std::vector<MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out)
+    std::list<multisig::MultisigSigningErrorVariant> &multisig_errors_inout,
+    multisig::MultisigNonceRecord &nonce_record_inout,
+    std::vector<multisig::MultisigPartialSigSetV1> &legacy_input_partial_sig_sets_out)
 {
     CHECK_AND_ASSERT_THROW_MES(signer_account.multisig_is_ready(),
         "multisig legacy input partial sigs: signer account is not complete, so it can't make partial signatures.");
@@ -1300,7 +1305,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
         proof_privkeys_z);
 
     // 7. signature maker for legacy CLSAG proofs
-    const MultisigPartialSigMakerCLSAG partial_sig_maker{
+    const multisig::MultisigPartialSigMakerCLSAG partial_sig_maker{
             threshold,
             multisig_tx_proposal.m_legacy_input_proof_proposals,
             proof_privkeys_k_offset,
@@ -1309,7 +1314,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_legacy_inputs_v1(const multisig::
 
 
     /// finish making partial signatures
-    if (!try_make_v1_multisig_partial_sig_sets_v1(signer_account,
+    if (!multisig::try_make_v1_multisig_partial_sig_sets_v1(signer_account,
             cryptonote::account_generator_era::cryptonote,
             multisig_tx_proposal.m_aggregate_signer_set_filter,
             input_proof_contexts,
@@ -1332,13 +1337,13 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
     const crypto::secret_key &legacy_view_privkey,
     const std::string &expected_version_string,
     //[ proof key : init set ]
-    std::unordered_map<rct::key, MultisigProofInitSetV1> local_input_init_set_collection,
+    std::unordered_map<rct::key, multisig::MultisigProofInitSetV1> local_input_init_set_collection,
     //[ signer id : [ proof key : init set ] ]
-    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
+    std::unordered_map<crypto::public_key, std::unordered_map<rct::key, multisig::MultisigProofInitSetV1>>
         other_input_init_set_collections,
-    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
-    MultisigNonceRecord &nonce_record_inout,
-    std::vector<MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out)
+    std::list<multisig::MultisigSigningErrorVariant> &multisig_errors_inout,
+    multisig::MultisigNonceRecord &nonce_record_inout,
+    std::vector<multisig::MultisigPartialSigSetV1> &sp_input_partial_sig_sets_out)
 {
     CHECK_AND_ASSERT_THROW_MES(signer_account.multisig_is_ready(),
         "multisig input partial sigs: signer account is not complete, so it can't make partial signatures.");
@@ -1402,7 +1407,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
         proof_privkeys_z_multiplier);
 
     // 8. signature maker for seraphis composition proofs
-    const MultisigPartialSigMakerSpCompositionProof partial_sig_maker{
+    const multisig::MultisigPartialSigMakerSpCompositionProof partial_sig_maker{
             threshold,
             multisig_tx_proposal.m_sp_input_proof_proposals,
             proof_privkeys_x,
@@ -1413,7 +1418,7 @@ bool try_make_v1_multisig_partial_sig_sets_for_sp_inputs_v1(const multisig::mult
 
 
     /// finish making partial signatures
-    if (!try_make_v1_multisig_partial_sig_sets_v1(signer_account,
+    if (!multisig::try_make_v1_multisig_partial_sig_sets_v1(signer_account,
             cryptonote::account_generator_era::seraphis,
             multisig_tx_proposal.m_aggregate_signer_set_filter,
             input_proof_contexts,
@@ -1436,9 +1441,11 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
     const crypto::secret_key &legacy_view_privkey,
     const rct::key &jamtis_spend_pubkey,
     const crypto::secret_key &k_view_balance,
-    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &legacy_input_partial_sigs_per_signer,
-    const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &sp_input_partial_sigs_per_signer,
-    std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
+    const std::unordered_map<crypto::public_key, std::vector<multisig::MultisigPartialSigSetV1>>
+        &legacy_input_partial_sigs_per_signer,
+    const std::unordered_map<crypto::public_key, std::vector<multisig::MultisigPartialSigSetV1>>
+        &sp_input_partial_sigs_per_signer,
+    std::list<multisig::MultisigSigningErrorVariant> &multisig_errors_inout,
     std::vector<LegacyInputV1> &legacy_inputs_out,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out)
 {

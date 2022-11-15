@@ -58,7 +58,7 @@
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
 
-namespace sp
+namespace multisig
 {
 //----------------------------------------------------------------------------------------------------------------------
 // TODO: move to a 'math' library, with unit tests
@@ -85,7 +85,7 @@ static std::uint32_t n_choose_k(const std::uint32_t n, const std::uint32_t k)
 //-------------------------------------------------------------------------------------------------------------------
 static void prepare_multisig_init_set_collections_v1(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const crypto::public_key &local_signer_id,
     const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_nonce_sets_per_proofkey,
@@ -113,7 +113,7 @@ static void prepare_multisig_init_set_collections_v1(const std::uint32_t thresho
         "validate and prepare multisig inits: the local signer's initializer is invalid.");
 
     // 2. weed out invalid other init set collections
-    for_all_in_map_erase_if(other_init_set_collections,
+    sp::for_all_in_map_erase_if(other_init_set_collections,
             [&](const auto &other_signer_init_set_collection) -> bool
             {
                 auto validation_error = validate_v1_multisig_init_set_collection_v1(
@@ -141,18 +141,18 @@ static void prepare_multisig_init_set_collections_v1(const std::uint32_t thresho
 static void prepare_filters_for_multisig_partial_signing(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
     const crypto::public_key &local_signer_id,
-    const multisig::signer_set_filter multisig_proposal_aggregate_signer_set_filter,
+    const signer_set_filter multisig_proposal_aggregate_signer_set_filter,
     //[ signer id : [ proof key : init set ] ]
     const std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         &all_init_set_collections,
-    multisig::signer_set_filter &local_signer_filter_out,
-    multisig::signer_set_filter &available_signers_filter_out,
+    signer_set_filter &local_signer_filter_out,
+    signer_set_filter &available_signers_filter_out,
     //[ signer id : signer as filter ]
-    std::unordered_map<crypto::public_key, multisig::signer_set_filter> &available_signers_as_filters_out,
-    std::vector<multisig::signer_set_filter> &filter_permutations_out)
+    std::unordered_map<crypto::public_key, signer_set_filter> &available_signers_as_filters_out,
+    std::vector<signer_set_filter> &filter_permutations_out)
 {
     // 1. save local signer as filter
-    multisig::multisig_signer_to_filter(local_signer_id, multisig_signers, local_signer_filter_out);
+    multisig_signer_to_filter(local_signer_id, multisig_signers, local_signer_filter_out);
 
     // 2. collect available signers
     std::vector<crypto::public_key> available_signers;
@@ -162,7 +162,7 @@ static void prepare_filters_for_multisig_partial_signing(const std::uint32_t thr
         available_signers.emplace_back(input_init_set_collection.first);
 
     // 3. available signers as a filter
-    multisig::multisig_signers_to_filter(available_signers, multisig_signers, available_signers_filter_out);
+    multisig_signers_to_filter(available_signers, multisig_signers, available_signers_filter_out);
 
     // 4. available signers as individual filters (note: available_signers contains no duplicates because it's built
     //    from a map)
@@ -170,13 +170,13 @@ static void prepare_filters_for_multisig_partial_signing(const std::uint32_t thr
 
     for (const crypto::public_key &available_signer : available_signers)
     {
-        multisig::multisig_signer_to_filter(available_signer,
+        multisig_signer_to_filter(available_signer,
             multisig_signers,
             available_signers_as_filters_out[available_signer]);
     }
 
     // 5. filter permutations (every subgroup of signers that is eligible to make a signature attempt)
-    multisig::aggregate_multisig_signer_set_filter_to_permutations(threshold,
+    aggregate_multisig_signer_set_filter_to_permutations(threshold,
         multisig_signers.size(),
         multisig_proposal_aggregate_signer_set_filter,
         filter_permutations_out);
@@ -185,13 +185,13 @@ static void prepare_filters_for_multisig_partial_signing(const std::uint32_t thr
 //-------------------------------------------------------------------------------------------------------------------
 static MultisigSigningErrorVariant try_make_v1_multisig_partial_signatures_v1(
     const std::uint32_t threshold,
-    const multisig::signer_set_filter filter,
+    const signer_set_filter filter,
     const std::unordered_map<rct::key, rct::key> &proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_proof_basekeys,
     //[ signer id : [ proof key : init set ] ]
     const std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         &all_init_set_collections,
-    const std::unordered_map<crypto::public_key, multisig::signer_set_filter> &available_signers_as_filters,
+    const std::unordered_map<crypto::public_key, signer_set_filter> &available_signers_as_filters,
     const std::unordered_map<crypto::public_key, std::size_t> &signer_nonce_trackers,
     const MultisigPartialSigMaker &partial_sig_maker,
     const crypto::secret_key &local_signer_privkey,
@@ -315,17 +315,17 @@ static MultisigSigningErrorVariant try_make_v1_multisig_partial_signatures_v1(
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &signer_account,
+static void make_v1_multisig_partial_sig_sets_v1(const multisig_account &signer_account,
     const std::unordered_map<rct::key, rct::key> &proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_proof_basekeys,
-    const std::vector<multisig::signer_set_filter> &filter_permutations,
-    const multisig::signer_set_filter local_signer_filter,
+    const std::vector<signer_set_filter> &filter_permutations,
+    const signer_set_filter local_signer_filter,
     //[ signer id : [ proof key : init set ] ]
     const std::unordered_map<crypto::public_key, std::unordered_map<rct::key, MultisigProofInitSetV1>>
         &all_init_set_collections,
-    const multisig::signer_set_filter available_signers_filter,
+    const signer_set_filter available_signers_filter,
     //[ signer id : signer as filter ]
-    const std::unordered_map<crypto::public_key, multisig::signer_set_filter> &available_signers_as_filters,
+    const std::unordered_map<crypto::public_key, signer_set_filter> &available_signers_as_filters,
     const MultisigPartialSigMaker &partial_sig_maker,
     std::list<MultisigSigningErrorVariant> &multisig_errors_inout,
     MultisigNonceRecord &nonce_record_inout,
@@ -355,7 +355,7 @@ static void make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_accoun
     std::uint32_t num_aborted_partial_sig_sets{0};
     crypto::secret_key k_e_temp;
 
-    for (const multisig::signer_set_filter filter : filter_permutations)
+    for (const signer_set_filter filter : filter_permutations)
     {
         // for filters that contain only available signers (and include the local signer), make a partial signature set
         // - throw on failure so the partial sig set can be rolled back
@@ -460,7 +460,7 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
     const std::size_t num_expected_nonce_sets_per_proofkey)
 {
     // signer set filter must be valid (at least 'threshold' signers allowed, format is valid)
-    CHECK_AND_ASSERT_THROW_MES(multisig::validate_aggregate_multisig_signer_set_filter(threshold,
+    CHECK_AND_ASSERT_THROW_MES(validate_aggregate_multisig_signer_set_filter(threshold,
             multisig_signers.size(),
             init_set.m_aggregate_signer_set_filter),
         "multisig init set semantics: invalid aggregate signer set filter.");
@@ -468,7 +468,7 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
     // the init's signer must be in allowed signers list, and contained in the aggregate filter
     CHECK_AND_ASSERT_THROW_MES(std::find(multisig_signers.begin(), multisig_signers.end(), init_set.m_signer_id) !=
         multisig_signers.end(), "multisig init set semantics: initializer from unknown signer.");
-    CHECK_AND_ASSERT_THROW_MES(multisig::signer_is_in_filter(init_set.m_signer_id,
+    CHECK_AND_ASSERT_THROW_MES(signer_is_in_filter(init_set.m_signer_id,
             multisig_signers,
             init_set.m_aggregate_signer_set_filter),
         "multisig init set semantics: signer is not eligible.");
@@ -480,7 +480,7 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
     // - remove our init's signer, then choose 'threshold - 1' signers from the remaining 'num signers requested - 1' to
     //   get the number of permutations that include our init's signer
     const std::uint32_t num_sets_with_signer_expected(
-            n_choose_k(multisig::get_num_flags_set(init_set.m_aggregate_signer_set_filter) - 1, threshold - 1)
+            n_choose_k(get_num_flags_set(init_set.m_aggregate_signer_set_filter) - 1, threshold - 1)
         );
 
     CHECK_AND_ASSERT_THROW_MES(init_set.m_inits.size() == num_sets_with_signer_expected,
@@ -497,7 +497,7 @@ void check_v1_multisig_init_set_semantics_v1(const MultisigProofInitSetV1 &init_
 MultisigSigningErrorVariant validate_v1_multisig_init_set_v1(const MultisigProofInitSetV1 &init_set,
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter expected_aggregate_signer_set_filter,
+    const signer_set_filter expected_aggregate_signer_set_filter,
     const crypto::public_key &expected_signer_id,
     const rct::key &expected_proof_message,
     const rct::key &expected_main_proof_key,
@@ -595,7 +595,7 @@ MultisigSigningErrorVariant validate_v1_multisig_init_set_collection_v1(
     const std::unordered_map<rct::key, MultisigProofInitSetV1> &init_set_collection, //[ proof key : init set ]
     const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter expected_aggregate_signer_set_filter,
+    const signer_set_filter expected_aggregate_signer_set_filter,
     const crypto::public_key &expected_signer_id,
     const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_nonce_sets_per_proofkey)
@@ -619,7 +619,7 @@ MultisigSigningErrorVariant validate_v1_multisig_init_set_collection_v1(
     }
 
     // check that the init set collection maps to its internal proof keys correctly
-    if (!keys_match_internal_values(init_set_collection,
+    if (!sp::keys_match_internal_values(init_set_collection,
                 [](const MultisigProofInitSetV1 &init_set) -> const rct::key&
                 {
                     return init_set.m_proof_key;
@@ -662,7 +662,7 @@ MultisigSigningErrorVariant validate_v1_multisig_init_set_collection_v1(
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const crypto::public_key &local_signer_id,
     const rct::key &proof_message,
     const rct::key &main_proof_key,
@@ -671,34 +671,34 @@ void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
     MultisigProofInitSetV1 &init_set_out)
 {
     // 1. enforce canonical proof keys (NOTE: this is only a sanity check)
-    CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(main_proof_key),
+    CHECK_AND_ASSERT_THROW_MES(sp::key_domain_is_prime_subgroup(main_proof_key),
         "make multisig proof initializer: found proof key with non-canonical representation!");
 
     for (const rct::key &proof_key_base_point : proof_key_base_points)
     {
-        CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(proof_key_base_point),
+        CHECK_AND_ASSERT_THROW_MES(sp::key_domain_is_prime_subgroup(proof_key_base_point),
             "make multisig proof initializer: found proof key base point with non-canonical representation!");
     }
 
     // 2. prepare init nonce map
     const std::uint32_t num_sets_with_signer_expected{
-            n_choose_k(multisig::get_num_flags_set(aggregate_signer_set_filter) - 1, threshold - 1)
+            n_choose_k(get_num_flags_set(aggregate_signer_set_filter) - 1, threshold - 1)
         };
 
     init_set_out.m_inits.clear();
     init_set_out.m_inits.reserve(num_sets_with_signer_expected);
 
     // 3. add nonces for every possible signer set that includes the signer
-    std::vector<multisig::signer_set_filter> filter_permutations;
-    multisig::aggregate_multisig_signer_set_filter_to_permutations(threshold,
+    std::vector<signer_set_filter> filter_permutations;
+    aggregate_multisig_signer_set_filter_to_permutations(threshold,
         multisig_signers.size(),
         aggregate_signer_set_filter,
         filter_permutations);
 
-    for (const multisig::signer_set_filter filter : filter_permutations)
+    for (const signer_set_filter filter : filter_permutations)
     {
         // a. ignore filters that don't include the signer
-        if (!multisig::signer_is_in_filter(local_signer_id, multisig_signers, filter))
+        if (!signer_is_in_filter(local_signer_id, multisig_signers, filter))
             continue;
 
         // b. add new nonces to the nonce record for this <proof message, main proof key, filter> combination
@@ -718,7 +718,7 @@ void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
                     main_proof_key,
                     filter,
                     proof_base,
-                    add_element(init_set_out.m_inits.back())),
+                    sp::add_element(init_set_out.m_inits.back())),
                 "make multisig proof initializer: could not get nonce pubkeys from nonce record (bug).");
         }
     }
@@ -735,7 +735,7 @@ void make_v1_multisig_init_set_v1(const std::uint32_t threshold,
 //-------------------------------------------------------------------------------------------------------------------
 void make_v1_multisig_init_set_collection_v1(const std::uint32_t threshold,
     const std::vector<crypto::public_key> &multisig_signers,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const crypto::public_key &local_signer_id,
     const std::unordered_map<rct::key, rct::key> &proof_contexts,  //[ proof key : proof message ]
     const std::unordered_map<rct::key, rct::keyV> &proof_key_base_points,  //[ proof key : {proof key base points} ]
@@ -766,7 +766,7 @@ void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV
     const std::vector<crypto::public_key> &multisig_signers)
 {
     // signer is in filter
-    CHECK_AND_ASSERT_THROW_MES(multisig::signer_is_in_filter(partial_sig_set.m_signer_id,
+    CHECK_AND_ASSERT_THROW_MES(signer_is_in_filter(partial_sig_set.m_signer_id,
             multisig_signers,
             partial_sig_set.m_signer_set_filter),
         "multisig partial sig set semantics: the signer is not a member of the signer group (or the filter is invalid).");
@@ -789,9 +789,9 @@ void check_v1_multisig_partial_sig_set_semantics_v1(const MultisigPartialSigSetV
         "multisig partial sig set semantics: partial signatures are not all the same type.");
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &signer_account,
+bool try_make_v1_multisig_partial_sig_sets_v1(const multisig_account &signer_account,
     const cryptonote::account_generator_era expected_multisig_account_era,
-    const multisig::signer_set_filter aggregate_signer_set_filter,
+    const signer_set_filter aggregate_signer_set_filter,
     const std::unordered_map<rct::key, rct::key> &expected_proof_contexts,  //[ proof key : proof message ]
     const std::size_t num_expected_proof_basekeys,
     const MultisigPartialSigMaker &partial_sig_maker,
@@ -839,10 +839,10 @@ bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &
         all_init_set_collections);
 
     // 3. prepare filters for signing
-    multisig::signer_set_filter local_signer_filter;
-    multisig::signer_set_filter available_signers_filter;
-    std::unordered_map<crypto::public_key, multisig::signer_set_filter> available_signers_as_filters;
-    std::vector<multisig::signer_set_filter> filter_permutations;
+    signer_set_filter local_signer_filter;
+    signer_set_filter available_signers_filter;
+    std::unordered_map<crypto::public_key, signer_set_filter> available_signers_as_filters;
+    std::vector<signer_set_filter> filter_permutations;
 
     prepare_filters_for_multisig_partial_signing(threshold,
         multisig_signers,
@@ -863,11 +863,11 @@ bool try_make_v1_multisig_partial_sig_sets_v1(const multisig::multisig_account &
                 MultisigSigningErrorAvailableSigners{
                         .m_error_code = MultisigSigningErrorAvailableSigners::ErrorCode::INCOMPLETE_AVAILABLE_SIGNERS,
                         .m_missing_signers =
-                            static_cast<multisig::signer_set_filter>(
+                            static_cast<signer_set_filter>(
                                     (~available_signers_filter) & aggregate_signer_set_filter
                                 ),
                         .m_unexpected_available_signers =
-                            static_cast<multisig::signer_set_filter>(
+                            static_cast<signer_set_filter>(
                                     (~aggregate_signer_set_filter) & available_signers_filter
                                 )
                     }
@@ -905,12 +905,12 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
     const int expected_partial_sig_variant_index,
     const std::unordered_map<crypto::public_key, std::vector<MultisigPartialSigSetV1>> &partial_sigs_per_signer,
     std::list<MultisigSigningErrorVariant> &multisig_errors_inout, //todo
-    std::unordered_map<multisig::signer_set_filter,  //signing group
+    std::unordered_map<signer_set_filter,  //signing group
         std::unordered_map<rct::key,                 //proof key
             std::vector<MultisigPartialSigVariant>>> &collected_sigs_per_key_per_filter_out)
 {
     // filter the partial signatures passed in into the 'collected sigs' output map
-    std::unordered_map<multisig::signer_set_filter, std::unordered_set<crypto::public_key>> collected_signers_per_filter;
+    std::unordered_map<signer_set_filter, std::unordered_set<crypto::public_key>> collected_signers_per_filter;
 
     for (const auto &partial_sigs_for_signer : partial_sigs_per_signer)
     {
@@ -1025,4 +1025,4 @@ void filter_multisig_partial_signatures_for_combining_v1(const std::vector<crypt
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-} //namespace sp
+} //namespace multisig

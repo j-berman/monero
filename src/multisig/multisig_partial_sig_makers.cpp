@@ -32,19 +32,19 @@
 #include "multisig_partial_sig_makers.h"
 
 //local headers
-#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 extern "C"
 {
 #include "crypto/crypto-ops.h"
 }
 #include "misc_log_ex.h"
-#include "multisig/multisig_signer_set_filter.h"
+#include "multisig_clsag.h"
+#include "multisig_signer_set_filter.h"
 #include "multisig_nonce_record.h"
 #include "multisig_signing_helper_types.h"
+#include "multisig_sp_composition_proof.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "seraphis_crypto/sp_composition_proof.h"
 #include "seraphis_crypto/sp_crypto_utils.h"
 
 //third party headers
@@ -55,7 +55,7 @@ extern "C"
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
 
-namespace sp
+namespace multisig
 {
 //-------------------------------------------------------------------------------------------------------------------
 // for partial proof key K_e = (k_offset + k_e)*G
@@ -141,7 +141,7 @@ MultisigPartialSigMakerCLSAG::MultisigPartialSigMakerCLSAG(const std::uint32_t t
     const std::vector<CLSAGMultisigProposal> &proof_proposals,
     const std::vector<crypto::secret_key> &proof_privkeys_k_offset,
     const std::vector<crypto::secret_key> &proof_privkeys_z) :
-        m_inv_threshold{threshold ? invert(rct::d2h(threshold)) : rct::zero()},  //avoid throwing in call to invert()
+        m_inv_threshold{threshold ? sp::invert(rct::d2h(threshold)) : rct::zero()},  //avoid throwing in call to invert()
         m_proof_proposals{proof_proposals},
         m_proof_privkeys_k_offset{proof_privkeys_k_offset},
         m_proof_privkeys_z{proof_privkeys_z}
@@ -197,7 +197,7 @@ MultisigPartialSigMakerSpCompositionProof::MultisigPartialSigMakerSpCompositionP
     const std::vector<crypto::secret_key> &proof_privkeys_y,
     const std::vector<crypto::secret_key> &proof_privkeys_z_offset,
     const std::vector<crypto::secret_key> &proof_privkeys_z_multiplier) :
-        m_inv_threshold{threshold ? invert(rct::d2h(threshold)) : rct::zero()},  //avoid throwing in call to invert()
+        m_inv_threshold{threshold ? sp::invert(rct::d2h(threshold)) : rct::zero()},  //avoid throwing in call to invert()
         m_proof_proposals{proof_proposals},
         m_proof_privkeys_x{proof_privkeys_x},
         m_proof_privkeys_y{proof_privkeys_y},
@@ -255,4 +255,4 @@ void MultisigPartialSigMakerSpCompositionProof::attempt_make_partial_sig(const r
         nonce_record_inout);
 }
 //-------------------------------------------------------------------------------------------------------------------
-} //namespace sp
+} //namespace multisig

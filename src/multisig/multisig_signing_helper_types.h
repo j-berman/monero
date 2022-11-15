@@ -34,13 +34,13 @@
 #pragma once
 
 //local headers
-#include "clsag_multisig.h"
 #include "crypto/crypto.h"
-#include "multisig/multisig_signer_set_filter.h"
+#include "multisig_clsag.h"
+#include "multisig_signer_set_filter.h"
 #include "multisig_nonce_record.h"
+#include "multisig_sp_composition_proof.h"
 #include "ringct/rctTypes.h"
 #include "seraphis_crypto/sp_variant.h"
-#include "sp_composition_proof_multisig.h"
 
 //third party headers
 #include <boost/variant/get.hpp>
@@ -53,7 +53,7 @@
 //forward declarations
 
 
-namespace sp
+namespace multisig
 {
 
 ////
@@ -68,7 +68,7 @@ namespace sp
 struct MultisigProofInitSetV1 final
 {
     /// all multisig signers who should participate in attempting to make these multisig proofs
-    multisig::signer_set_filter m_aggregate_signer_set_filter;
+    signer_set_filter m_aggregate_signer_set_filter;
     /// id of signer who made this proof initializer set
     crypto::public_key m_signer_id;
     /// message to be signed by the multisig proofs
@@ -101,7 +101,7 @@ struct MultisigProofInitSetV1 final
 // proof_key_ref(): get the partial signature's main proof key (there may be additional auxilliary proof keys)
 // message_ref(): get the partial signature's signed message
 ///
-using MultisigPartialSigVariant = SpVariant<CLSAGMultisigPartial, SpCompositionProofMultisigPartial>;
+using MultisigPartialSigVariant = sp::SpVariant<CLSAGMultisigPartial, SpCompositionProofMultisigPartial>;
 const rct::key& proof_key_ref(const MultisigPartialSigVariant &variant);
 const rct::key& message_ref(const MultisigPartialSigVariant &variant);
 
@@ -112,7 +112,7 @@ const rct::key& message_ref(const MultisigPartialSigVariant &variant);
 struct MultisigPartialSigSetV1 final
 {
     /// set of multisig signers these partial signatures correspond to
-    multisig::signer_set_filter m_signer_set_filter;
+    signer_set_filter m_signer_set_filter;
     /// id of signer who made these partial signatures
     crypto::public_key m_signer_id;
 
@@ -120,4 +120,4 @@ struct MultisigPartialSigSetV1 final
     std::unordered_map<rct::key, MultisigPartialSigVariant> m_partial_signatures;
 };
 
-} //namespace sp
+} //namespace multisig

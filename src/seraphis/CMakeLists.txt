@@ -27,7 +27,6 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set(seraphis_sources
-  clsag_multisig.cpp
   jamtis_address_tag_utils.cpp
   jamtis_address_utils.cpp
   jamtis_core_utils.cpp
@@ -41,13 +40,7 @@ set(seraphis_sources
   legacy_enote_utils.cpp
   mock_ledger_context.cpp
   mock_offchain_context.cpp
-  multisig_nonce_record.cpp
-  multisig_partial_sig_makers.cpp
-  multisig_signing_errors.cpp
-  multisig_signing_helper_types.cpp
-  multisig_signing_helper_utils.cpp
   serialization_demo_utils.cpp
-  sp_composition_proof_multisig.cpp
   sp_core_enote_utils.cpp
   sp_core_types.cpp
   tx_base.cpp

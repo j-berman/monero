@@ -37,6 +37,7 @@
 #include "crypto/crypto.h"
 #include "multisig/multisig_signer_set_filter.h"
 #include "ringct/rctTypes.h"
+#include "seraphis_crypto/sp_transcript.h"
 
 //third party headers
 #include <boost/utility/string_ref.hpp>
@@ -48,7 +49,7 @@
 namespace sp { class SpTranscriptBuilder; }
 
 
-namespace sp
+namespace multisig
 {
 
 ////
@@ -77,7 +78,7 @@ struct MultisigPubNonces final
     static std::size_t size_bytes() { return 2*sizeof(rct::key); }
 };
 inline const boost::string_ref container_name(const MultisigPubNonces&) { return "MultisigPubNonces"; }
-void append_to_transcript(const MultisigPubNonces &container, SpTranscriptBuilder &transcript_inout);
+void append_to_transcript(const MultisigPubNonces &container, sp::SpTranscriptBuilder &transcript_inout);
 
 struct MultisigNonces final
 {
@@ -111,26 +112,26 @@ public:
 
 //member functions
     /// true if there is a nonce record for a given signing scenario
-    bool has_record(const rct::key &message, const rct::key &proof_key, const multisig::signer_set_filter &filter) const;
+    bool has_record(const rct::key &message, const rct::key &proof_key, const signer_set_filter &filter) const;
     /// true if successfully added nonces for a given signing scenario
     /// note: nonces are generated internally and only exposed by try_get_recorded_nonce_privkeys()
     bool try_add_nonces(const rct::key &message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter &filter);
+        const signer_set_filter &filter);
     /// true if found nonce privkeys for a given signing scenario
     bool try_get_recorded_nonce_privkeys(const rct::key &message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter &filter,
+        const signer_set_filter &filter,
         crypto::secret_key &nonce_privkey_1_out,
         crypto::secret_key &nonce_privkey_2_out) const;
     /// true if found nonce pubkeys for a given signing scenario
     bool try_get_nonce_pubkeys_for_base(const rct::key &message,
         const rct::key &proof_key,
-        const multisig::signer_set_filter &filter,
+        const signer_set_filter &filter,
         const rct::key &pubkey_base,
         MultisigPubNonces &nonce_pubkeys_out) const;
     /// true if removed a record for a given signing scenario
-    bool try_remove_record(const rct::key &message, const rct::key &proof_key, const multisig::signer_set_filter &filter);
+    bool try_remove_record(const rct::key &message, const rct::key &proof_key, const signer_set_filter &filter);
 
 //member variables
 private:
@@ -140,11 +141,11 @@ private:
         std::unordered_map<
             rct::key,                          //proof key to be signed
             std::unordered_map<
-                multisig::signer_set_filter,   //filter representing a signer group
+                signer_set_filter,   //filter representing a signer group
                 MultisigNonces                 //nonces
             >
         >
     > m_record;
 };
 
-} //namespace sp
+} //namespace multisig

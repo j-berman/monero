@@ -47,7 +47,7 @@
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
 
-namespace sp
+namespace multisig
 {
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigPubNonces::operator<(const MultisigPubNonces &other) const
@@ -73,10 +73,10 @@ bool MultisigPubNonces::operator<(const MultisigPubNonces &other) const
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigPubNonces::operator==(const MultisigPubNonces &other) const
 {
-    return equals_from_less{}(*this, other);
+    return sp::equals_from_less{}(*this, other);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void append_to_transcript(const MultisigPubNonces &container, SpTranscriptBuilder &transcript_inout)
+void append_to_transcript(const MultisigPubNonces &container, sp::SpTranscriptBuilder &transcript_inout)
 {
     transcript_inout.append("nonce1", container.signature_nonce_1_pub);
     transcript_inout.append("nonce2", container.signature_nonce_2_pub);
@@ -84,7 +84,7 @@ void append_to_transcript(const MultisigPubNonces &container, SpTranscriptBuilde
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigNonceRecord::has_record(const rct::key &message,
     const rct::key &proof_key,
-    const multisig::signer_set_filter &filter) const
+    const signer_set_filter &filter) const
 {
     return m_record.find(message) != m_record.end() &&
         m_record.at(message).find(proof_key) != m_record.at(message).end() &&
@@ -93,12 +93,12 @@ bool MultisigNonceRecord::has_record(const rct::key &message,
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigNonceRecord::try_add_nonces(const rct::key &message,
     const rct::key &proof_key,
-    const multisig::signer_set_filter &filter)
+    const signer_set_filter &filter)
 {
-    if (has_record(message, proof_key, filter))
+    if (this->has_record(message, proof_key, filter))
         return false;
 
-    if (!key_domain_is_prime_subgroup(proof_key))
+    if (!sp::key_domain_is_prime_subgroup(proof_key))
         return false;
 
     // add record
@@ -109,11 +109,11 @@ bool MultisigNonceRecord::try_add_nonces(const rct::key &message,
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigNonceRecord::try_get_recorded_nonce_privkeys(const rct::key &message,
     const rct::key &proof_key,
-    const multisig::signer_set_filter &filter,
+    const signer_set_filter &filter,
     crypto::secret_key &nonce_privkey_1_out,
     crypto::secret_key &nonce_privkey_2_out) const
 {
-    if (!has_record(message, proof_key, filter))
+    if (!this->has_record(message, proof_key, filter))
         return false;
 
     // privkeys
@@ -125,14 +125,14 @@ bool MultisigNonceRecord::try_get_recorded_nonce_privkeys(const rct::key &messag
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigNonceRecord::try_get_nonce_pubkeys_for_base(const rct::key &message,
     const rct::key &proof_key,
-    const multisig::signer_set_filter &filter,
+    const signer_set_filter &filter,
     const rct::key &pubkey_base,
     MultisigPubNonces &nonce_pubkeys_out) const
 {
-    CHECK_AND_ASSERT_THROW_MES(key_domain_is_prime_subgroup(pubkey_base) && !(pubkey_base == rct::identity()),
+    CHECK_AND_ASSERT_THROW_MES(sp::key_domain_is_prime_subgroup(pubkey_base) && !(pubkey_base == rct::identity()),
         "multisig nonce record get nonce pubkeys: pubkey base is invalid.");
 
-    if (!has_record(message, proof_key, filter))
+    if (!this->has_record(message, proof_key, filter))
         return false;
 
     const MultisigNonces &nonces{m_record.at(message).at(proof_key).at(filter)};
@@ -148,9 +148,9 @@ bool MultisigNonceRecord::try_get_nonce_pubkeys_for_base(const rct::key &message
 //-------------------------------------------------------------------------------------------------------------------
 bool MultisigNonceRecord::try_remove_record(const rct::key &message,
     const rct::key &proof_key,
-    const multisig::signer_set_filter &filter)
+    const signer_set_filter &filter)
 {
-    if (!has_record(message, proof_key, filter))
+    if (!this->has_record(message, proof_key, filter))
         return false;
 
     // cleanup
@@ -163,4 +163,4 @@ bool MultisigNonceRecord::try_remove_record(const rct::key &message,
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-} //namespace sp
+} //namespace multisig

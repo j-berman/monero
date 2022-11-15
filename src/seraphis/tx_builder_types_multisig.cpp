@@ -32,7 +32,6 @@
 #include "tx_builder_types_multisig.h"
 
 //local headers
-#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "legacy_core_utils.h"
@@ -91,7 +90,7 @@ void LegacyMultisigInputProposalV1::get_input_proposal_v1(const rct::key &legacy
     make_v1_legacy_input_proposal_v1(legacy_enote_record, m_commitment_mask, input_proposal_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool LegacyMultisigInputProposalV1::matches_with(const CLSAGMultisigProposal &proof_proposal) const
+bool LegacyMultisigInputProposalV1::matches_with(const multisig::CLSAGMultisigProposal &proof_proposal) const
 {
     // onetime address to sign
     if (!(proof_proposal.main_proof_key() == onetime_address_ref(m_enote)))

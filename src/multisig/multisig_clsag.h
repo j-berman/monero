@@ -58,7 +58,7 @@
 //forward declarations
 
 
-namespace sp
+namespace multisig
 {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -200,7 +200,7 @@ bool try_make_clsag_multisig_partial_sig(const CLSAGMultisigProposal &proposal,
     const crypto::secret_key &z_e,
     const std::vector<MultisigPubNonces> &signer_pub_nonces_G,
     const std::vector<MultisigPubNonces> &signer_pub_nonces_Hp,
-    const multisig::signer_set_filter filter,
+    const signer_set_filter filter,
     MultisigNonceRecord &nonce_record_inout,
     CLSAGMultisigPartial &partial_sig_out);
 /**
@@ -216,4 +216,4 @@ void finalize_clsag_multisig_proof(const std::vector<CLSAGMultisigPartial> &part
     const rct::key &masked_commitment,
     rct::clsag &proof_out);
 
-} //namespace sp
+} //namespace multisig

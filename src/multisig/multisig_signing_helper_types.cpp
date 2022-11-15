@@ -29,46 +29,61 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "multisig_signing_errors.h"
+#include "multisig_signing_helper_types.h"
 
 //local headers
+#include "multisig_clsag.h"
+#include "multisig_sp_composition_proof.h"
+#include "ringct/rctTypes.h"
 #include "seraphis_crypto/sp_variant.h"
 
 //third party headers
 
 //standard headers
-#include <string>
+#include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
 
-namespace sp
+namespace multisig
 {
 //-------------------------------------------------------------------------------------------------------------------
-const std::string& error_message_ref(const MultisigSigningErrorVariant &variant)
+bool MultisigProofInitSetV1::try_get_nonces(const std::size_t filter_index, std::vector<MultisigPubNonces> &nonces_out) const
 {
-    struct visitor : public SpVariantStaticVisitor<const std::string&>
+    if (filter_index >= m_inits.size())
+        return false;
+
+    nonces_out = m_inits[filter_index];
+
+    return true;
+}
+//-------------------------------------------------------------------------------------------------------------------
+const rct::key& proof_key_ref(const MultisigPartialSigVariant &variant)
+{
+    struct visitor : public sp::SpVariantStaticVisitor<const rct::key&>
     {
         using SpVariantStaticVisitor::operator();  //for blank overload
-        const std::string& operator()(const MultisigSigningErrorBadInitSet &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorBadInitSetCollection &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorAvailableSigners &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorBadPartialSig &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorMakePartialSigSet &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorBadPartialSigSet &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorBadSigAssembly &error) const
-        { return error.m_error_message; }
-        const std::string& operator()(const MultisigSigningErrorBadSigSet &error) const
-        { return error.m_error_message; }
+        const rct::key& operator()(const CLSAGMultisigPartial &partial_sig) const
+        { return partial_sig.main_proof_key_K; }
+        const rct::key& operator()(const SpCompositionProofMultisigPartial &partial_sig) const
+        { return partial_sig.K; }
     };
 
     return variant.visit(visitor{});
 }
 //-------------------------------------------------------------------------------------------------------------------
-} //namespace sp
+const rct::key& message_ref(const MultisigPartialSigVariant &variant)
+{
+    struct visitor : public sp::SpVariantStaticVisitor<const rct::key&>
+    {
+        using SpVariantStaticVisitor::operator();  //for blank overload
+        const rct::key& operator()(const CLSAGMultisigPartial &partial_sig) const
+        { return partial_sig.message; }
+        const rct::key& operator()(const SpCompositionProofMultisigPartial &partial_sig) const
+        { return partial_sig.message; }
+    };
+
+    return variant.visit(visitor{});
+}
+//-------------------------------------------------------------------------------------------------------------------
+} //namespace multisig

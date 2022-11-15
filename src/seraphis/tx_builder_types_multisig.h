@@ -34,15 +34,15 @@
 #pragma once
 
 //local headers
-#include "clsag_multisig.h"
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "jamtis_payment_proposal.h"
 #include "legacy_enote_types.h"
+#include "multisig/multisig_clsag.h"
 #include "multisig/multisig_signer_set_filter.h"
+#include "multisig/multisig_sp_composition_proof.h"
 #include "ringct/rctTypes.h"
-#include "sp_composition_proof_multisig.h"
 #include "sp_core_types.h"
 #include "tx_builder_types.h"
 #include "tx_builder_types_legacy.h"
@@ -56,11 +56,8 @@
 #include <vector>
 
 //forward declarations
-namespace sp
-{
-    struct CLSAGMultisigProposal;
-    struct LegacyEnoteRecord;
-}
+namespace multisig { struct CLSAGMultisigProposal; }
+namespace sp { struct LegacyEnoteRecord; }
 
 
 namespace sp
@@ -112,7 +109,7 @@ struct LegacyMultisigInputProposalV1 final
     * ...
     * return: true if all alignment checks pass
     */
-    bool matches_with(const CLSAGMultisigProposal &proof_proposal) const;
+    bool matches_with(const multisig::CLSAGMultisigProposal &proof_proposal) const;
     bool matches_with(const LegacyEnoteRecord &enote_record) const;
 };
 
@@ -183,9 +180,9 @@ struct SpMultisigTxProposalV1 final
     /// seraphis tx inputs to sign with multisig (NOT SORTED)
     std::vector<SpMultisigInputProposalV1> m_sp_multisig_input_proposals;
     /// legacy ring signature proposals (CLSAGs) for each legacy input proposal (ALIGNED TO SORTED LEGACY INPUTS)
-    std::vector<CLSAGMultisigProposal> m_legacy_input_proof_proposals;
+    std::vector<multisig::CLSAGMultisigProposal> m_legacy_input_proof_proposals;
     /// composition proof proposals for each seraphis input proposal (ALIGNED TO SORTED LEGACY INPUTS)
-    std::vector<SpCompositionProofMultisigProposal> m_sp_input_proof_proposals;
+    std::vector<multisig::SpCompositionProofMultisigProposal> m_sp_input_proof_proposals;
     /// all multisig signers who should participate in signing this proposal
     /// - the set may be larger than 'threshold', in which case every permutation of 'threshold' signers will attempt to sign
     multisig::signer_set_filter m_aggregate_signer_set_filter;

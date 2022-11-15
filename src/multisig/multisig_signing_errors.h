@@ -50,7 +50,7 @@
 #include <string>
 
 
-namespace sp
+namespace multisig
 {
 
 struct dummy_multisig_exception : public std::exception
@@ -220,7 +220,7 @@ struct MultisigSigningErrorBadSigSet final
 // MultisigSigningErrorVariant
 ///
 using MultisigSigningErrorVariant =
-    SpVariant<
+    sp::SpVariant<
         MultisigSigningErrorBadInitSet,
         MultisigSigningErrorBadInitSetCollection,
         MultisigSigningErrorAvailableSigners,
@@ -232,4 +232,4 @@ using MultisigSigningErrorVariant =
     >;
 const std::string& error_message_ref(const MultisigSigningErrorVariant &variant);
 
-} //namespace sp
+} //namespace multisig
