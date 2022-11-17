@@ -347,10 +347,4 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
     std::vector<LegacyInputV1> &legacy_inputs_out,
     std::vector<SpPartialInputV1> &sp_partial_inputs_out);
 
-//todo
-bool try_gen_legacy_multisig_ring_signature_preps_v1(const std::list<LegacyContextualEnoteRecordV1> &contextual_records,
-    const std::uint64_t legacy_ring_size,
-    const MockLedgerContext &ledger_context,
-    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> &mapped_preps_out);
-
 } //namespace sp

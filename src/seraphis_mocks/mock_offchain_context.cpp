@@ -34,15 +34,15 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
-#include "jamtis_enote_utils.h"
 #include "misc_log_ex.h"
 #include "ringct/rctTypes.h"
-#include "sp_core_enote_utils.h"
-#include "tx_component_types.h"
-#include "tx_component_types_legacy.h"
-#include "tx_enote_scanning.h"
-#include "tx_enote_scanning_utils.h"
-#include "txtype_squashed_v1.h"
+#include "seraphis/jamtis_enote_utils.h"
+#include "seraphis/sp_core_enote_utils.h"
+#include "seraphis/tx_component_types.h"
+#include "seraphis/tx_component_types_legacy.h"
+#include "seraphis/tx_enote_scanning.h"
+#include "seraphis/tx_enote_scanning_utils.h"
+#include "seraphis/txtype_squashed_v1.h"
 
 //third party headers
 #include <boost/thread/locks.hpp>
@@ -52,7 +52,7 @@
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+#define MONERO_DEFAULT_LOG_CATEGORY "seraphis_mocks"
 
 namespace sp
 {

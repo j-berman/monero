@@ -36,7 +36,6 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
-#include "mock_ledger_context.h"
 #include "ringct/rctTypes.h"
 #include "sp_core_types.h"
 #include "tx_binned_reference_set.h"
@@ -255,71 +254,5 @@ void make_v1_partial_inputs_v1(const std::vector<SpInputProposalV1> &input_propo
     const rct::key &proposal_prefix,
     const crypto::secret_key &sp_spend_privkey,
     std::vector<SpPartialInputV1> &partial_inputs_out);
-/**
-* brief: gen_mock_sp_input_proposals_v1 - create random mock inputs
-* param: sp_spend_privkey -
-* param: in_amounts -
-* return: set of transaction inputs ready to spend
-*/
-std::vector<SpInputProposalV1> gen_mock_sp_input_proposals_v1(const crypto::secret_key &sp_spend_privkey,
-    const std::vector<rct::xmr_amount> in_amounts);
-/**
-* brief: gen_mock_sp_membership_proof_prep_v1 - create a random reference set for an enote, with real spend at a random index,
-*   and update mock ledger to include all members of the reference set (including squashed enotes)
-* param: input_enote -
-* param: ref_set_decomp_n -
-* param: ref_set_decomp_m -
-* inoutparam: ledger_context_inout -
-* return: a reference set that can be used to make a membership proof
-*/
-SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_for_enote_at_pos_v1(const SpEnote &real_reference_enote,
-    const std::uint64_t &real_reference_index_in_ledger,
-    const crypto::secret_key &address_mask,
-    const crypto::secret_key &commitment_mask,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
-    const MockLedgerContext &ledger_context);
-SpMembershipProofPrepV1 gen_mock_sp_membership_proof_prep_v1(
-    const SpEnote &real_reference_enote,
-    const crypto::secret_key &address_mask,
-    const crypto::secret_key &commitment_mask,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
-    MockLedgerContext &ledger_context_inout);
-std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
-    const std::vector<SpEnote> &real_referenced_enotes,
-    const std::vector<crypto::secret_key> &address_masks,
-    const std::vector<crypto::secret_key> &commitment_masks,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
-    MockLedgerContext &ledger_context_inout);
-std::vector<SpMembershipProofPrepV1> gen_mock_sp_membership_proof_preps_v1(
-    const std::vector<SpInputProposalV1> &input_proposals,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const SpBinnedReferenceSetConfigV1 &bin_config,
-    MockLedgerContext &ledger_context_inout);
-/**
-* brief: make_mock_sp_membership_proof_preps_for_inputs_v1 - use a mock ledger to prepare membership proofs for enotes
-*   in that mock ledger
-* param: input_ledger_mappings - 
-* param: input_proposals -
-* param: ref_set_decomp_n -
-* param: ref_set_decomp_m -
-* param: bin_config -
-* param: ledger_context -
-* outparam: membership_proof_preps_out -
-*/
-void make_mock_sp_membership_proof_preps_for_inputs_v1(
-    const std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings,
-    const std::vector<sp::SpInputProposalV1> &input_proposals,
-    const std::size_t ref_set_decomp_n,
-    const std::size_t ref_set_decomp_m,
-    const sp::SpBinnedReferenceSetConfigV1 &bin_config,
-    const sp::MockLedgerContext &ledger_context,
-    std::vector<sp::SpMembershipProofPrepV1> &membership_proof_preps_out);
 
 } //namespace sp

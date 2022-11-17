@@ -27,13 +27,12 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "ringct/rctTypes.h"
-#include "seraphis/mock_ledger_context.h"
 #include "seraphis/serialization_demo_types.h"
 #include "seraphis/serialization_demo_utils.h"
 #include "seraphis/tx_base.h"
 #include "seraphis/tx_binned_reference_set.h"
-#include "seraphis/tx_validation_context_mock.h"
 #include "seraphis/txtype_squashed_v1.h"
+#include "seraphis_mocks/seraphis_mocks.h"
 #include "span.h"
 
 #include "gtest/gtest.h"

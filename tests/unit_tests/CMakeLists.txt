@@ -132,6 +132,7 @@ target_link_libraries(unit_tests
     serialization
     seraphis
     seraphis_crypto
+    seraphis_mocks
     wallet
     p2p
     version

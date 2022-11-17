@@ -41,6 +41,7 @@ extern "C"
 #include "seraphis/legacy_enote_utils.h"
 #include "seraphis/tx_enote_record_types.h"
 #include "seraphis/tx_enote_record_utils_legacy.h"
+#include "seraphis_mocks/seraphis_mocks.h"
 
 #include "boost/multiprecision/cpp_int.hpp"
 #include "gtest/gtest.h"
@@ -54,27 +55,6 @@ extern "C"
 static crypto::secret_key make_secret_key()
 {
     return rct::rct2sk(rct::skGen());
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void make_legacy_subaddress(const rct::key &legacy_base_spend_pubkey,
-    const crypto::secret_key &legacy_view_privkey,
-    rct::key &subaddr_spendkey_out,
-    rct::key &subaddr_viewkey_out,
-    cryptonote::subaddress_index &subaddr_index_out)
-{
-    // random subaddress index: i
-    crypto::rand(sizeof(subaddr_index_out.minor), reinterpret_cast<unsigned char*>(&subaddr_index_out.minor));
-    crypto::rand(sizeof(subaddr_index_out.major), reinterpret_cast<unsigned char*>(&subaddr_index_out.major));
-
-    // subaddress spendkey: (Hn(k^v, i) + k^s) G
-    sp::make_legacy_subaddress_spendkey(legacy_base_spend_pubkey,
-        legacy_view_privkey,
-        subaddr_index_out,
-        subaddr_spendkey_out);
-
-    // subaddress viewkey: k^v * K^{s,i}
-    rct::scalarmultKey(subaddr_viewkey_out, subaddr_spendkey_out, rct::sk2rct(legacy_view_privkey));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -191,7 +171,7 @@ TEST(seraphis_legacy, information_recovery_enote_v1)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     // save subaddress
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
@@ -268,7 +248,7 @@ TEST(seraphis_legacy, information_recovery_enote_v2)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     // save subaddress
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
@@ -345,7 +325,7 @@ TEST(seraphis_legacy, information_recovery_enote_v3)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     // save subaddress
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;
@@ -422,7 +402,7 @@ TEST(seraphis_legacy, information_recovery_enote_v4)
     rct::key subaddr_viewkey;
     cryptonote::subaddress_index subaddr_index;
 
-    make_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
+    gen_legacy_subaddress(legacy_base_spend_pubkey, legacy_view_privkey, subaddr_spendkey, subaddr_viewkey, subaddr_index);
 
     // save subaddress
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map;

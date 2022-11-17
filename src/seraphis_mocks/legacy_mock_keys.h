@@ -1,21 +1,21 @@
 // Copyright (c) 2022, The Monero Project
-//
+// 
 // All rights reserved.
-//
+// 
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-//
+// 
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-//
+// 
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-//
+// 
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-//
+// 
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -28,30 +28,47 @@
 
 // NOT FOR PRODUCTION
 
-//paired header
-#include "tx_base.h"
+// Legacy mock keys.
+
+
+#pragma once
 
 //local headers
+#include "crypto/crypto.h"
+#include "cryptonote_basic/subaddress_index.h"
+#include "ringct/rctTypes.h"
 
 //third party headers
 
 //standard headers
-#include <vector>
 
-#undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+//forward declarations
+
 
 namespace sp
 {
-//-------------------------------------------------------------------------------------------------------------------
-bool validate_tx(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context)
+
+////
+// A set of legacy keys for mock-ups/unit testing
+///
+struct legacy_mock_keys final
 {
-    return validate_txs_impl<SpTxSquashedV1>({&tx}, tx_validation_context);
-}
-//-------------------------------------------------------------------------------------------------------------------
-bool validate_txs(const std::vector<const SpTxSquashedV1*> &txs, const TxValidationContext &tx_validation_context)
-{
-    return validate_txs_impl<SpTxSquashedV1>(txs, tx_validation_context);
-}
-//-------------------------------------------------------------------------------------------------------------------
+    crypto::secret_key k_s;  //spend privkey
+    crypto::secret_key k_v;  //view privkey
+    rct::key Ks;             //main spend pubkey: Ks = k_s G
+    rct::key Kv;             //main view pubkey:  Kv = k_v G
+};
+
+//todo
+void gen_legacy_subaddress(const rct::key &legacy_base_spend_pubkey,
+    const crypto::secret_key &legacy_view_privkey,
+    rct::key &subaddr_spendkey_out,
+    rct::key &subaddr_viewkey_out,
+    cryptonote::subaddress_index &subaddr_index_out);
+/**
+* brief: make_legacy_mock_keys - make a set of mock legacy keys (for mock-ups/unit testing)
+* outparam: legacy_mock_keys -
+*/
+void make_legacy_mock_keys(legacy_mock_keys &keys_out);
+
 } //namespace sp

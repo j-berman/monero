@@ -32,9 +32,9 @@
 #include "tx_input_selector_mocks.h"
 
 //local headers
-#include "tx_contextual_enote_record_types.h"
-#include "tx_contextual_enote_record_utils.h"
-#include "tx_input_selection.h"
+#include "seraphis/tx_contextual_enote_record_types.h"
+#include "seraphis/tx_contextual_enote_record_utils.h"
+#include "seraphis/tx_input_selection.h"
 
 //third party headers
 #include "boost/container/map.hpp"
@@ -45,7 +45,7 @@
 #include <list>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+#define MONERO_DEFAULT_LOG_CATEGORY "seraphis_mocks"
 
 namespace sp
 {

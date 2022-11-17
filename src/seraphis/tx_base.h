@@ -175,28 +175,4 @@ bool validate_txs_impl(const std::vector<const SpTxType*> &txs, const TxValidati
 bool validate_tx(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context);
 bool validate_txs(const std::vector<const SpTxSquashedV1*> &txs, const TxValidationContext &tx_validation_context);
 
-
-//// mock-ups
-
-/**
-* brief: make_mock_tx - make a mock transaction
-* type: SpTxType - 
-* type: SpTxParamsT -
-* param: params -
-* param: legacy_in_amounts -
-* param: sp_in_amounts -
-* param: out_amounts -
-* param: discretized_transaction_fee -
-* inoutparam: ledger_context_inout -
-* outparam: tx_out -
-*/
-template <typename SpTxType, typename SpTxParamsT>
-void make_mock_tx(const SpTxParamsT &params,
-    const std::vector<rct::xmr_amount> &legacy_in_amounts,
-    const std::vector<rct::xmr_amount> &sp_in_amounts,
-    const std::vector<rct::xmr_amount> &out_amounts,
-    const DiscretizedFee &discretized_transaction_fee,
-    MockLedgerContext &ledger_context_inout,
-    SpTxType &tx_out);
-
 } //namespace sp

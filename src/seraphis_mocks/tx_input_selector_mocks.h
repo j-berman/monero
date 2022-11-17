@@ -34,9 +34,9 @@
 #pragma once
 
 //local headers
-#include "tx_contextual_enote_record_types.h"
 #include "tx_enote_store_mocks.h"
-#include "tx_input_selection.h"
+#include "seraphis/tx_contextual_enote_record_types.h"
+#include "seraphis/tx_input_selection.h"
 
 //third party headers
 #include "boost/multiprecision/cpp_int.hpp"

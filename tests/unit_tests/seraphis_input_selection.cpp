@@ -33,12 +33,9 @@
 #include "seraphis/tx_contextual_enote_record_types.h"
 #include "seraphis/tx_contextual_enote_record_utils.h"
 #include "seraphis/tx_enote_record_types.h"
-#include "seraphis/tx_enote_store_mocks.h"
 #include "seraphis/tx_fee_calculator.h"
-#include "seraphis/tx_fee_calculator_mocks.h"
 #include "seraphis/tx_input_selection.h"
-#include "seraphis/tx_input_selection_output_context_mocks.h"
-#include "seraphis/tx_input_selector_mocks.h"
+#include "seraphis_mocks/seraphis_mocks.h"
 
 #include "boost/multiprecision/cpp_int.hpp"
 #include "gtest/gtest.h"

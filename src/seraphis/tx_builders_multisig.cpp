@@ -1493,32 +1493,4 @@ bool try_make_inputs_for_multisig_v1(const SpMultisigTxProposalV1 &multisig_tx_p
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool try_gen_legacy_multisig_ring_signature_preps_v1(const std::list<LegacyContextualEnoteRecordV1> &contextual_records,
-    const std::uint64_t legacy_ring_size,
-    const MockLedgerContext &ledger_context,
-    std::unordered_map<crypto::key_image, LegacyMultisigRingSignaturePrepV1> &mapped_preps_out)
-{
-    // extract map [ legacy KI : enote ledger index ] from contextual records
-    std::unordered_map<crypto::key_image, std::uint64_t> enote_ledger_mappings;
-
-    if (!try_get_membership_proof_real_reference_mappings(contextual_records, enote_ledger_mappings))
-        return false;
-
-    // generate legacy multisig ring signature preps for each legacy enote requested
-    for (const auto &enote_ledger_mapping : enote_ledger_mappings)
-    {
-        LegacyMultisigRingSignaturePrepV1 &prep = mapped_preps_out[enote_ledger_mapping.first];
-        prep.m_key_image = enote_ledger_mapping.first;
-
-        gen_mock_legacy_ring_signature_members_for_enote_at_pos_v1(enote_ledger_mapping.second,
-            legacy_ring_size,
-            ledger_context,
-            prep.m_reference_set,
-            prep.m_referenced_enotes,
-            prep.m_real_reference_index);
-    }
-
-    return true;
-}
-//-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

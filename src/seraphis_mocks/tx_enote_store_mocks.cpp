@@ -32,13 +32,12 @@
 #include "tx_enote_store_mocks.h"
 
 //local headers
-#include "cryptonote_config.h"
-#include "legacy_enote_utils.h"
 #include "misc_log_ex.h"
+#include "seraphis/legacy_enote_utils.h"
+#include "seraphis/tx_contextual_enote_record_types.h"
+#include "seraphis/tx_contextual_enote_record_utils.h"
+#include "seraphis/tx_enote_record_utils_legacy.h"
 #include "seraphis_crypto/sp_misc_utils.h"
-#include "tx_contextual_enote_record_types.h"
-#include "tx_contextual_enote_record_utils.h"
-#include "tx_enote_record_utils_legacy.h"
 
 //third party headers
 
@@ -53,7 +52,7 @@
 #include <utility>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+#define MONERO_DEFAULT_LOG_CATEGORY "seraphis_mocks"
 
 namespace sp
 {

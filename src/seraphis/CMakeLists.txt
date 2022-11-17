@@ -38,8 +38,6 @@ set(seraphis_sources
   legacy_decoy_selector_flat.cpp
   legacy_enote_types.cpp
   legacy_enote_utils.cpp
-  mock_ledger_context.cpp
-  mock_offchain_context.cpp
   serialization_demo_utils.cpp
   sp_core_enote_utils.cpp
   sp_core_types.cpp
@@ -59,18 +57,14 @@ set(seraphis_sources
   tx_contextual_enote_record_types.cpp
   tx_contextual_enote_record_utils.cpp
   tx_discretized_fee.cpp
-  tx_enote_finding_context_mocks.cpp
   tx_enote_record_utils.cpp
   tx_enote_record_utils_legacy.cpp
   tx_enote_scanning.cpp
   tx_enote_scanning_utils.cpp
-  tx_enote_store_mocks.cpp
-  tx_enote_store_updater_mocks.cpp
   tx_extra.cpp
   tx_fee_calculator_squashed_v1.cpp
   tx_input_selection.cpp
   tx_input_selection_output_context_v1.cpp
-  tx_input_selector_mocks.cpp
   tx_ref_set_index_mapper_flat.cpp
   tx_validators.cpp
   txtype_squashed_v1.cpp)

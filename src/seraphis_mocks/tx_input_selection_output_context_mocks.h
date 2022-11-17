@@ -28,30 +28,54 @@
 
 // NOT FOR PRODUCTION
 
-//paired header
-#include "tx_base.h"
+// Utilities for selecting tx inputs from an enote storage.
+
+
+#pragma once
 
 //local headers
+#include "ringct/rctTypes.h"
+#include "seraphis/tx_input_selection_output_context.h"
 
 //third party headers
+#include "boost/multiprecision/cpp_int.hpp"
 
 //standard headers
-#include <vector>
 
-#undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+//forward declarations
+
 
 namespace sp
 {
-//-------------------------------------------------------------------------------------------------------------------
-bool validate_tx(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context)
+
+class OutputSetContextForInputSelectionMockSimple final : public OutputSetContextForInputSelection
 {
-    return validate_txs_impl<SpTxSquashedV1>({&tx}, tx_validation_context);
-}
-//-------------------------------------------------------------------------------------------------------------------
-bool validate_txs(const std::vector<const SpTxSquashedV1*> &txs, const TxValidationContext &tx_validation_context)
-{
-    return validate_txs_impl<SpTxSquashedV1>(txs, tx_validation_context);
-}
-//-------------------------------------------------------------------------------------------------------------------
+public:
+//constructors
+    OutputSetContextForInputSelectionMockSimple(const std::vector<rct::xmr_amount> &output_amounts,
+        const std::size_t num_additional_with_change) :
+            m_num_outputs{output_amounts.size()},
+            m_num_additional_with_change{num_additional_with_change}
+    {
+        m_output_amount = 0;
+
+        for (const rct::xmr_amount output_amount : output_amounts)
+            m_output_amount += output_amount;
+    }
+
+//member functions
+    /// get total output amount
+    boost::multiprecision::uint128_t total_amount() const override { return m_output_amount; }
+    /// get number of outputs assuming no change
+    std::size_t num_outputs_nochange() const override { return m_num_outputs; }
+    /// get number of outputs assuming non-zero change
+    std::size_t num_outputs_withchange() const override { return m_num_outputs + m_num_additional_with_change; }
+
+//member variables
+private:
+    std::size_t m_num_outputs;
+    boost::multiprecision::uint128_t m_output_amount;
+    std::size_t m_num_additional_with_change;
+};
+
 } //namespace sp

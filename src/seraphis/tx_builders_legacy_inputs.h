@@ -35,7 +35,6 @@
 
 //local headers
 #include "crypto/crypto.h"
-#include "mock_ledger_context.h"
 #include "ringct/rctTypes.h"
 #include "tx_builder_types_legacy.h"
 #include "tx_component_types_legacy.h"
@@ -118,45 +117,5 @@ void make_v1_legacy_inputs_v1(const rct::key &proposal_prefix,
     std::vector<LegacyRingSignaturePrepV1> ring_signature_preps,  //must align with input_proposals
     const crypto::secret_key &legacy_spend_privkey,
     std::vector<LegacyInputV1> &inputs_out);
-//todo
-std::vector<LegacyInputProposalV1> gen_mock_legacy_input_proposals_v1(const crypto::secret_key &legacy_spend_privkey,
-    const std::vector<rct::xmr_amount> &input_amounts);
-void gen_mock_legacy_ring_signature_members_for_enote_at_pos_v1(const std::uint64_t real_reference_index_in_ledger,
-    const std::uint64_t ring_size,
-    const MockLedgerContext &ledger_context,
-    std::vector<std::uint64_t> &reference_set_out,
-    rct::ctkeyV &referenced_enotes_out,
-    std::uint64_t &real_reference_index_out);
-LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_for_enote_at_pos_v1(const rct::key &proposal_prefix,
-    const std::uint64_t real_reference_index_in_ledger,
-    const LegacyEnoteImageV2 &real_reference_image,
-    const crypto::secret_key &real_reference_view_privkey,
-    const crypto::secret_key &commitment_mask,
-    const std::uint64_t ring_size,
-    const MockLedgerContext &ledger_context);
-LegacyRingSignaturePrepV1 gen_mock_legacy_ring_signature_prep_v1(const rct::key &proposal_prefix,
-    const rct::ctkey &real_reference_enote,
-    const LegacyEnoteImageV2 &real_reference_image,
-    const crypto::secret_key &real_reference_view_privkey,
-    const crypto::secret_key &commitment_mask,
-    const std::uint64_t ring_size,
-    MockLedgerContext &ledger_context_inout);
-std::vector<LegacyRingSignaturePrepV1> gen_mock_legacy_ring_signature_preps_v1(const rct::key &proposal_prefix,
-    const rct::ctkeyV &real_referenced_enotes,
-    const std::vector<LegacyEnoteImageV2> &real_reference_images,
-    const std::vector<crypto::secret_key> &real_reference_view_privkeys,
-    const std::vector<crypto::secret_key> &commitment_masks,
-    const std::uint64_t ring_size,
-    MockLedgerContext &ledger_context_inout);
-std::vector<LegacyRingSignaturePrepV1> gen_mock_legacy_ring_signature_preps_v1(const rct::key &proposal_prefix,
-    const std::vector<LegacyInputProposalV1> &input_proposals,
-    const std::uint64_t ring_size,
-    MockLedgerContext &ledger_context_inout);
-void make_mock_legacy_ring_signature_preps_for_inputs_v1(const rct::key &proposal_prefix,
-    const std::unordered_map<crypto::key_image, std::uint64_t> &input_ledger_mappings,
-    const std::vector<LegacyInputProposalV1> &input_proposals,
-    const std::uint64_t ring_size,
-    const MockLedgerContext &ledger_context,
-    std::vector<LegacyRingSignaturePrepV1> &ring_signature_preps_out);
 
 } //namespace sp

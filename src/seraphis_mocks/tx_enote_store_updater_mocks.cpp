@@ -34,11 +34,11 @@
 //local headers
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
-#include "jamtis_core_utils.h"
 #include "ringct/rctTypes.h"
-#include "tx_enote_record_types.h"
-#include "tx_enote_scanning.h"
-#include "tx_enote_scanning_utils.h"
+#include "seraphis/jamtis_core_utils.h"
+#include "seraphis/tx_enote_record_types.h"
+#include "seraphis/tx_enote_scanning.h"
+#include "seraphis/tx_enote_scanning_utils.h"
 #include "tx_enote_store_mocks.h"
 
 //third party headers
@@ -51,7 +51,7 @@
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+#define MONERO_DEFAULT_LOG_CATEGORY "seraphis_mocks"
 
 namespace sp
 {

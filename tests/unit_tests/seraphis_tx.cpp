@@ -29,12 +29,11 @@
 #include "crypto/crypto.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "seraphis/mock_ledger_context.h"
 #include "seraphis/tx_base.h"
 #include "seraphis/tx_binned_reference_set.h"
-#include "seraphis/tx_validation_context_mock.h"
 #include "seraphis/txtype_squashed_v1.h"
 #include "seraphis_crypto/sp_misc_utils.h"
+#include "seraphis_mocks/seraphis_mocks.h"
 
 #include "gtest/gtest.h"
 

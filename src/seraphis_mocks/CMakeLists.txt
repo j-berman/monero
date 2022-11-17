@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2022, The Monero Project
+# Copyright (c) 2021, The Monero Project
 #
 # All rights reserved.
 #
@@ -26,59 +26,41 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-set(performance_tests_sources
-  main.cpp)
+set(seraphis_mocks_sources
+  jamtis_mock_keys.cpp
+  legacy_mock_keys.cpp
+  make_mock_tx.cpp
+  mock_ledger_context.cpp
+  mock_offchain_context.cpp
+  mock_tx_builders_inputs.cpp
+  mock_tx_builders_legacy_inputs.cpp
+  mock_tx_builders_outputs.cpp
+  tx_enote_finding_context_mocks.cpp
+  tx_enote_store_mocks.cpp
+  tx_enote_store_updater_mocks.cpp
+  tx_input_selector_mocks.cpp)
 
-set(performance_tests_headers
-  check_tx_signature.h
-  check_hash.h
-  cn_slow_hash.h
-  construct_tx.h
-  derive_public_key.h
-  derive_secret_key.h
-  ge_frombytes_vartime.h
-  generate_key_derivation.h
-  generate_key_image.h
-  generate_key_image_helper.h
-  generate_keypair.h
-  grootle.h
-  signature.h
-  is_out_to_acc.h
-  out_can_be_to_acc.h
-  subaddress_expand.h
-  range_proof.h
-  bulletproof.h
-  bulletproof_plus.h
-  crypto_ops.h
-  sc_reduce32.h
-  sc_check.h
-  multiexp.h
-  multi_tx_test_base.h
-  performance_tests.h
-  performance_utils.h
-  single_tx_test_base.h
-  balance_check.h
-  seraphis_tx.h
-  view_scan.h)
+monero_find_all_headers(seraphis_mocks_headers, "${CMAKE_CURRENT_SOURCE_DIR}")
 
-monero_add_minimal_executable(performance_tests
-  ${performance_tests_sources}
-  ${performance_tests_headers})
-target_link_libraries(performance_tests
-  PRIVATE
-    wallet
-    cryptonote_core
-    common
+monero_add_library(seraphis_mocks
+  ${seraphis_mocks_sources}
+  ${seraphis_mocks_headers})
+
+target_link_libraries(seraphis_mocks
+  PUBLIC
     cncrypto
+    common
+    cryptonote_basic
+    device
     epee
-    randomx
     ringct
     seraphis
     seraphis_crypto
-    seraphis_mocks
-    ${Boost_CHRONO_LIBRARY}
-    ${CMAKE_THREAD_LIBS_INIT}
+  PRIVATE
     ${EXTRA_LIBRARIES})
-set_property(TARGET performance_tests
-  PROPERTY
-    FOLDER "tests")
+
+target_include_directories(seraphis_mocks
+  PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE
+    ${Boost_INCLUDE_DIRS})

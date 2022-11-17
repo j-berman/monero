@@ -307,32 +307,4 @@ void extract_legacy_enote_ephemeral_pubkeys_from_tx_extra(const TxExtra &tx_extr
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void gen_legacy_subaddress(const rct::key &legacy_base_spend_pubkey,
-    const crypto::secret_key &legacy_view_privkey,
-    rct::key &subaddr_spendkey_out,
-    rct::key &subaddr_viewkey_out,
-    cryptonote::subaddress_index &subaddr_index_out)
-{
-    // random subaddress index: i
-    crypto::rand(sizeof(subaddr_index_out.minor), reinterpret_cast<unsigned char*>(&subaddr_index_out.minor));
-    crypto::rand(sizeof(subaddr_index_out.major), reinterpret_cast<unsigned char*>(&subaddr_index_out.major));
-
-    // subaddress spendkey: (Hn(k^v, i) + k^s) G
-    make_legacy_subaddress_spendkey(legacy_base_spend_pubkey,
-        legacy_view_privkey,
-        subaddr_index_out,
-        subaddr_spendkey_out);
-
-    // subaddress viewkey: k^v * K^{s,i}
-    rct::scalarmultKey(subaddr_viewkey_out, subaddr_spendkey_out, rct::sk2rct(legacy_view_privkey));
-}
-//-------------------------------------------------------------------------------------------------------------------
-void make_legacy_mock_keys(legacy_mock_keys &keys_out)
-{
-    keys_out.k_s = rct::rct2sk(rct::skGen());
-    keys_out.k_v = rct::rct2sk(rct::skGen());
-    keys_out.Ks = rct::scalarmultBase(rct::sk2rct(keys_out.k_s));
-    keys_out.Kv = rct::scalarmultBase(rct::sk2rct(keys_out.k_v));
-}
-//-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

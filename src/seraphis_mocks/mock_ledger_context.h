@@ -39,11 +39,11 @@
 #include "crypto/crypto.h"
 #include "crypto/x25519.h"
 #include "cryptonote_basic/subaddress_index.h"
-#include "legacy_enote_types.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
+#include "seraphis/legacy_enote_types.h"
+#include "seraphis/tx_component_types.h"
 #include "seraphis_crypto/sp_crypto_utils.h"
-#include "tx_component_types.h"
 
 //third party headers
 #include <boost/thread/shared_mutex.hpp>

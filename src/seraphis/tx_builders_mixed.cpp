@@ -38,7 +38,6 @@
 #include "jamtis_support_types.h"
 #include "misc_language.h"
 #include "misc_log_ex.h"
-#include "mock_ledger_context.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
 #include "seraphis_crypto/bulletproofs_plus2.h"
@@ -47,6 +46,7 @@
 #include "seraphis_crypto/sp_misc_utils.h"
 #include "seraphis_crypto/sp_transcript.h"
 #include "sp_core_enote_utils.h"
+#include "tx_binned_reference_set_utils.h"
 #include "tx_builder_types.h"
 #include "tx_builders_inputs.h"
 #include "tx_builders_legacy_inputs.h"
@@ -55,7 +55,7 @@
 #include "tx_component_types_legacy.h"
 #include "tx_contextual_enote_record_utils.h"
 #include "tx_input_selection_output_context_v1.h"
-#include "tx_validation_context_mock.h"
+#include "tx_ref_set_index_mapper_flat.h"
 #include "txtype_squashed_v1.h"
 
 //third party headers
@@ -70,6 +70,80 @@
 
 namespace sp
 {
+////
+// TxValidationContextSimple
+// - assumes key images are not double-spent
+// - stores manually-specified reference set elements (useful for validating partial txs)
+///
+class TxValidationContextSimple final : public TxValidationContext
+{
+public:
+//constructors
+    TxValidationContextSimple(const std::unordered_map<std::uint64_t, rct::key> &sp_reference_set_proof_elements,
+        const std::unordered_map<std::uint64_t, rct::ctkey> &legacy_reference_set_proof_elements) :
+        m_sp_reference_set_proof_elements{sp_reference_set_proof_elements},
+        m_legacy_reference_set_proof_elements{legacy_reference_set_proof_elements}
+    {}
+
+//overloaded operators
+    /// disable copy/move (this is a scoped manager [reference wrapper])
+    TxValidationContextSimple& operator=(TxValidationContextSimple&&) = delete;
+
+//member functions
+    /**
+    * brief: key_image_exists_v1 - checks if a key image (linking tag) exists in the mock ledger
+    * param: key_image -
+    * return: true/false on check result
+    */
+    bool key_image_exists_v1(const crypto::key_image &key_image) const override
+    {
+        return false;
+    }
+    /**
+    * brief: get_reference_set_proof_elements_v1 - gets legacy {KI, C} pairs stored in the validation context
+    * param: indices -
+    * outparam: proof_elements_out - {KI, C}
+    */
+    void get_reference_set_proof_elements_v1(const std::vector<std::uint64_t> &indices,
+        rct::ctkeyV &proof_elements_out) const override
+    {
+        proof_elements_out.clear();
+        proof_elements_out.reserve(indices.size());
+
+        for (const std::uint64_t index : indices)
+        {
+            if (m_legacy_reference_set_proof_elements.find(index) != m_legacy_reference_set_proof_elements.end())
+                proof_elements_out.emplace_back(m_legacy_reference_set_proof_elements.at(index));
+            else
+                proof_elements_out.emplace_back(rct::ctkey{});
+        }
+    }
+    /**
+    * brief: get_reference_set_proof_elements_v2 - gets seraphis squashed enotes stored in the mock ledger
+    * param: indices -
+    * outparam: proof_elements_out - {squashed enote}
+    */
+    void get_reference_set_proof_elements_v2(const std::vector<std::uint64_t> &indices,
+        rct::keyV &proof_elements_out) const override
+    {
+        proof_elements_out.clear();
+        proof_elements_out.reserve(indices.size());
+
+        for (const std::uint64_t index : indices)
+        {
+            if (m_sp_reference_set_proof_elements.find(index) != m_sp_reference_set_proof_elements.end())
+                proof_elements_out.emplace_back(m_sp_reference_set_proof_elements.at(index));
+            else
+                proof_elements_out.emplace_back(rct::key{});
+        }
+    }
+
+//member variables
+private:
+    const std::unordered_map<std::uint64_t, rct::key> &m_sp_reference_set_proof_elements;
+    const std::unordered_map<std::uint64_t, rct::ctkey> &m_legacy_reference_set_proof_elements;
+};
+
 //-------------------------------------------------------------------------------------------------------------------
 // convert a crypto::secret_key vector to an rct::key vector, and obtain a memwiper for the rct::key vector
 //-------------------------------------------------------------------------------------------------------------------
@@ -134,6 +208,140 @@ static void sp_enote_records_to_input_proposals(const std::list<SpContextualEnot
             rct::rct2sk(rct::skGen()),
             rct::rct2sk(rct::skGen()),
             add_element(sp_input_proposals_out));
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void prepare_sp_membership_proof_prep_for_tx_simulation(const rct::keyV &reference_enotes_squashed,
+    const std::size_t real_reference_index,
+    const SpEnote &real_reference_enote,
+    const crypto::secret_key &address_mask,
+    const crypto::secret_key &commitment_mask,
+    const std::size_t ref_set_decomp_n,
+    const std::size_t ref_set_decomp_m,
+    const SpBinnedReferenceSetConfigV1 &bin_config,
+    SpMembershipProofPrepV1 &prep_out)
+{
+    /// checks and initialization
+    const std::size_t ref_set_size{ref_set_size_from_decomp(ref_set_decomp_n, ref_set_decomp_m)};  // n^m
+
+    CHECK_AND_ASSERT_THROW_MES(reference_enotes_squashed.size() > 0,
+        "prepare sp membership proof prep (tx simulation): insufficient reference elements.");
+    CHECK_AND_ASSERT_THROW_MES(reference_enotes_squashed.size() >= compute_bin_width(bin_config.m_bin_radius),
+        "prepare sp membership proof prep (tx simulation): insufficient reference elements.");
+    CHECK_AND_ASSERT_THROW_MES(real_reference_index < reference_enotes_squashed.size(),
+        "prepare sp membership proof prep (tx simulation): real reference is out of bounds.");
+    CHECK_AND_ASSERT_THROW_MES(validate_bin_config_v1(ref_set_size, bin_config),
+        "prepare sp membership proof prep (tx simulation): invalid binned reference set config.");
+
+
+    /// make binned reference set
+
+    // 1. flat index mapper for mock-up
+    const SpRefSetIndexMapperFlat flat_index_mapper{0, reference_enotes_squashed.size() - 1};
+
+    // 2. generator seed
+    rct::key generator_seed;
+    make_binned_ref_set_generator_seed_v1(real_reference_enote.m_onetime_address,
+        real_reference_enote.m_amount_commitment,
+        address_mask,
+        commitment_mask,
+        generator_seed);
+
+    // 3. binned reference set
+    make_binned_reference_set_v1(flat_index_mapper,
+        bin_config,
+        generator_seed,
+        ref_set_size,
+        real_reference_index,
+        prep_out.m_binned_reference_set);
+
+
+    /// copy all referenced enotes from the simulated ledger (in squashed enote representation)
+    std::vector<std::uint64_t> reference_indices;
+    CHECK_AND_ASSERT_THROW_MES(try_get_reference_indices_from_binned_reference_set_v1(prep_out.m_binned_reference_set,
+            reference_indices),
+        "prepare sp membership proof prep (tx simulation): could not extract reference indices from binned representation "
+        "(bug).");
+
+    prep_out.m_referenced_enotes_squashed.clear();
+    for (const std::uint64_t reference_index : reference_indices)
+    {
+        CHECK_AND_ASSERT_THROW_MES(reference_index < reference_enotes_squashed.size(),
+            "prepare sp membership proof prep (tx simulation): invalid index recovered from binned representation (bug).");
+        prep_out.m_referenced_enotes_squashed.emplace_back(reference_enotes_squashed.at(reference_index));
+    }
+
+
+    /// copy misc pieces
+    prep_out.m_ref_set_decomp_n = ref_set_decomp_n;
+    prep_out.m_ref_set_decomp_m = ref_set_decomp_m;
+    prep_out.m_real_reference_enote = real_reference_enote;
+    prep_out.m_address_mask = address_mask;
+    prep_out.m_commitment_mask = commitment_mask;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void prepare_sp_membership_proof_preps_for_tx_simulation(const std::vector<SpEnote> &real_reference_enotes,
+    const std::vector<crypto::secret_key> &address_masks,
+    const std::vector<crypto::secret_key> &commitment_masks,
+    const std::size_t ref_set_decomp_n,
+    const std::size_t ref_set_decomp_m,
+    const SpBinnedReferenceSetConfigV1 &bin_config,
+    std::vector<SpMembershipProofPrepV1> &preps_out,
+    std::unordered_map<std::uint64_t, rct::key> &sp_reference_set_proof_elements_out)
+{
+    preps_out.clear();
+    sp_reference_set_proof_elements_out.clear();
+
+    /// checks
+    CHECK_AND_ASSERT_THROW_MES(real_reference_enotes.size() == address_masks.size(),
+        "prepare sp membership proof preps (tx simulation): invalid number of address masks.");
+    CHECK_AND_ASSERT_THROW_MES(real_reference_enotes.size() == commitment_masks.size(),
+        "prepare sp membership proof preps (tx simulation): invalid number of commitment masks.");
+
+
+    /// make preps
+
+    // 1. convert real reference enotes to squashed representations
+    // - the enotes' indices in the input vectors will be treated as their indices in the simulated ledger
+    rct::keyV reference_enotes_squashed;
+    reference_enotes_squashed.reserve(real_reference_enotes.size());
+
+    for (std::size_t proof_index{0}; proof_index < real_reference_enotes.size(); ++proof_index)
+    {
+        make_seraphis_squashed_enote_Q(real_reference_enotes[proof_index].m_onetime_address,
+            real_reference_enotes[proof_index].m_amount_commitment,
+            add_element(reference_enotes_squashed));
+
+        // save the [ index : squashed enote ] mapping
+        sp_reference_set_proof_elements_out[proof_index] = reference_enotes_squashed.back();
+    }
+
+    // 2. pad the squashed enotes so there are enough to satisfy the binning config
+    for (std::size_t ref_set_index{reference_enotes_squashed.size()};
+        ref_set_index < compute_bin_width(bin_config.m_bin_radius);
+        ++ref_set_index)
+    {
+        reference_enotes_squashed.emplace_back(rct::pkGen());
+
+        // save the [ index : squashed enote ] mapping
+        sp_reference_set_proof_elements_out[ref_set_index] = reference_enotes_squashed.back();
+    }
+
+    // 3. make each membership proof prep
+    for (std::size_t proof_index{0}; proof_index < real_reference_enotes.size(); ++proof_index)
+    {
+        // make the proof prep
+        prepare_sp_membership_proof_prep_for_tx_simulation(reference_enotes_squashed,
+            proof_index,
+            real_reference_enotes[proof_index],
+            address_masks[proof_index],
+            commitment_masks[proof_index],
+            ref_set_decomp_n,
+            ref_set_decomp_m,
+            bin_config,
+            add_element(preps_out));
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -718,10 +926,7 @@ bool balance_check_in_out_amnts_v1(const std::vector<LegacyInputProposalV1> &leg
 void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
     const SpTxSquashedV1::SemanticRulesVersion semantic_rules_version)
 {
-    // 1. prepare a mock ledger
-    MockLedgerContext mock_ledger{0, 0};
-
-    // 2. get parameters for making mock seraphis ref sets (use minimum parameters for efficiency when possible)
+    // 1. get parameters for making mock seraphis ref sets (use minimum parameters for efficiency when possible)
     const SemanticConfigSpRefSetV1 ref_set_config{semantic_config_sp_ref_sets_v1(semantic_rules_version)};
     const SpBinnedReferenceSetConfigV1 bin_config{
             .m_bin_radius = static_cast<ref_set_bin_dimension_v1_t>(ref_set_config.m_bin_radius_min),
@@ -729,15 +934,17 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
         };
 
     // 3. make mock membership proof ref sets
-    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps{
-            gen_mock_sp_membership_proof_preps_v1(partial_tx.m_sp_input_enotes,
-                partial_tx.m_sp_address_masks,
-                partial_tx.m_sp_commitment_masks,
-                ref_set_config.m_decomp_n_min,
-                ref_set_config.m_decomp_m_min,
-                bin_config,
-                mock_ledger)
-        };
+    std::vector<SpMembershipProofPrepV1> sp_membership_proof_preps;
+    std::unordered_map<std::uint64_t, rct::key> sp_reference_set_proof_elements;
+
+    prepare_sp_membership_proof_preps_for_tx_simulation(partial_tx.m_sp_input_enotes,
+        partial_tx.m_sp_address_masks,
+        partial_tx.m_sp_commitment_masks,
+        ref_set_config.m_decomp_n_min,
+        ref_set_config.m_decomp_m_min,
+        bin_config,
+        sp_membership_proof_preps,
+        sp_reference_set_proof_elements);
 
     // 4. make the mock seraphis membership proofs
     std::vector<SpMembershipProofV1> sp_membership_proofs;
@@ -765,7 +972,10 @@ void check_v1_partial_tx_semantics_v1(const SpPartialTxV1 &partial_tx,
         test_tx);
 
     // 7. validate tx
-    const TxValidationContextMockPartial tx_validation_context{mock_ledger, legacy_reference_set_proof_elements};
+    const TxValidationContextSimple tx_validation_context{
+            sp_reference_set_proof_elements,
+            legacy_reference_set_proof_elements
+        };
 
     CHECK_AND_ASSERT_THROW_MES(validate_tx(test_tx, tx_validation_context),
         "v1 partial tx semantics check (v1): test transaction was invalid using requested semantics rules version!");

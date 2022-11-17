@@ -238,36 +238,4 @@ template <>
 bool validate_txs_batchable<SpTxSquashedV1>(const std::vector<const SpTxSquashedV1*> &txs,
     const TxValidationContext &tx_validation_context);
 
-
-//// mock-ups
-
-////
-// SpTxParamPackV1 - parameter pack (for unit tests/mockups/etc.)
-///
-struct SpTxParamPackV1
-{
-    std::size_t legacy_ring_size{0};
-    std::size_t ref_set_decomp_n{0};
-    std::size_t ref_set_decomp_m{0};
-    std::size_t num_random_memo_elements{0};
-    SpBinnedReferenceSetConfigV1 bin_config{0, 0};
-};
-/**
-* brief: make_mock_tx - make an SpTxSquashedV1 transaction
-* param: params -
-* param: legacy_in_amounts -
-* param: sp_in_amounts -
-* param: out_amounts -
-* inoutparam: ledger_context_inout -
-* outparam: tx_out -
-*/
-template <>
-void make_mock_tx<SpTxSquashedV1>(const SpTxParamPackV1 &params,
-    const std::vector<rct::xmr_amount> &legacy_in_amounts,
-    const std::vector<rct::xmr_amount> &sp_in_amounts,
-    const std::vector<rct::xmr_amount> &out_amounts,
-    const DiscretizedFee &discretized_transaction_fee,
-    MockLedgerContext &ledger_context_inout,
-    SpTxSquashedV1 &tx_out);
-
 } //namespace sp

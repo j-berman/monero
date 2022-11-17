@@ -39,8 +39,8 @@
 #include "crypto/x25519.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctTypes.h"
-#include "tx_component_types.h"
-#include "tx_component_types_legacy.h"
+#include "seraphis/tx_component_types.h"
+#include "seraphis/tx_component_types_legacy.h"
 
 //third party headers
 #include <boost/thread/shared_mutex.hpp>

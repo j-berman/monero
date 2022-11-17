@@ -55,22 +55,6 @@ namespace sp
 namespace jamtis
 {
 
-////
-// A set of jamtis keys for mock-ups/unit testing
-///
-struct jamtis_mock_keys
-{
-    crypto::secret_key k_m;   //master
-    crypto::secret_key k_vb;  //view-balance
-    crypto::x25519_secret_key xk_ua;  //unlock-amounts
-    crypto::x25519_secret_key xk_fr;  //find-received
-    crypto::secret_key s_ga;  //generate-address
-    crypto::secret_key s_ct;  //cipher-tag
-    rct::key K_1_base;        //wallet spend base = k_vb X + k_m U
-    crypto::x25519_pubkey xK_ua;     //unlock-amounts pubkey = xk_ua xG
-    crypto::x25519_pubkey xK_fr;     //find-received pubkey = xk_fr xk_ua xG
-};
-
 /**
 * brief: make_jamtis_unlockamounts_key - unlock-amounts key, for decrypting amounts and reconstructing amount commitments
 *   xk_ua = H_n_x25519[k_vb]()
@@ -104,13 +88,6 @@ void make_jamtis_generateaddress_secret(const crypto::secret_key &k_view_balance
 */
 void make_jamtis_ciphertag_secret(const crypto::secret_key &s_generate_address,
     crypto::secret_key &s_cipher_tag_out);
-
-
-/**
-* brief: make_jamtis_mock_keys - make a set of mock jamtis keys (for mock-ups/unit testing)
-* outparam: jamtis_mock_keys -
-*/
-void make_jamtis_mock_keys(jamtis_mock_keys &keys_out);
 
 } //namespace jamtis
 } //namespace sp

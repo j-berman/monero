@@ -29,29 +29,39 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "tx_base.h"
+#include "mock_tx_builders_outputs.h"
 
 //local headers
+#include "ringct/rctTypes.h"
+#include "seraphis/tx_builder_types.h"
+#include "seraphis_crypto/sp_misc_utils.h"
 
 //third party headers
 
 //standard headers
+#include <algorithm>
 #include <vector>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
-#define MONERO_DEFAULT_LOG_CATEGORY "seraphis"
+#define MONERO_DEFAULT_LOG_CATEGORY "seraphis_mocks"
 
 namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
-bool validate_tx(const SpTxSquashedV1 &tx, const TxValidationContext &tx_validation_context)
+std::vector<SpOutputProposalV1> gen_mock_sp_output_proposals_v1(const std::vector<rct::xmr_amount> &out_amounts,
+    const std::size_t num_random_memo_elements)
 {
-    return validate_txs_impl<SpTxSquashedV1>({&tx}, tx_validation_context);
-}
-//-------------------------------------------------------------------------------------------------------------------
-bool validate_txs(const std::vector<const SpTxSquashedV1*> &txs, const TxValidationContext &tx_validation_context)
-{
-    return validate_txs_impl<SpTxSquashedV1>(txs, tx_validation_context);
+    // generate random output proposals
+    std::vector<SpOutputProposalV1> output_proposals;
+    output_proposals.reserve(out_amounts.size());
+
+    for (const rct::xmr_amount out_amount : out_amounts)
+        add_element(output_proposals).gen(out_amount, num_random_memo_elements);
+
+    // sort them
+    std::sort(output_proposals.begin(), output_proposals.end());
+
+    return output_proposals;
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

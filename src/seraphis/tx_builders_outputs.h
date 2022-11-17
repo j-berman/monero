@@ -149,13 +149,5 @@ void finalize_v1_output_proposal_set_v1(const boost::multiprecision::uint128_t &
     const crypto::secret_key &k_view_balance,
     std::vector<jamtis::JamtisPaymentProposalV1> &normal_payment_proposals_inout,
     std::vector<jamtis::JamtisPaymentProposalSelfSendV1> &selfsend_payment_proposals_inout);
-/**
-* brief: gen_mock_sp_output_proposals_v1 - create random output proposals
-* param: out_amounts -
-* param: num_random_memo_elements -
-* return: set of generated output proposals
-*/
-std::vector<SpOutputProposalV1> gen_mock_sp_output_proposals_v1(const std::vector<rct::xmr_amount> &out_amounts,
-    const std::size_t num_random_memo_elements);
 
 } //namespace sp

@@ -29,10 +29,10 @@
 // NOT FOR PRODUCTION
 
 //paired header
-#include "crypto/crypto.h"
 #include "legacy_decoy_selector_flat.h"
 
 //local headers
+#include "crypto/crypto.h"
 #include "misc_log_ex.h"
 
 //third party headers
