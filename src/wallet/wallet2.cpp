@@ -2740,13 +2740,18 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
   if (try_incremental)
     req.pool_info_since = m_pool_info_query_time;
 
+  std::chrono::milliseconds duration;
   {
     const boost::lock_guard<boost::recursive_mutex> lock{m_daemon_rpc_mutex};
+    auto start = std::chrono::high_resolution_clock::now();
     bool r = net_utils::invoke_http_bin("/getblocks.bin", req, res, *m_http_client, rpc_timeout);
     THROW_ON_RPC_RESPONSE_ERROR(r, {}, res, "getblocks.bin", error::get_blocks_error, get_rpc_status(res.status));
     THROW_WALLET_EXCEPTION_IF(res.blocks.size() != res.output_indices.size(), error::wallet_internal_error,
         "mismatched blocks (" + boost::lexical_cast<std::string>(res.blocks.size()) + ") and output_indices (" +
         boost::lexical_cast<std::string>(res.output_indices.size()) + ") sizes from daemon");
+    auto stop = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    m_duration_getting_blocks += duration;
   }
 
   blocks_start_height = res.start_height;
@@ -2756,9 +2761,10 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
   if (res.pool_info_extent != COMMAND_RPC_GET_BLOCKS_FAST::NONE)
     m_pool_info_query_time = res.daemon_time;
 
-  MDEBUG("Pulled blocks: blocks_start_height " << blocks_start_height << ", count " << blocks.size()
+  LOG_PRINT_L0("Pulled blocks: blocks_start_height " << blocks_start_height << ", count " << blocks.size()
       << ", height " << blocks_start_height + blocks.size() << ", node height " << res.current_height
-      << ", pool info " << static_cast<unsigned int>(res.pool_info_extent));
+      << ", pool info " << static_cast<unsigned int>(res.pool_info_extent)
+      << ", duration " << duration.count() << "ms");
 
   if (first)
   {
@@ -2774,7 +2780,6 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
       update_pool_state_by_pool_query(process_pool_txs, true);
     }
   }
-
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::pull_hashes(uint64_t start_height, uint64_t &blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<crypto::hash> &hashes)
@@ -3656,6 +3661,20 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   // since that might cause a password prompt, which would introduce a data
   // leak allowing a passive adversary with traffic analysis capability to
   // infer when we get an incoming output
+
+  // don't start timer until after we've gotten short history and will start actually scanning blocks
+  LOG_PRINT_L0("Starting wallet2 scanner timer...");
+  m_duration_getting_blocks = std::chrono::milliseconds(0);
+  auto start = std::chrono::high_resolution_clock::now();
+  auto seh = epee::misc_utils::create_scope_leave_handler([&](){
+      auto stop = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+      if (0 != m_callback) {
+          m_callback->on_scanner_complete(duration);
+      }
+      LOG_PRINT_L0("Time to scan using wallet2: " << duration.count() << "ms");
+      LOG_PRINT_L0("Time spent retrieiving blocks: " << m_duration_getting_blocks.count() << "ms");
+  });
 
   bool first = true, last = false;
   while(m_run.load(std::memory_order_relaxed) && blocks_fetched < max_blocks)
