@@ -128,7 +128,7 @@ void parse_get_blocks(
 {
     validate_get_blocks_res(res);
 
-    const std::uint64_t num_blocks = std::min(res.blocks.size(), requested_chunk_size);
+    const std::uint64_t num_blocks = std::min((std::uint64_t)res.blocks.size(), requested_chunk_size);
 
     parsed_blocks.clear();
     parsed_blocks.resize(num_blocks);
