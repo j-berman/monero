@@ -61,7 +61,7 @@
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "bcutil"
 
-const std::uint64_t DEFAULT_LOOP_COUNT = 10;
+const std::uint64_t DEFAULT_LOOP_COUNT = 3;
 
 namespace po = boost::program_options;
 using namespace epee;
@@ -393,43 +393,52 @@ int main(int argc, char* argv[])
 
     for (std::uint64_t i = 0; i < loop_count; ++i)
     {
+        LOG_PRINT_L0("Starting loop " << i+1 << " / " << loop_count);
+
+        // wallet2
+        LOG_PRINT_L0("Initalizing the wallet2 client...");
+        std::unique_ptr<tools::wallet2> wallet2 = std::unique_ptr<tools::wallet2>(new tools::wallet2(static_cast<cryptonote::network_type>(net_type), 1, true));
+
+        crypto::secret_key recovery_key;
+        std::string language = Language::English().get_language_name();
+        if (!crypto::ElectrumWords::words_to_bytes(mnemonic, recovery_key, language)) throw std::runtime_error("Invalid mnemonic");
+        wallet2->set_seed_language(language);
+
+        wallet2->set_refresh_from_block_height(start_height);
+        wallet2->set_daemon(daemon_address);
+        // TODO: allow user to password protect entered seed
+        wallet2->generate(wallet_file, "", recovery_key, true, false, false);
+
+        // set callback to print progress
+        std::chrono::milliseconds wallet2_duration;
+        std::unique_ptr<Wallet2Callback> wallet2_callback = std::unique_ptr<Wallet2Callback>(new Wallet2Callback(*wallet2, wallet2_duration));
+        wallet2->callback(wallet2_callback.get());
+
+        // start scanning using wallet2
+        LOG_PRINT_L0("Scanning using wallet2...");
+        wallet2->refresh(true);
+        LOG_PRINT_L0("Time to scan using wallet2: " << wallet2_duration.count() << "ms");
+        if (i == 0)
+        {
+            LOG_PRINT_L0("Warning: sometimes the first scan attempt is slower than the subsequent attempts because " <<
+                        "the daemon is spending most of its time reading blocks from the database.");
+            // To reproduce this slow first attempt, restart the machine the daemon is running on and rescan.
+            // It appears the blocks read from the db are getting cached in memory for subsequent scan attempts.
+            // TODO: investigate this further
+        }
+
+        wallet2_results.push_back(std::move(wallet2_duration));
+
+        std::remove(wallet_file.c_str());
+        std::remove((wallet_file + ".keys").c_str());
+        // end wallet2
+
         // seraphis lib
         LOG_PRINT_L0("Initializing the client using the updated Seraphis lib...");
         auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
         LOG_PRINT_L0("Time to scan using the updated Seraphis lib: " << seraphis_lib_duration.count() << "ms");
         seraphis_lib_results.push_back(std::move(seraphis_lib_duration));
-
-        // wallet2
-        {
-            // initialize wallet2 client
-            LOG_PRINT_L0("Initalizing the wallet2 client...");
-            std::unique_ptr<tools::wallet2> wallet2 = std::unique_ptr<tools::wallet2>(new tools::wallet2(static_cast<cryptonote::network_type>(net_type), 1, true));
-
-            crypto::secret_key recovery_key;
-            std::string language = Language::English().get_language_name();
-            if (!crypto::ElectrumWords::words_to_bytes(mnemonic, recovery_key, language)) throw std::runtime_error("Invalid mnemonic");
-            wallet2->set_seed_language(language);
-
-            wallet2->set_refresh_from_block_height(start_height);
-            wallet2->set_daemon(daemon_address);
-            // TODO: allow user to password protect entered seed
-            wallet2->generate(wallet_file, "", recovery_key, true, false, false);
-
-            // set callback to print progress
-            std::chrono::milliseconds wallet2_duration;
-            std::unique_ptr<Wallet2Callback> wallet2_callback = std::unique_ptr<Wallet2Callback>(new Wallet2Callback(*wallet2, wallet2_duration));
-            wallet2->callback(wallet2_callback.get());
-
-            // start scanning using wallet2
-            LOG_PRINT_L0("Scanning using wallet2...");
-            wallet2->refresh(true);
-            LOG_PRINT_L0("Time to scan using wallet2: " << wallet2_duration.count() << "ms");
-
-            wallet2_results.push_back(std::move(wallet2_duration));
-        }
-
-        std::remove(wallet_file.c_str());
-        std::remove((wallet_file + ".keys").c_str());
+        // end seraphis lib
     }
 
     std::sort(seraphis_lib_results.begin(), seraphis_lib_results.end());
