@@ -29,6 +29,7 @@
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <thread>
 #include "common/command_line.h"
 #include "common/varint.h"
@@ -60,6 +61,8 @@
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "bcutil"
+
+const std::string DEFAULT_WALLET_FILE = "monero_blockchain_scanner_test_wallet_file";
 
 const std::uint64_t DEFAULT_LOOP_COUNT = 3;
 
@@ -312,7 +315,6 @@ int main(int argc, char* argv[])
     const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
     const command_line::arg_descriptor<std::string> arg_daemon_address  = {"daemon-address",  "Use daemon instance at <host>:<port>", ""};
     const command_line::arg_descriptor<std::uint64_t> arg_start_height  = {"start-height", "Scan from height", 0};
-    const command_line::arg_descriptor<std::string> arg_wallet_file  = {"wallet-file",  "Wallet file name", ""};
     const command_line::arg_descriptor<std::uint64_t> arg_loop_count  = {"loop-count",  "Attempt to scan this many times", DEFAULT_LOOP_COUNT};
 
     command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
@@ -320,7 +322,6 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_log_level);
     command_line::add_arg(desc_cmd_sett, arg_daemon_address);
     command_line::add_arg(desc_cmd_sett, arg_start_height);
-    command_line::add_arg(desc_cmd_sett, arg_wallet_file);
     command_line::add_arg(desc_cmd_sett, arg_loop_count);
     command_line::add_arg(desc_cmd_only, command_line::arg_help);
 
@@ -361,11 +362,11 @@ int main(int argc, char* argv[])
     if (!command_line::is_arg_defaulted(vm, arg_start_height))
         start_height = command_line::get_arg(vm, arg_start_height);
 
-    std::string wallet_file;
-    if (command_line::is_arg_defaulted(vm, arg_wallet_file))
-        throw std::runtime_error("Missing wallet file");
-    else
-        wallet_file = command_line::get_arg(vm, arg_wallet_file);
+    if (boost::filesystem::exists(DEFAULT_WALLET_FILE))
+    {
+        std::remove(DEFAULT_WALLET_FILE.c_str());
+        std::remove((DEFAULT_WALLET_FILE + ".keys").c_str());
+    }
 
     std::uint64_t loop_count = DEFAULT_LOOP_COUNT;
     if (!command_line::is_arg_defaulted(vm, arg_loop_count))
@@ -407,7 +408,7 @@ int main(int argc, char* argv[])
         wallet2->set_refresh_from_block_height(start_height);
         wallet2->set_daemon(daemon_address);
         // TODO: allow user to password protect entered seed
-        wallet2->generate(wallet_file, "", recovery_key, true, false, false);
+        wallet2->generate(DEFAULT_WALLET_FILE, "", recovery_key, true, false, false);
 
         // set callback to print progress
         std::chrono::milliseconds wallet2_duration;
@@ -429,8 +430,8 @@ int main(int argc, char* argv[])
 
         wallet2_results.push_back(std::move(wallet2_duration));
 
-        std::remove(wallet_file.c_str());
-        std::remove((wallet_file + ".keys").c_str());
+        std::remove(DEFAULT_WALLET_FILE.c_str());
+        std::remove((DEFAULT_WALLET_FILE + ".keys").c_str());
         // end wallet2
 
         // seraphis lib
