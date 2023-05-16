@@ -283,6 +283,13 @@ void request_onchain_chunk(
         // TODO: remove this code once http client lib can make concurrent requests over a connection
         LOG_PRINT_L0("http client was not connected at " << start_index << ", setting daemon");
         r = http_client->set_server(daemon_address, boost::optional<epee::net_utils::http::login>(), ssl_support);
+
+        // make sure RPC version matches and make sure connection is initialized by making first request
+        cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
+        cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
+        r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t, *http_client);
+        CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
+        CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR), "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
     }
 
     // TODO: correct downstream error handling on failure + add clean retry logic

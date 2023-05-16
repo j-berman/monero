@@ -210,7 +210,7 @@ void initialize_connection_pool(
                 cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
                 bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t, *enote_finding_context.m_http_clients[i]);
                 CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
-                CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(3, 1000), "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
+                CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR), "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
 
                 return boost::none;
             }
@@ -284,10 +284,13 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     LOG_PRINT_L0("Scanning using the updated Seraphis lib...");
     auto start = std::chrono::high_resolution_clock::now();
 
-    sp::refresh_enote_store(scan_config,
+    if (!sp::refresh_enote_store(scan_config,
         scan_context_nonledger,
         scan_context_ledger,
-        chunk_consumer);
+        chunk_consumer))
+    {
+        throw std::runtime_error("Failed to refresh enote store");
+    };
 
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
