@@ -64,7 +64,7 @@
 
 const std::string DEFAULT_WALLET_FILE = "monero_blockchain_scanner_test_wallet_file";
 
-const std::uint64_t DEFAULT_LOOP_COUNT = 3;
+const std::uint64_t DEFAULT_LOOP_COUNT = 5;
 
 namespace po = boost::program_options;
 using namespace epee;
