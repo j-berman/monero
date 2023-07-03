@@ -701,19 +701,6 @@ namespace cryptonote
 
     if (get_blocks)
     {
-      size_t max_blocks = req.max_block_count > 0
-        ? std::min(req.max_block_count, (uint64_t)COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT)
-        : COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT;
-      if (m_rpc_payment)
-      {
-        max_blocks = std::min((size_t)(res.credits / COST_PER_BLOCK), max_blocks);
-        if (max_blocks == 0)
-        {
-          res.status = CORE_RPC_STATUS_PAYMENT_REQUIRED;
-          return true;
-        }
-      }
-
       // quick check for noop
       if (!req.block_ids.empty())
       {
@@ -725,6 +712,19 @@ namespace cryptonote
           res.start_height = 0;
           res.current_height = last_block_height + 1;
           res.status = CORE_RPC_STATUS_OK;
+          return true;
+        }
+      }
+
+      size_t max_blocks = req.max_block_count > 0
+        ? std::min(req.max_block_count, (uint64_t)COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT)
+        : COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT;
+      if (m_rpc_payment)
+      {
+        max_blocks = std::min((size_t)(res.credits / COST_PER_BLOCK), max_blocks);
+        if (max_blocks == 0)
+        {
+          res.status = CORE_RPC_STATUS_PAYMENT_REQUIRED;
           return true;
         }
       }
