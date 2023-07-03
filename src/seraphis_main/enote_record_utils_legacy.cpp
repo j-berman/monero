@@ -620,7 +620,7 @@ bool try_out_to_legacy_enote_v2(const cryptonote::transaction &tx, const size_t 
      if (!is_legacy_enote_v2(tx, tx.vout[output_index]))
         return false;
     if (output_index >= tx.rct_signatures.outPk.size() || output_index >= tx.rct_signatures.ecdhInfo.size())
-      return false;
+        return false;
 
     sp::LegacyEnoteV2 enote_v2;
 
@@ -646,7 +646,7 @@ bool try_out_to_legacy_enote_v3(const cryptonote::transaction &tx, const size_t 
     if (!is_legacy_enote_v3(tx, tx.vout[output_index]))
         return false;
     if (output_index >= tx.rct_signatures.outPk.size() || output_index >= tx.rct_signatures.ecdhInfo.size())
-      return false;
+        return false;
 
     sp::LegacyEnoteV3 enote_v3;
 
@@ -693,7 +693,7 @@ bool try_out_to_legacy_enote_v5(const cryptonote::transaction &tx, const size_t 
     if (!is_legacy_enote_v5(tx, tx.vout[output_index]))
         return false;
     if (output_index >= tx.rct_signatures.outPk.size() || output_index >= tx.rct_signatures.ecdhInfo.size())
-      return false;
+        return false;
 
     sp::LegacyEnoteV5 enote_v5;
 
