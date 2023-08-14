@@ -42,6 +42,7 @@
 #include "seraphis_main/scan_core_types.h"
 #include "seraphis_main/scan_ledger_chunk.h"
 #include "net/http.h"
+#include "rpc/core_rpc_server_commands_defs.h"
 
 //third party headers
 
@@ -105,7 +106,6 @@ private:
 
 ////
 // EnoteFindingContextMockLegacy
-// - wraps a pool of network clients used to fetch blocks from the daemon
 // - find owned enotes from legacy view scanning using actual chain data
 ///
 class EnoteFindingContextMockLegacy final
@@ -116,13 +116,11 @@ public:
         const rct::key &legacy_base_spend_pubkey,
         const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
         const crypto::secret_key &legacy_view_privkey,
-        const std::string &daemon_address,
-        const epee::net_utils::ssl_options_t ssl_support):
+        const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> &_rpc_get_blocks):
             m_legacy_base_spend_pubkey{legacy_base_spend_pubkey},
             m_legacy_subaddress_map{legacy_subaddress_map},
             m_legacy_view_privkey{legacy_view_privkey},
-            m_daemon_address{daemon_address},
-            m_ssl_support(ssl_support)
+            rpc_get_blocks{_rpc_get_blocks}
     {
     }
 
@@ -142,24 +140,13 @@ public:
         const std::vector<sp::LegacyEnoteVariant> &enotes,
         std::list<sp::ContextualBasicRecordVariant> &collected_records) const;
 
-    size_t http_client_index();
-    void release_http_client(size_t index);
-
-    epee::net_utils::ssl_options_t ssl_support() { return m_ssl_support; }
-
-    const std::string m_daemon_address;
-
-    mutable std::mutex m_http_client_mutex;
-    mutable std::unordered_map<size_t, bool> m_http_client_in_use;
-    mutable std::vector<std::unique_ptr<epee::net_utils::http::abstract_http_client>> m_http_clients;
+    /// abstracted function that gets blocks via RPC request
+    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> &rpc_get_blocks;
 //member variables
 private:
     const rct::key &m_legacy_base_spend_pubkey;
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &m_legacy_subaddress_map;
     const crypto::secret_key &m_legacy_view_privkey;
-
-    // network
-    const epee::net_utils::ssl_options_t m_ssl_support;
 };
 
 ////

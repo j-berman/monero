@@ -259,53 +259,6 @@ void prepare_chunk_out(
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void request_onchain_chunk(
-    const std::uint64_t start_index,
-    const std::uint64_t requested_chunk_size,
-    const std::string daemon_address,
-    epee::net_utils::http::abstract_http_client *http_client,
-    epee::net_utils::ssl_options_t ssl_support,
-    RawChunkData &res)
-{
-    LOG_PRINT_L1("Requesting onchain chunk starting at " << start_index << " (max block count=" << requested_chunk_size << ")");
-
-    cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req;
-
-    req.prune = true;
-    req.start_height = start_index;
-    req.max_block_count = requested_chunk_size;
-    req.no_miner_tx = false;
-
-    bool r = true;
-    if (!http_client->is_connected())
-    {
-        // TODO: support specified RPC login (also this connection logic is only here because of connection pool logic)
-        // TODO: remove this code once http client lib can make concurrent requests over a connection
-        LOG_PRINT_L0("http client was not connected at " << start_index << ", setting daemon");
-        r = http_client->set_server(daemon_address, boost::optional<epee::net_utils::http::login>(), ssl_support);
-
-        // make sure RPC version matches and make sure connection is initialized by making first request
-        cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
-        cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
-        r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t, *http_client);
-        CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
-        CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR), "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
-    }
-
-    // TODO: correct downstream error handling on failure + add clean retry logic
-    r = r && epee::net_utils::invoke_http_bin("/getblocks.bin", req, res, *http_client);
-    if (!r)
-    {
-        LOG_ERROR("Failed to /getblocks.bin at block index " << start_index);
-        RawChunkData empty_res = AUTO_VAL_INIT(empty_res);
-        res = std::move(empty_res);
-    }
-    else
-    {
-        LOG_PRINT_L0("Successfully retrieved onchain chunk starting at " << start_index << " (blocks=" << res.blocks.size() << ")");
-    }
-}
-//-------------------------------------------------------------------------------------------------------------------
 bool is_end_chunk(const sp::scanning::ChunkContext &context, const std::uint64_t num_blocks_in_chain)
 {
     if (sp::scanning::chunk_context_is_empty(context))
@@ -393,18 +346,19 @@ PendingChunk launch_chunk_task(
             }
 
             // daemon query
-            // TODO: clean up this ugly code (move it into the finding context / separate http client code)
+            // TODO: error handling
             RawChunkData raw_chunk_data = AUTO_VAL_INIT(raw_chunk_data);
             {
-                const size_t http_client_index = enote_finding_context.http_client_index();
-                request_onchain_chunk(
-                    l_chunk_request.start_index,
-                    l_chunk_request.requested_chunk_size,
-                    enote_finding_context.m_daemon_address,
-                    enote_finding_context.m_http_clients[http_client_index].get(),
-                    enote_finding_context.ssl_support(),
-                    raw_chunk_data);
-                enote_finding_context.release_http_client(http_client_index);
+                cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req = AUTO_VAL_INIT(req);
+                req.start_height = l_chunk_request.start_index;
+                req.max_block_count = l_chunk_request.requested_chunk_size;
+                req.prune = true;
+                req.no_miner_tx = false;
+                if (!enote_finding_context.rpc_get_blocks(req, raw_chunk_data))
+                {
+                    num_pending_chunks.fetch_sub(1, std::memory_order_relaxed);
+                    return boost::none;
+                }
             }
 
             // parse the chunk

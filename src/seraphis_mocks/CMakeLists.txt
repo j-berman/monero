@@ -32,6 +32,7 @@ set(seraphis_mocks_sources
   jamtis_mock_keys.cpp
   legacy_mock_keys.cpp
   make_mock_tx.cpp
+  mock_http_client_pool.cpp
   mock_ledger_context.cpp
   mock_offchain_context.cpp
   mock_send_receive.cpp
