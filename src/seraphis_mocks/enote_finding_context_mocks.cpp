@@ -131,34 +131,5 @@ void EnoteFindingContextMockLegacy::find_basic_records(
         collected_records);
 }
 //-------------------------------------------------------------------------------------------------------------------
-size_t EnoteFindingContextMockLegacy::http_client_index()
-{
-    std::lock_guard<std::mutex> lock{m_http_client_mutex};
-    for (size_t i = 0; i < m_http_clients.size(); ++i)
-    {
-        CHECK_AND_ASSERT_THROW_MES(m_http_client_in_use.find(i) != m_http_client_in_use.end(),
-                "http client not expected to exist yet");
-        if (!m_http_client_in_use[i])
-        {
-            m_http_client_in_use[i] = true;
-            return i;
-        }
-    }
-
-    std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client = std::unique_ptr<epee::net_utils::http::abstract_http_client>(new net::http::client());
-    m_http_clients.emplace_back(std::move(http_client));
-    const size_t index = m_http_clients.size() - 1;
-    m_http_client_in_use[index] = true;
-    return index;
-}
-//-------------------------------------------------------------------------------------------------------------------
-void EnoteFindingContextMockLegacy::release_http_client(const size_t index)
-{
-    std::lock_guard<std::mutex> lock{m_http_client_mutex};
-    CHECK_AND_ASSERT_THROW_MES(m_http_client_in_use.find(index) != m_http_client_in_use.end(),
-            "http client does exist");
-    m_http_client_in_use[index] = false;
-}
-//-------------------------------------------------------------------------------------------------------------------
 } //namespace mocks
 } //namespace sp

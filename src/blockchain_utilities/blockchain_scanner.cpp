@@ -48,6 +48,7 @@
 #include "seraphis_mocks/scan_chunk_consumer_mocks.h"
 #include "seraphis_mocks/scan_context_async_mock.h"
 #include "seraphis_mocks/enote_finding_context_mocks.h"
+#include "seraphis_mocks/mock_http_client_pool.h"
 #include "version.h"
 #include <algorithm>
 #include <stdio.h>
@@ -175,61 +176,8 @@ void add_default_subaddresses(
     }
 };
 
-void initialize_connection_pool(
-    sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context,
-    const uint64_t init_connection_pool_size,
-    const std::string daemon_address,
-    const epee::net_utils::ssl_options_t ssl_support)
-{
-    async::Threadpool &threadpool{async::get_default_threadpool()};
-
-    // 1. make join signal
-    auto join_signal = threadpool.make_join_signal();
-
-    // 2. get join token
-    auto join_token = threadpool.get_join_token(join_signal);
-
-    // 3. submit tasks to join on
-    for (size_t i = 0; i < init_connection_pool_size; ++i)
-    {
-        // initialize http client and grab a lock for the client at that index
-        CHECK_AND_ASSERT_THROW_MES(enote_finding_context.http_client_index() == i, "unexpected http client index");
-
-        threadpool.submit(async::make_simple_task(async::DefaultPriorityLevels::MEDIUM,
-            [&threadpool, &enote_finding_context, i, daemon_address, ssl_support, join_token]() -> async::TaskVariant
-            {
-                async::fanout_token_t fanout_token{threadpool.launch_temporary_worker()};
-
-                CHECK_AND_ASSERT_THROW_MES(!enote_finding_context.m_http_clients[i]->is_connected(), "http client already connected");
-                CHECK_AND_ASSERT_THROW_MES(enote_finding_context.m_http_clients[i]->set_server(daemon_address, boost::optional<epee::net_utils::http::login>(), ssl_support), "failed to set server");
-                CHECK_AND_ASSERT_THROW_MES(enote_finding_context.m_http_clients[i]->connect(std::chrono::seconds(30)), "http client failed to connect");
-                CHECK_AND_ASSERT_THROW_MES(enote_finding_context.m_http_clients[i]->is_connected(), "http client is not connected");
-
-                // make sure RPC version matches and make sure connection is initialized by making first request
-                cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
-                cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
-                bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t, *enote_finding_context.m_http_clients[i]);
-                CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
-                CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR), "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
-
-                return boost::none;
-            }
-        ));
-    }
-
-    // 4. get join condition
-    auto join_condition = threadpool.get_join_condition(std::move(join_signal), std::move(join_token));
-
-    // 5. join the tasks
-    threadpool.work_while_waiting(std::move(join_condition));
-
-    // release all http client locks
-    for (size_t i = 0; i < init_connection_pool_size; ++i)
-        enote_finding_context.release_http_client(i);
-}
-
 std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::string &legacy_spend_privkey_str, const std::string &legacy_view_privkey_str,
-    const std::string daemon_address, const epee::net_utils::ssl_options_t ssl_support)
+    const std::string daemon_address, const boost::optional<epee::net_utils::http::login> daemon_login, const epee::net_utils::ssl_options_t ssl_support)
 {
     // load keys
     /// spend key
@@ -251,21 +199,49 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
     add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
 
+    sp::mocks::ClientConnectionPool conn_pool{daemon_address, daemon_login, ssl_support};
+
+    {
+        // Make sure daemon RPC version matches
+        // TODO: return version info in /getblocks.bin
+        cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
+        cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
+        bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t);
+        CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
+        CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR),
+            "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
+    }
+
+    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
+        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+            {
+                LOG_PRINT_L0("Querying for onchain chunk (req.start_height=" << req.start_height << ")");
+                // TODO: retry logic
+                if (conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
+                        sp::mocks::ClientConnectionPool::invoke_http_mode::BIN,
+                        "/getblocks.bin",
+                        req,
+                        res))
+                {
+                    LOG_PRINT_L0("Successfully queried for onchain chunk (req.start_height=" << req.start_height
+                            << ", res.current_height=" << res.current_height << ", blocks=" << res.blocks.size() << ")");
+                    return true;
+                }
+                else
+                {
+                    LOG_ERROR("Failed to /getblocks.bin at block index " << req.start_height);
+                    return false;
+                }
+            };
+
     sp::mocks::EnoteFindingContextMockLegacy enote_finding_context{
         legacy_base_spend_pubkey,
         legacy_subaddress_map,
         legacy_view_privkey,
-        daemon_address,
-        ssl_support};
+        rpc_get_blocks};
 
     const uint64_t pending_chunk_queue_size = std::min((std::uint64_t)(std::thread::hardware_concurrency() + 2), static_cast<std::uint64_t>(10));
     LOG_PRINT_L0("Pending chunk queue size: " << pending_chunk_queue_size);
-
-    // initialize a connection pool
-    // TODO: implement ability to make concurrent network requests via http lib and remove need for connection pool
-    LOG_PRINT_L0("Initializing connection pool...");
-    const uint64_t init_connection_pool_size = pending_chunk_queue_size * 15 / 10;
-    initialize_connection_pool(enote_finding_context, init_connection_pool_size, daemon_address, ssl_support);
 
     sp::scanning::mocks::AsyncScanContext scan_context_ledger{
         pending_chunk_queue_size, // TODO: stick this in scan conifg
@@ -439,7 +415,7 @@ int main(int argc, char* argv[])
 
         // seraphis lib
         LOG_PRINT_L0("Initializing the client using the updated Seraphis lib...");
-        auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
+        auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
         LOG_PRINT_L0("Time to scan using the updated Seraphis lib: " << seraphis_lib_duration.count() << "ms");
         seraphis_lib_results.push_back(std::move(seraphis_lib_duration));
         // end seraphis lib
