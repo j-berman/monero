@@ -59,11 +59,13 @@ public:
         const std::string &daemon_address,
         const boost::optional<epee::net_utils::http::login> daemon_login = boost::none,
         const epee::net_utils::ssl_options_t ssl_support = epee::net_utils::ssl_support_t::e_ssl_support_autodetect,
-        const size_t &max_connections = 20):
+        const size_t &max_connections = 20,
+        const bool reuse_connections = true):
             m_daemon_address{daemon_address},
             m_daemon_login{daemon_login},
-            m_ssl_support(ssl_support),
-            m_max_connections{max_connections}
+            m_ssl_support{ssl_support},
+            m_max_connections{max_connections},
+            m_reuse_connections{reuse_connections}
     {
         m_http_client_pool.reserve(max_connections);
     }
@@ -83,7 +85,8 @@ public:
                 m_ssl_support,
                 http_client_index);
         auto scope_exit_handler = epee::misc_utils::create_scope_leave_handler([this, http_client_index]{
-            release_http_client(http_client_index);
+            if (m_reuse_connections)
+                release_http_client(http_client_index);
         });
 
         // Do the RPC command
@@ -135,6 +138,7 @@ private:
     const epee::net_utils::ssl_options_t m_ssl_support;
 
     const size_t m_max_connections;
+    const bool m_reuse_connections;
 
     struct pool_http_client_t {
         bool in_use;

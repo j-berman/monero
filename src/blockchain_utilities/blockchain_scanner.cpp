@@ -178,7 +178,7 @@ void add_default_subaddresses(
 };
 
 std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::string &legacy_spend_privkey_str, const std::string &legacy_view_privkey_str,
-    const std::string daemon_address, const boost::optional<epee::net_utils::http::login> daemon_login, const epee::net_utils::ssl_options_t ssl_support, const bool use_curl = false)
+    const std::string daemon_address, const boost::optional<epee::net_utils::http::login> daemon_login, const epee::net_utils::ssl_options_t ssl_support, const bool reuse_connections = true)
 {
     // load keys
     /// spend key
@@ -200,30 +200,25 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
     add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
 
-    sp::mocks::CurlConnectionPool curl_pool{daemon_address, daemon_login, ssl_support};
-    sp::mocks::ClientConnectionPool conn_pool{daemon_address, daemon_login, ssl_support};
+    sp::mocks::ClientConnectionPool conn_pool{daemon_address, daemon_login, ssl_support, 20, reuse_connections};
 
     {
         // Make sure daemon RPC version matches
         // TODO: return version info in /getblocks.bin
         cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
         cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
-        bool r = use_curl
-            ? curl_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::CurlConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t)
-            : conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t);
+        bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t);
         CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
         CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR),
             "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
     }
 
     const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
-        [&curl_pool, &conn_pool, use_curl](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
             {
                 LOG_PRINT_L0("Querying for onchain chunk (req.start_height=" << req.start_height << ")");
                 // TODO: retry logic
-                bool r = use_curl
-                    ? curl_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(sp::mocks::CurlConnectionPool::invoke_http_mode::BIN, "/getblocks.bin", req, res)
-                    : conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(sp::mocks::ClientConnectionPool::invoke_http_mode::BIN, "/getblocks.bin", req, res);
+                bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(sp::mocks::ClientConnectionPool::invoke_http_mode::BIN, "/getblocks.bin", req, res);
                 if (r)
                 {
                     LOG_PRINT_L0("Successfully queried for onchain chunk (req.start_height=" << req.start_height
@@ -369,65 +364,65 @@ int main(int argc, char* argv[])
     const std::string priv_view_key = "42ba20adb337e5eca797565be11c9adb0a8bef8c830bccc2df712535d3b8f608";
 
     std::vector<std::chrono::milliseconds> seraphis_lib_results;
-    std::vector<std::chrono::milliseconds> seraphis_lib_results_curl;
+    std::vector<std::chrono::milliseconds> seraphis_lib_results_no_reuse;
 
     seraphis_lib_results.reserve(loop_count);
-    seraphis_lib_results_curl.reserve(loop_count);
+    seraphis_lib_results_no_reuse.reserve(loop_count);
 
     for (std::uint64_t i = 0; i < loop_count; ++i)
     {
         LOG_PRINT_L0("Starting loop " << i+1 << " / " << loop_count);
 
         // seraphis lib
-        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib (with epee http client)...");
+        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib (with connection reuse)...");
         auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
-        LOG_PRINT_L0("Time to scan using the updated Seraphis lib (with epee http client): " << seraphis_lib_duration.count() << "ms");
+        LOG_PRINT_L0("Time to scan using the updated Seraphis lib (with connection reuse): " << seraphis_lib_duration.count() << "ms");
         seraphis_lib_results.push_back(std::move(seraphis_lib_duration));
         // end seraphis lib
 
-        // seraphis lib with libcurl
-        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib (with libcurl)...");
-        bool use_curl = true;
-        auto seraphis_lib_duration_curl = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled, use_curl);
-        LOG_PRINT_L0("Time to scan using the updated Seraphis lib (with libcurl): " << seraphis_lib_duration_curl.count() << "ms");
-        seraphis_lib_results_curl.push_back(std::move(seraphis_lib_duration_curl));
-        // end seraphis lib with libcurl
+        // seraphis lib with no connection reuse
+        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib (with no connection reuse)...");
+        bool reuse_connections = false;
+        auto seraphis_lib_duration_no_reuse = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled, reuse_connections);
+        LOG_PRINT_L0("Time to scan using the updated Seraphis lib (with no connection reuse): " << seraphis_lib_duration_no_reuse.count() << "ms");
+        seraphis_lib_results_no_reuse.push_back(std::move(seraphis_lib_duration_no_reuse));
+        // end seraphis lib with no connection reuse
     }
 
     std::sort(seraphis_lib_results.begin(), seraphis_lib_results.end());
-    std::sort(seraphis_lib_results_curl.begin(), seraphis_lib_results_curl.end());
+    std::sort(seraphis_lib_results_no_reuse.begin(), seraphis_lib_results_no_reuse.end());
 
     // print final results
     LOG_PRINT_L0("**********************************************************************");
     std::chrono::milliseconds min_seraphis_lib_duration = seraphis_lib_results[0];
-    std::chrono::milliseconds min_seraphis_lib_duration_curl = seraphis_lib_results_curl[0];
+    std::chrono::milliseconds min_seraphis_lib_duration_no_reuse = seraphis_lib_results_no_reuse[0];
 
-    if (min_seraphis_lib_duration_curl > min_seraphis_lib_duration)
+    if (min_seraphis_lib_duration_no_reuse > min_seraphis_lib_duration)
     {
-        auto percent_diff = (min_seraphis_lib_duration_curl.count() - min_seraphis_lib_duration.count()) / (double) min_seraphis_lib_duration_curl.count();
-        LOG_PRINT_L0("The Seraphis lib with the epee http client was " << percent_diff * 100 << "\% faster than with libcurl\n");
+        auto percent_diff = (min_seraphis_lib_duration_no_reuse.count() - min_seraphis_lib_duration.count()) / (double) min_seraphis_lib_duration_no_reuse.count();
+        LOG_PRINT_L0("The Seraphis lib was " << percent_diff * 100 << "\% faster WITH connection reuse\n");
     }
     else
     {
-        auto percent_diff = (min_seraphis_lib_duration.count() - min_seraphis_lib_duration_curl.count()) / (double) min_seraphis_lib_duration_curl.count();
-        LOG_PRINT_L0("The Seraphis lib with libcurl was " << percent_diff * 100 << "\% slower than with the epee http client\n");
+        auto percent_diff = (min_seraphis_lib_duration.count() - min_seraphis_lib_duration_no_reuse.count()) / (double) min_seraphis_lib_duration_no_reuse.count();
+        LOG_PRINT_L0("The Seraphis lib was " << percent_diff * 100 << "\% slower WITHOUT connection reuse\n");
     }
 
     if (loop_count > 1)
     {
-        LOG_PRINT_L0("Seraphis lib with epee http client (min):   " << min_seraphis_lib_duration.count() << "ms");
-        LOG_PRINT_L0("Seraphis lib with libcurl          (min):   " << min_seraphis_lib_duration_curl.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib WITH reuse (min):   " << min_seraphis_lib_duration.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib WITHOUT reuse          (min):   " << min_seraphis_lib_duration_no_reuse.count() << "ms");
 
         auto median_seraphis_lib_result = seraphis_lib_results[loop_count / 2];
-        auto median_seraphis_lib_result_curl = seraphis_lib_results_curl[loop_count / 2];
+        auto median_seraphis_lib_result_no_reuse = seraphis_lib_results_no_reuse[loop_count / 2];
 
-        LOG_PRINT_L0("Seraphis lib with epee http client (median):   " << median_seraphis_lib_result.count() << "ms");
-        LOG_PRINT_L0("Seraphis lib with libcurl          (median):   " << median_seraphis_lib_result_curl.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib WITH reuse (median):   " << median_seraphis_lib_result.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib WITHOUT reuse          (median):   " << median_seraphis_lib_result_no_reuse.count() << "ms");
     }
     else
     {
-        LOG_PRINT_L0("Seraphis lib with epee http client:   " << min_seraphis_lib_duration.count() << "ms");
-        LOG_PRINT_L0("Seraphis lib with libcurl         :   " << min_seraphis_lib_duration_curl.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib WITH reuse:   " << min_seraphis_lib_duration.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib WITHOUT reuse:   " << min_seraphis_lib_duration_no_reuse.count() << "ms");
     }
     LOG_PRINT_L0("**********************************************************************");
 
