@@ -32,6 +32,7 @@ set(seraphis_mocks_sources
   jamtis_mock_keys.cpp
   legacy_mock_keys.cpp
   make_mock_tx.cpp
+  mock_http_client_pool_curl.cpp
   mock_http_client_pool.cpp
   mock_ledger_context.cpp
   mock_offchain_context.cpp
@@ -64,10 +65,12 @@ target_link_libraries(seraphis_mocks
     seraphis_impl
     seraphis_main
   PRIVATE
-    ${EXTRA_LIBRARIES})
+    ${EXTRA_LIBRARIES}
+    ${CURL_LIBRARIES})
 
 target_include_directories(seraphis_mocks
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
   PRIVATE
-    ${Boost_INCLUDE_DIRS})
+    ${Boost_INCLUDE_DIRS}
+    ${CURL_INCLUDE_DIR})

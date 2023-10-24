@@ -49,6 +49,7 @@
 #include "seraphis_mocks/scan_context_async_mock.h"
 #include "seraphis_mocks/enote_finding_context_mocks.h"
 #include "seraphis_mocks/mock_http_client_pool.h"
+#include "seraphis_mocks/mock_http_client_pool_curl.h"
 #include "version.h"
 #include <algorithm>
 #include <stdio.h>
@@ -177,7 +178,7 @@ void add_default_subaddresses(
 };
 
 std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::string &legacy_spend_privkey_str, const std::string &legacy_view_privkey_str,
-    const std::string daemon_address, const boost::optional<epee::net_utils::http::login> daemon_login, const epee::net_utils::ssl_options_t ssl_support)
+    const std::string daemon_address, const boost::optional<epee::net_utils::http::login> daemon_login, const epee::net_utils::ssl_options_t ssl_support, const bool use_curl = false)
 {
     // load keys
     /// spend key
@@ -199,6 +200,7 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
     add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
 
+    sp::mocks::CurlConnectionPool curl_pool{daemon_address, daemon_login, ssl_support};
     sp::mocks::ClientConnectionPool conn_pool{daemon_address, daemon_login, ssl_support};
 
     {
@@ -206,22 +208,23 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
         // TODO: return version info in /getblocks.bin
         cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
         cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
-        bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t);
+        bool r = use_curl
+            ? curl_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::CurlConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t)
+            : conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t);
         CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
         CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR),
             "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
     }
 
     const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
-        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+        [&curl_pool, &conn_pool, use_curl](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
             {
                 LOG_PRINT_L0("Querying for onchain chunk (req.start_height=" << req.start_height << ")");
                 // TODO: retry logic
-                if (conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
-                        sp::mocks::ClientConnectionPool::invoke_http_mode::BIN,
-                        "/getblocks.bin",
-                        req,
-                        res))
+                bool r = use_curl
+                    ? curl_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(sp::mocks::CurlConnectionPool::invoke_http_mode::BIN, "/getblocks.bin", req, res)
+                    : conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(sp::mocks::ClientConnectionPool::invoke_http_mode::BIN, "/getblocks.bin", req, res);
+                if (r)
                 {
                     LOG_PRINT_L0("Successfully queried for onchain chunk (req.start_height=" << req.start_height
                             << ", res.current_height=" << res.current_height << ", blocks=" << res.blocks.size() << ")");
@@ -366,97 +369,65 @@ int main(int argc, char* argv[])
     const std::string priv_view_key = "42ba20adb337e5eca797565be11c9adb0a8bef8c830bccc2df712535d3b8f608";
 
     std::vector<std::chrono::milliseconds> seraphis_lib_results;
-    std::vector<std::chrono::milliseconds> wallet2_results;
+    std::vector<std::chrono::milliseconds> seraphis_lib_results_curl;
 
     seraphis_lib_results.reserve(loop_count);
-    wallet2_results.reserve(loop_count);
+    seraphis_lib_results_curl.reserve(loop_count);
 
     for (std::uint64_t i = 0; i < loop_count; ++i)
     {
         LOG_PRINT_L0("Starting loop " << i+1 << " / " << loop_count);
 
-        // wallet2
-        LOG_PRINT_L0("Initalizing the wallet2 client...");
-        std::unique_ptr<tools::wallet2> wallet2 = std::unique_ptr<tools::wallet2>(new tools::wallet2(static_cast<cryptonote::network_type>(net_type), 1, true));
-
-        crypto::secret_key recovery_key;
-        std::string language = Language::English().get_language_name();
-        if (!crypto::ElectrumWords::words_to_bytes(mnemonic, recovery_key, language)) throw std::runtime_error("Invalid mnemonic");
-        wallet2->set_seed_language(language);
-
-        wallet2->set_refresh_from_block_height(start_height);
-        wallet2->set_daemon(daemon_address);
-        // TODO: allow user to password protect entered seed
-        wallet2->generate(DEFAULT_WALLET_FILE, "", recovery_key, true, false, false);
-
-        // set callback to print progress
-        std::chrono::milliseconds wallet2_duration;
-        std::unique_ptr<Wallet2Callback> wallet2_callback = std::unique_ptr<Wallet2Callback>(new Wallet2Callback(*wallet2, wallet2_duration));
-        wallet2->callback(wallet2_callback.get());
-
-        // start scanning using wallet2
-        LOG_PRINT_L0("Scanning using wallet2...");
-        wallet2->refresh(true);
-        LOG_PRINT_L0("Time to scan using wallet2: " << wallet2_duration.count() << "ms");
-        if (i == 0)
-        {
-            LOG_PRINT_L0("Warning: sometimes the first scan attempt is slower than the subsequent attempts because " <<
-                        "the daemon is spending most of its time reading blocks from the database.");
-            // To reproduce this slow first attempt, restart the machine the daemon is running on and rescan.
-            // It appears the blocks read from the db are getting cached in memory for subsequent scan attempts.
-            // TODO: investigate this further
-        }
-
-        wallet2_results.push_back(std::move(wallet2_duration));
-
-        std::remove(DEFAULT_WALLET_FILE.c_str());
-        std::remove((DEFAULT_WALLET_FILE + ".keys").c_str());
-        // end wallet2
-
         // seraphis lib
-        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib...");
-        auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
-        LOG_PRINT_L0("Time to scan using the updated Seraphis lib: " << seraphis_lib_duration.count() << "ms");
+        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib (with epee http client)...");
+        auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+        LOG_PRINT_L0("Time to scan using the updated Seraphis lib (with epee http client): " << seraphis_lib_duration.count() << "ms");
         seraphis_lib_results.push_back(std::move(seraphis_lib_duration));
         // end seraphis lib
+
+        // seraphis lib with libcurl
+        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib (with libcurl)...");
+        bool use_curl = true;
+        auto seraphis_lib_duration_curl = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled, use_curl);
+        LOG_PRINT_L0("Time to scan using the updated Seraphis lib (with libcurl): " << seraphis_lib_duration_curl.count() << "ms");
+        seraphis_lib_results_curl.push_back(std::move(seraphis_lib_duration_curl));
+        // end seraphis lib with libcurl
     }
 
     std::sort(seraphis_lib_results.begin(), seraphis_lib_results.end());
-    std::sort(wallet2_results.begin(), wallet2_results.end());
+    std::sort(seraphis_lib_results_curl.begin(), seraphis_lib_results_curl.end());
 
     // print final results
     LOG_PRINT_L0("**********************************************************************");
     std::chrono::milliseconds min_seraphis_lib_duration = seraphis_lib_results[0];
-    std::chrono::milliseconds min_wallet2_duration = wallet2_results[0];
+    std::chrono::milliseconds min_seraphis_lib_duration_curl = seraphis_lib_results_curl[0];
 
-    if (min_wallet2_duration > min_seraphis_lib_duration)
+    if (min_seraphis_lib_duration_curl > min_seraphis_lib_duration)
     {
-        auto percent_diff = (min_wallet2_duration.count() - min_seraphis_lib_duration.count()) / (double) min_wallet2_duration.count();
-        LOG_PRINT_L0("Success!");
-        LOG_PRINT_L0("The updated Seraphis lib was " << percent_diff * 100 << "\% faster than wallet2\n");
+        auto percent_diff = (min_seraphis_lib_duration_curl.count() - min_seraphis_lib_duration.count()) / (double) min_seraphis_lib_duration_curl.count();
+        LOG_PRINT_L0("The Seraphis lib with the epee http client was " << percent_diff * 100 << "\% faster than with libcurl\n");
     }
     else
     {
-        auto percent_diff = (min_seraphis_lib_duration.count() - min_wallet2_duration.count()) / (double) min_wallet2_duration.count();
-        LOG_PRINT_L0("Unexpected result...");
-        LOG_PRINT_L0("The updated Seraphis lib was " << percent_diff * 100 << "\% slower than wallet2\n");
+        auto percent_diff = (min_seraphis_lib_duration.count() - min_seraphis_lib_duration_curl.count()) / (double) min_seraphis_lib_duration_curl.count();
+        LOG_PRINT_L0("The Seraphis lib with libcurl was " << percent_diff * 100 << "\% slower than with the epee http client\n");
     }
 
     if (loop_count > 1)
     {
-        LOG_PRINT_L0("Updated Seraphis lib (min):   " << min_seraphis_lib_duration.count() << "ms");
-        LOG_PRINT_L0("wallet2              (min):   " << min_wallet2_duration.count()      << "ms");
+        LOG_PRINT_L0("Seraphis lib with epee http client (min):   " << min_seraphis_lib_duration.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib with libcurl          (min):   " << min_seraphis_lib_duration_curl.count() << "ms");
 
-        auto median_wallet2_result = wallet2_results[loop_count / 2];
         auto median_seraphis_lib_result = seraphis_lib_results[loop_count / 2];
+        auto median_seraphis_lib_result_curl = seraphis_lib_results_curl[loop_count / 2];
 
-        LOG_PRINT_L0("Updated Seraphis lib (median):   " << median_seraphis_lib_result.count() << "ms");
-        LOG_PRINT_L0("wallet2              (median):   " << median_wallet2_result.count()      << "ms");
+        LOG_PRINT_L0("Seraphis lib with epee http client (median):   " << median_seraphis_lib_result.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib with libcurl          (median):   " << median_seraphis_lib_result_curl.count() << "ms");
     }
     else
     {
-        LOG_PRINT_L0("Updated Seraphis lib:   " << min_seraphis_lib_duration.count() << "ms");
-        LOG_PRINT_L0("wallet2             :   " << min_wallet2_duration.count()      << "ms");
+        LOG_PRINT_L0("Seraphis lib with epee http client:   " << min_seraphis_lib_duration.count() << "ms");
+        LOG_PRINT_L0("Seraphis lib with libcurl         :   " << min_seraphis_lib_duration_curl.count() << "ms");
     }
     LOG_PRINT_L0("**********************************************************************");
 
