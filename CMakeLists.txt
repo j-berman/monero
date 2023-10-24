@@ -597,6 +597,10 @@ if (WIN32)
   list(APPEND OPENSSL_LIBRARIES ws2_32 crypt32)
 endif()
 
+find_package(CURL REQUIRED)
+message(STATUS "Using Curl include dir at ${CURL_INCLUDE_DIR}")
+include_directories(${CURL_INCLUDE_DIR})
+
 find_package(HIDAPI)
 
 add_definition_if_library_exists(c memset_s "string.h" HAVE_MEMSET_S)
