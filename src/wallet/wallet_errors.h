@@ -1012,9 +1012,9 @@ namespace tools
   }
 }
 
-#define THROW_ON_RPC_RESPONSE_ERROR(r, error, res, method, ...) \
+#define THROW_ON_RPC_RESPONSE_ERROR(r, err, res, method, ...) \
   do { \
-    tools::error::throw_on_rpc_response_error(r, error, res.status, method); \
+    tools::error::throw_on_rpc_response_error(r, err, res.status, method); \
     THROW_WALLET_EXCEPTION_IF(res.status != CORE_RPC_STATUS_OK, ## __VA_ARGS__); \
   } while(0)
 
