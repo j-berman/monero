@@ -48,6 +48,8 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
+#include <cstdint>
+#include <vector>
 
 //forward declarations
 

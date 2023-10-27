@@ -40,6 +40,9 @@
 //third party headers
 
 //standard headers
+#include <string>
+#include <vector>
+#include <mutex>
 
 //forward declarations
 

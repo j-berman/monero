@@ -46,6 +46,9 @@
 
 //standard headers
 #include <future>
+#include <exception>
+#include <utility>
+#include <string>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "seraphis_impl"
@@ -144,10 +147,8 @@ static void parse_rpc_get_blocks(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::
         parsed_block.parsed_txs.resize(1 + res.blocks[block_idx].txs.size());
 
         cryptonote::block block;
-        if (!cryptonote::parse_and_validate_block_from_blob(res.blocks[block_idx].block, block))
-        {
-            throw std::runtime_error("failed to parse block blob at index " + std::to_string(block_idx));
-        }
+        THROW_WALLET_EXCEPTION_IF(!cryptonote::parse_and_validate_block_from_blob(res.blocks[block_idx].block, block),
+            tools::error::wallet_internal_error, "failed to parse block blob at index " + std::to_string(block_idx));
 
         parsed_block.block_index = cryptonote::get_block_height(block);
         parsed_block.timestamp = block.timestamp;
@@ -169,10 +170,8 @@ static void parse_rpc_get_blocks(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::
             auto &parsed_tx = parsed_block.parsed_txs[1+tx_idx];
 
             cryptonote::transaction tx;
-            if (!cryptonote::parse_and_validate_tx_base_from_blob(res.blocks[block_idx].txs[tx_idx].blob, tx))
-            {
-                throw std::runtime_error("failed to parse tx blob at index " + std::to_string(tx_idx));
-            }
+            THROW_WALLET_EXCEPTION_IF(!cryptonote::parse_and_validate_tx_base_from_blob(res.blocks[block_idx].txs[tx_idx].blob, tx),
+                tools::error::wallet_internal_error, "failed to parse tx blob at index " + std::to_string(tx_idx));
 
             parsed_tx = parsed_transaction_t{
                         std::move(tx),
@@ -184,8 +183,8 @@ static void parse_rpc_get_blocks(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::
 
     for (size_t block_idx = 0; block_idx < non_miner_tx_hashes.size(); ++block_idx)
     {
-        if (parsed_blocks[block_idx].parsed_txs.size() != non_miner_tx_hashes[block_idx].size() + 1)
-            throw std::runtime_error("Unexpected number of tx hashes");
+        THROW_WALLET_EXCEPTION_IF(parsed_blocks[block_idx].parsed_txs.size() != non_miner_tx_hashes[block_idx].size() + 1,
+            tools::error::wallet_internal_error, "Unexpected number of tx hashes");
         for (size_t tx_idx = 0; tx_idx < non_miner_tx_hashes[block_idx].size(); ++tx_idx)
             parsed_blocks[block_idx].parsed_txs[1+tx_idx].tx_hash = std::move(non_miner_tx_hashes[block_idx][tx_idx]);
     }
