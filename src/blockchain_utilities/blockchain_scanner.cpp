@@ -63,8 +63,6 @@
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "bcutil"
 
-const std::string DEFAULT_WALLET_FILE = "monero_blockchain_scanner_test_wallet_file";
-
 const std::uint64_t DEFAULT_LOOP_COUNT = 5;
 
 namespace po = boost::program_options;
@@ -331,12 +329,6 @@ int main(int argc, char* argv[])
     if (!command_line::is_arg_defaulted(vm, arg_start_height))
         start_height = command_line::get_arg(vm, arg_start_height);
 
-    if (boost::filesystem::exists(DEFAULT_WALLET_FILE))
-    {
-        std::remove(DEFAULT_WALLET_FILE.c_str());
-        std::remove((DEFAULT_WALLET_FILE + ".keys").c_str());
-    }
-
     std::uint64_t loop_count = DEFAULT_LOOP_COUNT;
     if (!command_line::is_arg_defaulted(vm, arg_loop_count))
         loop_count = command_line::get_arg(vm, arg_loop_count);
@@ -349,7 +341,7 @@ int main(int argc, char* argv[])
     bool opt_stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
     network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET : MAINNET;
 
-    // TODO: allow user to securely input seed manually (make sure I password protect the file wallet2 generates)
+    // TODO: allow user to pass these as args
     const std::string mnemonic = "sequence atlas unveil summon pebbles tuesday beer rudely snake rockets different fuselage woven tagged bested dented vegan hover rapid fawns obvious muppet randomly seasons randomly";
     const std::string priv_spend_key = "b0ef6bd527b9b23b9ceef70dc8b4cd1ee83ca14541964e764ad23f5151204f0f";
     const std::string pub_spend_key = "7d996b0f2db6dbb5f2a086211f2399a4a7479b2c911af307fdc3f7f61a88cb0e";
@@ -365,6 +357,13 @@ int main(int argc, char* argv[])
     {
         LOG_PRINT_L0("Starting loop " << i+1 << " / " << loop_count);
 
+        // seraphis lib
+        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib...");
+        auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+        LOG_PRINT_L0("Time to scan using the updated Seraphis lib: " << seraphis_lib_duration.count() << "ms");
+        seraphis_lib_results.push_back(std::move(seraphis_lib_duration));
+        // end seraphis lib
+
         // wallet2
         LOG_PRINT_L0("Initalizing the wallet2 client...");
         std::unique_ptr<tools::wallet2> wallet2 = std::unique_ptr<tools::wallet2>(new tools::wallet2(static_cast<cryptonote::network_type>(net_type), 1, true));
@@ -375,9 +374,8 @@ int main(int argc, char* argv[])
         wallet2->set_seed_language(language);
 
         wallet2->set_refresh_from_block_height(start_height);
-        wallet2->set_daemon(daemon_address);
-        // TODO: allow user to password protect entered seed
-        wallet2->generate(DEFAULT_WALLET_FILE, "", recovery_key, true, false, false);
+        wallet2->set_daemon(daemon_address, boost::none, true, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+        wallet2->generate("", "", recovery_key, true, false, false);
 
         // set callback to print progress
         std::chrono::milliseconds wallet2_duration;
@@ -398,17 +396,7 @@ int main(int argc, char* argv[])
         }
 
         wallet2_results.push_back(std::move(wallet2_duration));
-
-        std::remove(DEFAULT_WALLET_FILE.c_str());
-        std::remove((DEFAULT_WALLET_FILE + ".keys").c_str());
         // end wallet2
-
-        // seraphis lib
-        LOG_PRINT_L0("Initializing the client using the updated Seraphis lib...");
-        auto seraphis_lib_duration = scan_chain(start_height, priv_spend_key, priv_view_key, daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
-        LOG_PRINT_L0("Time to scan using the updated Seraphis lib: " << seraphis_lib_duration.count() << "ms");
-        seraphis_lib_results.push_back(std::move(seraphis_lib_duration));
-        // end seraphis lib
     }
 
     std::sort(seraphis_lib_results.begin(), seraphis_lib_results.end());
