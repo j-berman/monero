@@ -47,6 +47,7 @@
 //standard headers
 #include <memory>
 #include <atomic>
+#include <mutex>
 
 //forward declarations
 
