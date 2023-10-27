@@ -337,7 +337,7 @@ static void rpc_get_blocks(const ChunkRequest &chunk_request,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-// TODO: make this a member of the AsyncScanContext class and reduce number of params
+// TODO: make this a member of the AsyncScanContextLegacy class and reduce number of params
 bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context,
     async::TokenQueue<PendingChunk> &pending_chunks,
     const std::unique_lock<std::mutex> &pending_queue_lock,
@@ -351,7 +351,7 @@ bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &en
     std::uint64_t &num_blocks_in_chain,
     rct::key &top_block_hash); // forward declaration
 //-------------------------------------------------------------------------------------------------------------------
-// TODO: make this a member of the AsyncScanContext class and reduce number of params
+// TODO: make this a member of the AsyncScanContextLegacy class and reduce number of params
 PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
     sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context,
     async::TokenQueue<PendingChunk> &pending_chunks,
@@ -632,7 +632,7 @@ bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &en
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void AsyncScanContext::wait_until_pending_queue_clears(const std::unique_lock<std::mutex> &pending_queue_lock)
+void AsyncScanContextLegacy::wait_until_pending_queue_clears(const std::unique_lock<std::mutex> &pending_queue_lock)
 {
     // TODO: implement a clean safe cancel instead of waiting
     MDEBUG("Waiting until pending queue clears");
@@ -661,7 +661,7 @@ void AsyncScanContext::wait_until_pending_queue_clears(const std::unique_lock<st
     MDEBUG("Pending queue cleared");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void AsyncScanContext::begin_scanning_from_index(const std::uint64_t start_index, const std::uint64_t max_chunk_size)
+void AsyncScanContextLegacy::begin_scanning_from_index(const std::uint64_t start_index, const std::uint64_t max_chunk_size)
 {
     MDEBUG("Begin scanning from index " << start_index);
 
@@ -691,7 +691,7 @@ void AsyncScanContext::begin_scanning_from_index(const std::uint64_t start_index
 ;
 }
 //-------------------------------------------------------------------------------------------------------------------
-std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContext::get_onchain_chunk()
+std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_chunk()
 {
     // Get the chunk with the lowest start height
     PendingChunk oldest_chunk;

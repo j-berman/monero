@@ -106,10 +106,10 @@ typedef struct {
 // WARNING: if the chunk size increment exceeds the max chunk size obtainable from the raw chunk data source, then
 //          this will be less efficient because it will need to 'gap fill' continuously
 ///
-class AsyncScanContext final : public ScanContextLedger
+class AsyncScanContextLegacy final : public ScanContextLedger
 {
 public:
-    AsyncScanContext(const std::uint64_t pending_chunk_max_queue_size,
+    AsyncScanContextLegacy(const std::uint64_t pending_chunk_max_queue_size,
             const std::uint64_t chunk_size_increment,
             const std::uint64_t max_get_blocks_attempts,
             sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context) :
@@ -124,7 +124,7 @@ public:
         assert(m_max_get_blocks_attempts > 0);
     }
 
-    ~AsyncScanContext()
+    ~AsyncScanContextLegacy()
     {
         std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
         wait_until_pending_queue_clears(lock);

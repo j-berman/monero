@@ -232,7 +232,7 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     const uint64_t pending_chunk_queue_size = std::min((std::uint64_t)(std::thread::hardware_concurrency() + 2), static_cast<std::uint64_t>(10));
     LOG_PRINT_L0("Pending chunk queue size: " << pending_chunk_queue_size);
 
-    sp::scanning::mocks::AsyncScanContext scan_context_ledger{
+    sp::scanning::mocks::AsyncScanContextLegacy scan_context_ledger{
         pending_chunk_queue_size, // TODO: stick this in scan conifg
         scan_config.max_chunk_size_hint,
         scan_config.max_get_blocks_attempts,
