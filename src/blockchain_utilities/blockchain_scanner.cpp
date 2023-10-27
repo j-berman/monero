@@ -194,7 +194,8 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     const sp::scanning::ScanMachineConfig scan_config{
         .reorg_avoidance_increment = 1,
         .max_chunk_size_hint = 1000,
-        .max_partialscan_attempts = 0};
+        .max_partialscan_attempts = 0,
+        .max_get_blocks_attempts = 3};
 
     std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
     add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
@@ -206,7 +207,7 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
         // TODO: return version info in /getblocks.bin
         cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
         cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
-        bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::invoke_http_mode::JON_RPC, "get_version", req_t, resp_t);
+        bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::http_mode::JSON_RPC, "get_version", req_t, resp_t);
         CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
         CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR),
             "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
@@ -215,23 +216,11 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
         [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
             {
-                LOG_PRINT_L0("Querying for onchain chunk (req.start_height=" << req.start_height << ")");
-                // TODO: retry logic
-                if (conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
-                        sp::mocks::ClientConnectionPool::invoke_http_mode::BIN,
-                        "/getblocks.bin",
-                        req,
-                        res))
-                {
-                    LOG_PRINT_L0("Successfully queried for onchain chunk (req.start_height=" << req.start_height
-                            << ", res.current_height=" << res.current_height << ", blocks=" << res.blocks.size() << ")");
-                    return true;
-                }
-                else
-                {
-                    LOG_ERROR("Failed to /getblocks.bin at block index " << req.start_height);
-                    return false;
-                }
+                return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
+                    sp::mocks::ClientConnectionPool::http_mode::BIN,
+                    "/getblocks.bin",
+                    req,
+                    res);
             };
 
     sp::mocks::EnoteFindingContextMockLegacy enote_finding_context{
@@ -246,6 +235,7 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
     sp::scanning::mocks::AsyncScanContext scan_context_ledger{
         pending_chunk_queue_size, // TODO: stick this in scan conifg
         scan_config.max_chunk_size_hint,
+        scan_config.max_get_blocks_attempts,
         enote_finding_context};
 
     sp::SpEnoteStore user_enote_store{start_height == 0 ? 1 : start_height, 3000000, 10};

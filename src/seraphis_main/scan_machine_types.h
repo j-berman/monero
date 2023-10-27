@@ -80,6 +80,8 @@ struct ScanMachineConfig final
     std::uint64_t max_chunk_size_hint{100};
     /// maximum number of times to try rescanning if a partial reorg is detected
     std::uint64_t max_partialscan_attempts{3};
+    /// maximum number of times to retry fetching blocks from daemon on failure
+    std::uint64_t max_get_blocks_attempts{3};
 };
 
 ////

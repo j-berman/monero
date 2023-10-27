@@ -72,30 +72,10 @@ struct PendingChunk final
     sp::scanning::PendingChunkData pending_data;
 };
 
-// TODO: remove usage of this variant, pending chunk queue should just be composed of pending chunks
-using PendingChunkVariant = tools::variant<PendingChunk, sp::scanning::ChunkContext>;
-
-static inline bool operator<(const PendingChunkVariant &variant1, const PendingChunkVariant &variant2)
+static inline bool operator<(const PendingChunk &pending_chunk1, const PendingChunk &pending_chunk2)
 {
-    struct visitor final : public tools::variant_static_visitor<bool>
-    {
-        visitor(const PendingChunkVariant &other_ref) : other{other_ref} {}
-        const PendingChunkVariant &other;
-
-        // TODO: static assert these are the only 2 types
-        const uint64_t other_start_index = other.index() == PendingChunkVariant::type_index_of<PendingChunk>()
-            ? other.unwrap<PendingChunk>().chunk_request.start_index
-            : other.unwrap<sp::scanning::ChunkContext>().start_index;
-
-        using variant_static_visitor::operator();  //for blank overload
-        bool operator()(const PendingChunk &chunk) const { return chunk.chunk_request.start_index < other_start_index; }
-        bool operator()(const sp::scanning::ChunkContext &chunk) const { return chunk.start_index < other_start_index; }
-    };
-
-    return variant1.visit(visitor{variant2});
+    return pending_chunk1.chunk_request.start_index < pending_chunk2.chunk_request.start_index;
 }
-
-using RawChunkData = cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response;
 
 typedef struct {
     cryptonote::transaction tx;
@@ -129,13 +109,25 @@ typedef struct {
 class AsyncScanContext final : public ScanContextLedger
 {
 public:
-    AsyncScanContext(const std::uint64_t pending_chunk_max_queue_size, const std::uint64_t chunk_size_increment, sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context) :
+    AsyncScanContext(const std::uint64_t pending_chunk_max_queue_size,
+            const std::uint64_t chunk_size_increment,
+            const std::uint64_t max_get_blocks_attempts,
+            sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context) :
         m_pending_chunk_max_queue_size{pending_chunk_max_queue_size},
         m_chunk_size_increment{chunk_size_increment},
-        m_enote_finding_context{enote_finding_context}
+        m_max_get_blocks_attempts{max_get_blocks_attempts},
+        m_enote_finding_context{enote_finding_context},
+        m_pause_pending_queue{false}
     {
         assert(m_pending_chunk_max_queue_size > 0);
         assert(m_chunk_size_increment > 0);
+        assert(m_max_get_blocks_attempts > 0);
+    }
+
+    ~AsyncScanContext()
+    {
+        std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
+        wait_until_pending_queue_clears(lock);
     }
 
     void begin_scanning_from_index(const std::uint64_t start_index, const std::uint64_t max_chunk_size);
@@ -148,21 +140,25 @@ public:
     bool is_aborted() const override { return false; }
 
 private:
-    void wait_until_pending_queue_clears();
+    void wait_until_pending_queue_clears(const std::unique_lock<std::mutex> &pending_queue_lock);
 
+private:
     /// config
     const std::uint64_t m_pending_chunk_max_queue_size;
     const std::uint64_t m_chunk_size_increment;
+    const std::uint64_t m_max_get_blocks_attempts;
 
     /// finding context
     sp::mocks::EnoteFindingContextMockLegacy &m_enote_finding_context;
 
     /// pending chunks
-    async::TokenQueue<PendingChunkVariant> m_pending_chunks{};
-    std::mutex m_pending_queue_lock;
+    async::TokenQueue<PendingChunk> m_pending_chunks{};
+    std::mutex m_pending_queue_mutex;
+    bool m_pause_pending_queue;
     std::atomic<std::uint64_t> m_num_pending_chunks{0};
     std::atomic<std::uint64_t> m_start_index{0};
     std::uint64_t m_num_blocks_in_chain{0};
+    rct::key m_top_block_hash;
     std::uint64_t m_last_scanned_index{0};
 };
 //-------------------------------------------------------------------------------------------------------------------

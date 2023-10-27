@@ -69,11 +69,11 @@ public:
     }
 
 //member functions
-    enum invoke_http_mode { JON, BIN, JON_RPC };
+    enum http_mode { JSON, BIN, JSON_RPC };
 
     /// Use an http client from the pool to make an RPC request to the daemon
     template <typename COMMAND_TYPE>
-    bool rpc_command(const invoke_http_mode &mode, const std::string &command_name, const typename COMMAND_TYPE::request &req, typename COMMAND_TYPE::response &res)
+    bool rpc_command(const http_mode &mode, const std::string &command_name, const typename COMMAND_TYPE::request &req, typename COMMAND_TYPE::response &res)
     {
         // Acquire an http client from the connection pool
         size_t http_client_index = 0;
@@ -88,32 +88,13 @@ public:
 
         // Do the RPC command
         LOG_PRINT_L2("Invoking " << command_name << " with http client " << http_client_index);
-        bool r = false;
         switch (mode)
         {
-            case invoke_http_mode::JON:
-                r = epee::net_utils::invoke_http_json(command_name, req, res, *http_client);
-                break;
-            case invoke_http_mode::BIN:
-                r = epee::net_utils::invoke_http_bin(command_name, req, res, *http_client);
-                break;
-            case invoke_http_mode::JON_RPC:
-                r = epee::net_utils::invoke_http_json_rpc("/json_rpc", command_name, req, res, *http_client);
-                break;
-            default:
-                MERROR("Unknown invoke_http_mode: " << mode);
-                r = false;
+            case JSON: return epee::net_utils::invoke_http_json(command_name, req, res, *http_client);
+            case BIN: return epee::net_utils::invoke_http_bin(command_name, req, res, *http_client);
+            case JSON_RPC: return epee::net_utils::invoke_http_json_rpc("/json_rpc", command_name, req, res, *http_client);
+            default: { MERROR("Unknown http_mode: " << mode); return false; }
         }
-
-        // Return an empty result on failure
-        if (!r)
-        {
-            typename COMMAND_TYPE::response empty_res = AUTO_VAL_INIT(empty_res);
-            res = std::move(empty_res);
-            return true;
-        }
-
-        return r;
     }
 
 private:
