@@ -508,6 +508,24 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
                 return boost::none;
             }
 
+            // launch the next task if we expect more and the queue has room
+            if (!chunk_is_terminal_chunk)
+            {
+                std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
+                launch_non_gap_fill_chunk_task(enote_finding_context,
+                    pending_chunks,
+                    lock,
+                    m_pending_queue_mutex,
+                    m_pause_pending_queue,
+                    num_pending_chunks,
+                    l_pending_chunk_max_queue_size,
+                    l_max_get_blocks_attempts,
+                    next_start_index,
+                    l_chunk_size_increment,
+                    num_blocks_in_chain,
+                    top_block_hash);
+            }
+
             // find-received-scan raw data
             // set data
             // - note: process chunk data can 'do nothing' if the chunk is empty (i.e. don't launch any tasks)
@@ -518,7 +536,7 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
             l_chunk_data->set_value(std::move(chunk_data));
             l_data_join_token = nullptr;
 
-            // we finished this task, decrement pending chunk queue
+            // we finished this task and the bulky chain data will be freed from memory, decrement pending chunk queue
             if (!l_chunk_request.gap_fill)
                 num_pending_chunks.fetch_sub(1, std::memory_order_relaxed);
 
