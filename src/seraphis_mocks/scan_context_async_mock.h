@@ -117,6 +117,7 @@ public:
             const std::uint64_t max_get_blocks_attempts,
             sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context) :
         m_pending_chunk_max_queue_size{pending_chunk_max_queue_size},
+        m_max_scanning_queue_size{pending_chunk_max_queue_size},
         m_chunk_size_increment{chunk_size_increment},
         m_max_get_blocks_attempts{max_get_blocks_attempts},
         m_enote_finding_context{enote_finding_context},
@@ -146,8 +147,10 @@ private:
     void wait_until_pending_queue_clears(const std::unique_lock<std::mutex> &pending_queue_lock);
 
 private:
+    // TODO: add a config_t struct and a state_t struct
     /// config
     const std::uint64_t m_pending_chunk_max_queue_size;
+    const std::uint64_t m_max_scanning_queue_size;
     const std::uint64_t m_chunk_size_increment;
     const std::uint64_t m_max_get_blocks_attempts;
 
@@ -155,10 +158,11 @@ private:
     sp::mocks::EnoteFindingContextMockLegacy &m_enote_finding_context;
 
     /// pending chunks
-    async::TokenQueue<PendingChunk> m_pending_chunks{};
+    async::TokenQueue<PendingChunk> m_pending_chunk_queue{};
     std::mutex m_pending_queue_mutex;
     bool m_pause_pending_queue;
     std::atomic<std::uint64_t> m_num_pending_chunks{0};
+    std::atomic<std::uint64_t> m_num_scanning_chunks{0};
     std::atomic<std::uint64_t> m_start_index{0};
     std::uint64_t m_num_blocks_in_chain{0};
     rct::key m_top_block_hash;

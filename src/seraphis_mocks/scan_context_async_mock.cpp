@@ -338,12 +338,14 @@ static void rpc_get_blocks(const ChunkRequest &chunk_request,
 //-------------------------------------------------------------------------------------------------------------------
 // TODO: make this a member of the AsyncScanContextLegacy class and reduce number of params
 bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context,
-    async::TokenQueue<PendingChunk> &pending_chunks,
+    async::TokenQueue<PendingChunk> &pending_chunk_queue,
     const std::unique_lock<std::mutex> &pending_queue_lock,
     std::mutex &m_pending_queue_mutex,
     bool &m_pause_pending_queue,
     std::atomic<std::uint64_t> &num_pending_chunks,
     const std::uint64_t pending_chunk_max_queue_size,
+    std::atomic<std::uint64_t> &m_num_scanning_chunks,
+    const std::uint64_t m_max_scanning_queue_size,
     const std::uint64_t max_get_blocks_attempts,
     std::atomic<std::uint64_t> &next_start_index,
     const std::uint64_t chunk_size_increment,
@@ -353,12 +355,14 @@ bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &en
 // TODO: make this a member of the AsyncScanContextLegacy class and reduce number of params
 PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
     sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context,
-    async::TokenQueue<PendingChunk> &pending_chunks,
+    async::TokenQueue<PendingChunk> &pending_chunk_queue,
     const std::unique_lock<std::mutex> &pending_queue_lock,
     std::mutex &m_pending_queue_mutex,
     bool &m_pause_pending_queue,
     std::atomic<std::uint64_t> &num_pending_chunks,
     const std::uint64_t pending_chunk_max_queue_size,
+    std::atomic<std::uint64_t> &m_num_scanning_chunks,
+    const std::uint64_t m_max_scanning_queue_size,
     const std::uint64_t max_get_blocks_attempts,
     std::atomic<std::uint64_t> &next_start_index,
     const std::uint64_t chunk_size_increment,
@@ -389,10 +393,11 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
         [
             &threadpool,
             &enote_finding_context,
-            &pending_chunks,
+            &pending_chunk_queue,
             &m_pending_queue_mutex,
             &m_pause_pending_queue,
             &num_pending_chunks,
+            &m_num_scanning_chunks,
             &next_start_index,
             &num_blocks_in_chain,
             &top_block_hash,
@@ -400,6 +405,7 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
             l_data_stop_flag               = data_stop_signal.get_future().share(),
             l_chunk_request                = chunk_request,
             l_pending_chunk_max_queue_size = pending_chunk_max_queue_size,
+            l_max_scanning_queue_size      = m_max_scanning_queue_size,
             l_max_get_blocks_attempts      = max_get_blocks_attempts,
             l_chunk_size_increment         = chunk_size_increment,
             l_chunk_context                = std::make_shared<std::promise<sp::scanning::ChunkContext>>(std::move(chunk_context_handle)),
@@ -473,14 +479,16 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
                                 .gap_fill             = true
                             };
 
-                        pending_chunks.force_push(launch_chunk_task(next_chunk_request,
+                        pending_chunk_queue.force_push(launch_chunk_task(next_chunk_request,
                             enote_finding_context,
-                            pending_chunks,
+                            pending_chunk_queue,
                             lock,
                             m_pending_queue_mutex,
                             m_pause_pending_queue,
                             num_pending_chunks,
                             l_pending_chunk_max_queue_size,
+                            m_num_scanning_chunks,
+                            l_max_scanning_queue_size,
                             l_max_get_blocks_attempts,
                             next_start_index,
                             l_chunk_size_increment,
@@ -508,17 +516,26 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
                 return boost::none;
             }
 
+            if (!l_chunk_request.gap_fill)
+            {
+                // Retrieved the chunk, now need to scan it
+                num_pending_chunks.fetch_sub(1, std::memory_order_relaxed);
+                m_num_scanning_chunks.fetch_add(1, std::memory_order_relaxed);
+            }
+
             // launch the next task if we expect more and the queue has room
             if (!chunk_is_terminal_chunk)
             {
                 std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
                 launch_non_gap_fill_chunk_task(enote_finding_context,
-                    pending_chunks,
+                    pending_chunk_queue,
                     lock,
                     m_pending_queue_mutex,
                     m_pause_pending_queue,
                     num_pending_chunks,
                     l_pending_chunk_max_queue_size,
+                    m_num_scanning_chunks,
+                    l_max_scanning_queue_size,
                     l_max_get_blocks_attempts,
                     next_start_index,
                     l_chunk_size_increment,
@@ -536,21 +553,23 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
             l_chunk_data->set_value(std::move(chunk_data));
             l_data_join_token = nullptr;
 
-            // we finished this task and the bulky chain data will be freed from memory, decrement pending chunk queue
+            // Finished scanning the chunk
             if (!l_chunk_request.gap_fill)
-                num_pending_chunks.fetch_sub(1, std::memory_order_relaxed);
+                m_num_scanning_chunks.fetch_sub(1, std::memory_order_relaxed);
 
             // launch the next task if we expect more and the queue has room
             if (!chunk_is_terminal_chunk)
             {
                 std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
                 launch_non_gap_fill_chunk_task(enote_finding_context,
-                    pending_chunks,
+                    pending_chunk_queue,
                     lock,
                     m_pending_queue_mutex,
                     m_pause_pending_queue,
                     num_pending_chunks,
                     l_pending_chunk_max_queue_size,
+                    m_num_scanning_chunks,
+                    l_max_scanning_queue_size,
                     l_max_get_blocks_attempts,
                     next_start_index,
                     l_chunk_size_increment,
@@ -591,12 +610,14 @@ PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &enote_finding_context,
-    async::TokenQueue<PendingChunk> &pending_chunks,
+    async::TokenQueue<PendingChunk> &pending_chunk_queue,
     const std::unique_lock<std::mutex> &pending_queue_lock,
     std::mutex &m_pending_queue_mutex,
     bool &m_pause_pending_queue,
     std::atomic<std::uint64_t> &num_pending_chunks,
     const std::uint64_t pending_chunk_max_queue_size,
+    std::atomic<std::uint64_t> &m_num_scanning_chunks,
+    const std::uint64_t m_max_scanning_queue_size,
     const std::uint64_t max_get_blocks_attempts,
     std::atomic<std::uint64_t> &next_start_index,
     const std::uint64_t chunk_size_increment,
@@ -615,6 +636,12 @@ bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &en
         return false;
     }
 
+    if (m_num_scanning_chunks.load(std::memory_order_relaxed) >= m_max_scanning_queue_size)
+    {
+        MDEBUG("Scanning queue is already at max capacity");
+        return false;
+    }
+
     const std::uint64_t pending_queue_size = num_pending_chunks.fetch_add(1, std::memory_order_relaxed);
     if (pending_queue_size >= pending_chunk_max_queue_size)
     {
@@ -626,14 +653,16 @@ bool launch_non_gap_fill_chunk_task(sp::mocks::EnoteFindingContextMockLegacy &en
     const std::uint64_t start_index = next_start_index.fetch_add(chunk_size_increment);
     if (num_blocks_in_chain == 0 || start_index < num_blocks_in_chain)
     {
-        pending_chunks.force_push(launch_chunk_task({ start_index, chunk_size_increment, false },
+        pending_chunk_queue.force_push(launch_chunk_task({ start_index, chunk_size_increment, false },
             enote_finding_context,
-            pending_chunks,
+            pending_chunk_queue,
             pending_queue_lock,
             m_pending_queue_mutex,
             m_pause_pending_queue,
             num_pending_chunks,
             pending_chunk_max_queue_size,
+            m_num_scanning_chunks,
+            m_max_scanning_queue_size,
             max_get_blocks_attempts,
             next_start_index,
             chunk_size_increment,
@@ -661,7 +690,7 @@ void AsyncScanContextLegacy::wait_until_pending_queue_clears(const std::unique_l
     m_pause_pending_queue = true;
 
     PendingChunk clear_chunk;
-    async::TokenQueueResult clear_chunk_result = m_pending_chunks.try_pop(clear_chunk);
+    async::TokenQueueResult clear_chunk_result = m_pending_chunk_queue.try_pop(clear_chunk);
     while (clear_chunk_result != async::TokenQueueResult::QUEUE_EMPTY)
     {
         THROW_WALLET_EXCEPTION_IF(clear_chunk_result != async::TokenQueueResult::SUCCESS,
@@ -672,7 +701,7 @@ void AsyncScanContextLegacy::wait_until_pending_queue_clears(const std::unique_l
         async::get_default_threadpool().work_while_waiting(clear_chunk.pending_data.data_join_condition,
             async::DefaultPriorityLevels::MAX);
 
-        clear_chunk_result = m_pending_chunks.try_pop(clear_chunk);
+        clear_chunk_result = m_pending_chunk_queue.try_pop(clear_chunk);
     }
 
     MDEBUG("Pending queue cleared");
@@ -688,18 +717,21 @@ void AsyncScanContextLegacy::begin_scanning_from_index(const std::uint64_t start
 
     m_start_index.store(start_index, std::memory_order_relaxed);
     m_num_pending_chunks.store(0, std::memory_order_relaxed);
+    m_num_scanning_chunks.store(0, std::memory_order_relaxed);
     m_num_blocks_in_chain = 0;
     m_top_block_hash = rct::hash2rct(crypto::null_hash);
     m_last_scanned_index = start_index;
 
     // launch tasks until the queue fills up
     while (launch_non_gap_fill_chunk_task(m_enote_finding_context,
-            m_pending_chunks,
+            m_pending_chunk_queue,
             pending_queue_lock,
             m_pending_queue_mutex,
             m_pause_pending_queue,
             m_num_pending_chunks,
             m_pending_chunk_max_queue_size,
+            m_num_scanning_chunks,
+            m_max_scanning_queue_size,
             m_max_get_blocks_attempts,
             m_start_index,
             m_chunk_size_increment,
@@ -714,7 +746,7 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_c
     PendingChunk oldest_chunk;
     {
         std::lock_guard<std::mutex> lock{m_pending_queue_mutex};
-        async::TokenQueueResult oldest_chunk_result = m_pending_chunks.try_remove_min(oldest_chunk);
+        async::TokenQueueResult oldest_chunk_result = m_pending_chunk_queue.try_remove_min(oldest_chunk);
         if (oldest_chunk_result == async::TokenQueueResult::QUEUE_EMPTY)
         {
             // end condition
