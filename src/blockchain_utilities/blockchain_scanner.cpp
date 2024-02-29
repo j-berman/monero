@@ -191,7 +191,7 @@ std::chrono::milliseconds scan_chain(const uint64_t start_height, const std::str
 
     const sp::scanning::ScanMachineConfig scan_config{
         .reorg_avoidance_increment = 1,
-        .max_chunk_size_hint = 1000,
+        .max_chunk_size_hint = 20, // the lower this is, the quicker feedback gets to the user on scanner progress
         .max_partialscan_attempts = 0,
         .max_get_blocks_attempts = 3};
 
