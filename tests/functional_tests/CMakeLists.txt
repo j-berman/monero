@@ -29,17 +29,20 @@
 set(functional_tests_sources
   main.cpp
   transactions_flow_test.cpp
-  transactions_generation_from_blockchain.cpp)
+  transactions_generation_from_blockchain.cpp
+  wallet_scanner.cpp)
 
 set(functional_tests_headers
   transactions_flow_test.h
-  transactions_generation_from_blockchain.h)
+  transactions_generation_from_blockchain.h
+  wallet_scanner.h)
 
 monero_add_minimal_executable(functional_tests
   ${functional_tests_sources}
   ${functional_tests_headers})
 target_link_libraries(functional_tests
   PRIVATE
+    cryptonote_basic
     cryptonote_core
     wallet
     common
@@ -48,6 +51,7 @@ target_link_libraries(functional_tests
     ${Boost_REGEX_LIBRARY}
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${CMAKE_THREAD_LIBS_INIT}
+    ${EPEE_READLINE}
     ${EXTRA_LIBRARIES})
 
 set(make_test_signature_sources

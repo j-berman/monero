@@ -219,6 +219,16 @@ namespace tools
       return res;
     }
 
+    cryptonote::COMMAND_RPC_GET_TRANSACTIONS::response get_transactions(const std::vector<std::string> &txs_hashes)
+    {
+      cryptonote::COMMAND_RPC_GET_TRANSACTIONS::request req = AUTO_VAL_INIT(req);
+      cryptonote::COMMAND_RPC_GET_TRANSACTIONS::response res = AUTO_VAL_INIT(res);
+      req.txs_hashes = txs_hashes;
+      req.decode_as_json = false;
+      CHECK_AND_ASSERT_THROW_MES(m_rpc_client.basic_rpc_request(req, res, "/get_transactions"), "failed to get transactions");
+      return res;
+    }
+
     cryptonote::COMMAND_RPC_FLUSH_TRANSACTION_POOL::response flush_txpool()
     {
       cryptonote::COMMAND_RPC_FLUSH_TRANSACTION_POOL::request req = AUTO_VAL_INIT(req);
