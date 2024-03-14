@@ -30,7 +30,22 @@
 
 #include "common/rpc_client.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "rpc/core_rpc_server_commands_defs.h"
+#include "seraphis_core/legacy_core_utils.h"
+#include "seraphis_impl/enote_store.h"
+#include "seraphis_impl/enote_store_utils.h"
+#include "seraphis_impl/scan_context_simple.h"
+#include "seraphis_impl/scan_process_basic.h"
+#include "seraphis_main/contextual_enote_record_types.h"
+#include "seraphis_main/scan_machine_types.h"
+#include "seraphis_mocks/scan_chunk_consumer_mocks.h"
+#include "seraphis_mocks/scan_context_async_mock.h"
+#include "seraphis_mocks/enote_finding_context_mocks.h"
+#include "seraphis_mocks/mock_http_client_pool.h"
 #include "wallet/wallet2.h"
+
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/thread/thread.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -148,11 +163,138 @@ static void check_wallet2_scan(std::unique_ptr<tools::wallet2> &sendr_wallet,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void add_default_subaddresses(const rct::key &legacy_base_spend_pubkey,
+    const crypto::secret_key &legacy_view_privkey,
+    std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map)
+{
+    const uint32_t SUBADDR_MAJOR_DEFAULT_LOOKAHEAD = 50;
+    const uint32_t SUBADDR_MINOR_DEFAULT_LOOKAHEAD = 200;
+
+    for (uint32_t i = 0; i < SUBADDR_MAJOR_DEFAULT_LOOKAHEAD; ++i)
+    {
+        for (uint32_t j = 0; j < SUBADDR_MINOR_DEFAULT_LOOKAHEAD; ++j)
+        {
+            const cryptonote::subaddress_index subaddr_index{i, j};
+
+            rct::key legacy_subaddress_spendkey;
+            sp::make_legacy_subaddress_spendkey(
+                legacy_base_spend_pubkey,
+                legacy_view_privkey,
+                subaddr_index,
+                hw::get_device("default"),
+                legacy_subaddress_spendkey);
+
+            legacy_subaddress_map[legacy_subaddress_spendkey] = subaddr_index;
+        }
+    }
+};
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static boost::multiprecision::uint128_t scan_chain(const uint64_t start_height,
+    const rct::key &legacy_base_spend_pubkey,
+    const crypto::secret_key &legacy_spend_privkey,
+    const crypto::secret_key &legacy_view_privkey,
+    sp::mocks::ClientConnectionPool &conn_pool)
+{
+    const sp::scanning::ScanMachineConfig scan_config{
+        .reorg_avoidance_increment = 1,
+        .max_chunk_size_hint = 20, // the lower this is, the quicker feedback gets to the user on scanner progress
+        .max_partialscan_attempts = 0,
+        .max_get_blocks_attempts = 3};
+
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
+    add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
+
+    {
+        // Make sure daemon RPC version matches
+        // TODO: return version info in /getblocks.bin
+        cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
+        cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
+        bool r = conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_VERSION>(sp::mocks::ClientConnectionPool::http_mode::JSON_RPC, "get_version", req_t, resp_t);
+        CHECK_AND_ASSERT_THROW_MES(r && resp_t.status == CORE_RPC_STATUS_OK, "failed /get_version");
+        CHECK_AND_ASSERT_THROW_MES(resp_t.version >= MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR),
+            "unexpected daemon version (must be running an updated daemon for accurate benchmarks)");
+    }
+
+    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
+        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+            {
+                return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
+                    sp::mocks::ClientConnectionPool::http_mode::BIN,
+                    "/getblocks.bin",
+                    req,
+                    res);
+            };
+
+    sp::mocks::EnoteFindingContextMockLegacy enote_finding_context{
+        legacy_base_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
+        rpc_get_blocks};
+
+    const uint64_t pending_chunk_queue_size = std::min(
+        (std::uint64_t)(std::thread::hardware_concurrency() + 2),
+        static_cast<std::uint64_t>(10));
+
+    sp::scanning::mocks::AsyncScanContextLegacy scan_context_ledger{
+        pending_chunk_queue_size, // TODO: stick this in scan conifg
+        scan_config.max_chunk_size_hint,
+        scan_config.max_get_blocks_attempts,
+        enote_finding_context};
+
+    sp::SpEnoteStore user_enote_store{start_height == 0 ? 1 : start_height, 3000000, 10};
+    sp::mocks::ChunkConsumerMockLegacy chunk_consumer{
+        legacy_base_spend_pubkey,
+        legacy_spend_privkey,
+        legacy_view_privkey,
+        user_enote_store};
+
+    sp::scanning::ScanContextNonLedgerDummy scan_context_nonledger{};
+
+    bool r = sp::refresh_enote_store(scan_config,
+        scan_context_nonledger,
+        scan_context_ledger,
+        chunk_consumer);
+    CHECK_AND_ASSERT_THROW_MES(r, "Failed to refresh enote store");
+
+    return sp::get_balance(user_enote_store,
+        {sp::SpEnoteOriginStatus::ONCHAIN, sp::SpEnoteOriginStatus::UNCONFIRMED},
+        {sp::SpEnoteSpentStatus::SPENT_ONCHAIN, sp::SpEnoteSpentStatus::SPENT_UNCONFIRMED});
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+static void check_seraphis_scan(std::unique_ptr<tools::wallet2> &sendr_wallet,
+    std::unique_ptr<tools::wallet2> &recvr_wallet,
+    uint64_t sendr_wallet_expected_balance,
+    uint64_t recvr_wallet_expected_balance,
+    sp::mocks::ClientConnectionPool &conn_pool)
+{
+    boost::multiprecision::uint128_t sp_balance_sendr_wallet = scan_chain(0/*start_height*/,
+            rct::pk2rct(sendr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
+            sendr_wallet->get_account().get_keys().m_spend_secret_key,
+            sendr_wallet->get_account().get_keys().m_view_secret_key,
+            conn_pool
+        );
+    boost::multiprecision::uint128_t sp_balance_recvr_wallet = scan_chain(0/*start_height*/,
+            rct::pk2rct(recvr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
+            recvr_wallet->get_account().get_keys().m_spend_secret_key,
+            recvr_wallet->get_account().get_keys().m_view_secret_key,
+            conn_pool
+        );
+
+    CHECK_AND_ASSERT_THROW_MES(sp_balance_sendr_wallet == boost::multiprecision::uint128_t(sendr_wallet_expected_balance),
+        "sendr_wallet Seraphis lib balance incorrect");
+    CHECK_AND_ASSERT_THROW_MES(sp_balance_recvr_wallet == boost::multiprecision::uint128_t(recvr_wallet_expected_balance),
+        "recvr_wallet Seraphis lib balance incorrect");
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 // Tests
 //-------------------------------------------------------------------------------------------------------------------
 static void check_normal_transfer(tools::t_daemon_rpc_client &daemon,
     std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet)
+    std::unique_ptr<tools::wallet2> &recvr_wallet,
+    sp::mocks::ClientConnectionPool &conn_pool)
 {
     printf("Checking normal transfer\n");
 
@@ -188,11 +330,20 @@ static void check_normal_transfer(tools::t_daemon_rpc_client &daemon,
             tx_hash,
             amount_to_transfer
         );
+
+    // Use Seraphis lib to scan chain
+    check_seraphis_scan(sendr_wallet,
+            recvr_wallet,
+            sendr_wallet_expected_balance,
+            recvr_wallet_expected_balance,
+            conn_pool
+        );
 }
 //-------------------------------------------------------------------------------------------------------------------
 static void check_sweep_single(tools::t_daemon_rpc_client &daemon,
     std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet)
+    std::unique_ptr<tools::wallet2> &recvr_wallet,
+    sp::mocks::ClientConnectionPool &conn_pool)
 {
     printf("Checking sweep single\n");
 
@@ -256,11 +407,20 @@ static void check_sweep_single(tools::t_daemon_rpc_client &daemon,
             tx_hash,
             (amount - fee)
         );
+
+    // Use Seraphis lib to scan chain
+    check_seraphis_scan(sendr_wallet,
+            recvr_wallet,
+            sendr_wallet_expected_balance,
+            recvr_wallet_expected_balance,
+            conn_pool
+        );
 }
 //-------------------------------------------------------------------------------------------------------------------
 static void check_transfer_to_subaddress(tools::t_daemon_rpc_client &daemon,
     std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet)
+    std::unique_ptr<tools::wallet2> &recvr_wallet,
+    sp::mocks::ClientConnectionPool &conn_pool)
 {
     printf("Checking transfer to subaddress\n");
 
@@ -296,11 +456,20 @@ static void check_transfer_to_subaddress(tools::t_daemon_rpc_client &daemon,
             tx_hash,
             amount_to_transfer
         );
+
+    // Use Seraphis lib to scan chain
+    check_seraphis_scan(sendr_wallet,
+            recvr_wallet,
+            sendr_wallet_expected_balance,
+            recvr_wallet_expected_balance,
+            conn_pool
+        );
 }
 //-------------------------------------------------------------------------------------------------------------------
 static void check_transfer_to_multiple_subaddresses(tools::t_daemon_rpc_client &daemon,
     std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet)
+    std::unique_ptr<tools::wallet2> &recvr_wallet,
+    sp::mocks::ClientConnectionPool &conn_pool)
 {
     printf("Checking transfer to multiple subaddresses\n");
 
@@ -360,6 +529,14 @@ static void check_transfer_to_multiple_subaddresses(tools::t_daemon_rpc_client &
             tx_hash,
             amount_to_transfer
         );
+
+    // Use Seraphis lib to scan chain
+    check_seraphis_scan(sendr_wallet,
+            recvr_wallet,
+            sendr_wallet_expected_balance,
+            recvr_wallet_expected_balance,
+            conn_pool
+        );
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool wallet_scanner(const std::string& daemon_addr)
@@ -379,11 +556,14 @@ bool wallet_scanner(const std::string& daemon_addr)
     printf("Mining to sender wallet\n");
     daemon.generateblocks(sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET), 80);
 
+    // Initialize Seraphis lib connection pool
+    sp::mocks::ClientConnectionPool conn_pool(daemon_addr, daemon_login, ssl_support);
+
     // Run the tests
-    check_normal_transfer(daemon, sendr_wallet, recvr_wallet);
-    check_sweep_single(daemon, sendr_wallet, recvr_wallet);
-    check_transfer_to_subaddress(daemon, sendr_wallet, recvr_wallet);
-    check_transfer_to_multiple_subaddresses(daemon, sendr_wallet, recvr_wallet);
+    check_normal_transfer(daemon, sendr_wallet, recvr_wallet, conn_pool);
+    check_sweep_single(daemon, sendr_wallet, recvr_wallet, conn_pool);
+    check_transfer_to_subaddress(daemon, sendr_wallet, recvr_wallet, conn_pool);
+    check_transfer_to_multiple_subaddresses(daemon, sendr_wallet, recvr_wallet, conn_pool);
 
     return true;
 }
