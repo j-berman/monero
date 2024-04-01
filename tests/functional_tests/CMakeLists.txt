@@ -49,6 +49,10 @@ target_link_libraries(functional_tests
     cncrypto
     epee
     rpc
+    seraphis_core
+    seraphis_impl
+    seraphis_main
+    seraphis_mocks
     ${Boost_REGEX_LIBRARY}
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${CMAKE_THREAD_LIBS_INIT}

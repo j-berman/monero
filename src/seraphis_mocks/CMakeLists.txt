@@ -51,6 +51,7 @@ monero_add_library(seraphis_mocks
 
 target_link_libraries(seraphis_mocks
   PUBLIC
+    async
     cncrypto
     common
     cryptonote_basic
