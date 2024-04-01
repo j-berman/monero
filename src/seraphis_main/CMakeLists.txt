@@ -60,6 +60,7 @@ monero_add_library(seraphis_main
 
 target_link_libraries(seraphis_main
   PUBLIC
+    async
     cncrypto
     common
     cryptonote_basic

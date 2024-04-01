@@ -31,6 +31,7 @@
 #pragma once
 
 //local headers
+#include "async/threadpool.h"
 #include "crypto/crypto.h"
 #include "cryptonote_basic/subaddress_index.h"
 #include "ringct/rctTypes.h"
@@ -174,6 +175,45 @@ private:
     // TODO: implement subaddress lookahead
     const std::unordered_map<rct::key, cryptonote::subaddress_index> &m_legacy_subaddress_map;
     const crypto::secret_key &m_legacy_view_privkey;
+};
+
+////
+// EnoteFindingContextLegacyMultithreaded
+// - find owned enotes from legacy view scanning using actual chain data
+// - scanning each individual tx is a task that gets submitted to threadpool
+///
+class EnoteFindingContextLegacyMultithreaded final : public EnoteFindingContextLegacy
+{
+public:
+//constructors
+    EnoteFindingContextLegacyMultithreaded(const rct::key &legacy_base_spend_pubkey,
+        const std::unordered_map<rct::key, cryptonote::subaddress_index> &legacy_subaddress_map,
+        const crypto::secret_key &legacy_view_privkey,
+        async::Threadpool &threadpool) :
+            m_legacy_base_spend_pubkey{legacy_base_spend_pubkey},
+            m_legacy_subaddress_map{legacy_subaddress_map},
+            m_legacy_view_privkey{legacy_view_privkey},
+            m_threadpool(threadpool)
+    {
+    }
+
+//overloaded operators
+    /// disable copy/move (this is a scoped manager [reference wrapper])
+    EnoteFindingContextLegacyMultithreaded& operator=(EnoteFindingContextLegacyMultithreaded&&) = delete;
+
+//member functions
+    /// scans a chunk of blocks to find basic enote records
+    void view_scan_chunk(const LegacyUnscannedChunk &legacy_unscanned_chunk,
+        sp::scanning::ChunkData &chunk_data_out) override;
+
+//member variables
+private:
+    const rct::key &m_legacy_base_spend_pubkey;
+    // TODO: implement subaddress lookahead
+    const std::unordered_map<rct::key, cryptonote::subaddress_index> &m_legacy_subaddress_map;
+    const crypto::secret_key &m_legacy_view_privkey;
+
+    async::Threadpool &m_threadpool;
 };
 
 } //namespace sp

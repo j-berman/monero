@@ -30,6 +30,7 @@
 #include "enote_finding_context.h"
 
 //local headers
+#include "async/misc_utils.h"
 #include "device/device.hpp"
 #include "seraphis_main/contextual_enote_record_types.h"
 #include "seraphis_main/scan_balance_recovery_utils.h"
@@ -92,6 +93,99 @@ void EnoteFindingContextLegacySimple::view_scan_chunk(const LegacyUnscannedChunk
             }
         }
     }
+}
+//-------------------------------------------------------------------------------------------------------------------
+void EnoteFindingContextLegacyMultithreaded::view_scan_chunk(const LegacyUnscannedChunk &legacy_unscanned_chunk,
+    sp::scanning::ChunkData &chunk_data_out)
+{
+    // 1. make join signal
+    async::join_signal_t join_signal{m_threadpool.make_join_signal()};
+
+    // 2. get join token
+    async::join_token_t join_token{m_threadpool.get_join_token(join_signal)};
+
+    // 3. prepare vector we'll use to collect results across threads
+    std::uint64_t num_txs = 0;
+    for (const auto &blk : legacy_unscanned_chunk)
+        num_txs += blk.unscanned_txs.size();
+    std::vector<std::pair<rct::key, std::list<sp::ContextualBasicRecordVariant>>> basic_records_per_tx;
+    basic_records_per_tx.resize(num_txs);
+
+    // 4. submit tasks to join on
+    std::uint64_t idx = 0;
+    for (const auto &blk : legacy_unscanned_chunk)
+    {
+        for (const auto &tx : blk.unscanned_txs)
+        {
+            // Identify owned enotes
+            if (tx.enotes.size() > 0)
+            {
+                auto task =
+                    [
+                        this,
+                        &blk,
+                        &tx,
+                        &basic_records_per_tx,
+                        l_idx                   = idx,
+                        l_join_token            = join_token
+                    ]() -> async::TaskVariant
+                    {
+                        std::list<sp::ContextualBasicRecordVariant> collected_records;
+                        sp::scanning::try_find_legacy_enotes_in_tx(m_legacy_base_spend_pubkey,
+                            m_legacy_subaddress_map,
+                            m_legacy_view_privkey,
+                            blk.block_index,
+                            blk.block_timestamp,
+                            tx.transaction_id,
+                            tx.total_enotes_before_tx,
+                            tx.unlock_time,
+                            tx.tx_memo,
+                            tx.enotes,
+                            sp::SpEnoteOriginStatus::ONCHAIN,
+                            hw::get_device("default"),
+                            collected_records);
+
+                        basic_records_per_tx[l_idx] = {tx.transaction_id, std::move(collected_records)};
+                        return boost::none;
+                    };
+
+                // submit to the threadpool
+                m_threadpool.submit(async::make_simple_task(async::DefaultPriorityLevels::MEDIUM, std::move(task)));
+            }
+            else
+            {
+                // always add an entry for tx in the legacy basic records map (since we save key images for every tx)
+                basic_records_per_tx[idx] = {tx.transaction_id, std::list<sp::ContextualBasicRecordVariant>{}};
+            }
+
+            // Collect key images
+            sp::SpContextualKeyImageSetV1 collected_key_images;
+            if (sp::scanning::try_collect_key_images_from_tx(blk.block_index,
+                    blk.block_timestamp,
+                    tx.transaction_id,
+                    tx.legacy_key_images,
+                    std::vector<crypto::key_image>()/*sp_key_images*/,
+                    sp::SpEnoteSpentStatus::SPENT_ONCHAIN,
+                    collected_key_images))
+            {
+                chunk_data_out.contextual_key_images.emplace_back(std::move(collected_key_images));
+            }
+
+            ++idx;
+        }
+    }
+
+    // 5. get join condition
+    async::join_condition_t join_condition{
+            m_threadpool.get_join_condition(std::move(join_signal), std::move(join_token))
+        };
+
+    // 6. join the tasks
+    m_threadpool.work_while_waiting(std::move(join_condition));
+
+    // 7. set results
+    for (auto &brpt : basic_records_per_tx)
+        chunk_data_out.basic_records_per_tx.emplace(std::move(brpt));
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace sp
