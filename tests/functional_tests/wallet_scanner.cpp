@@ -262,12 +262,86 @@ static boost::multiprecision::uint128_t scan_chain(const std::uint64_t start_hei
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+// TODO: remove after hard fork
+static boost::multiprecision::uint128_t scan_using_old_daemon_version_config(const std::uint64_t start_height,
+    const rct::key &legacy_base_spend_pubkey,
+    const crypto::secret_key &legacy_spend_privkey,
+    const crypto::secret_key &legacy_view_privkey,
+    sp::mocks::ClientConnectionPool &conn_pool)
+{
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
+    add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
+
+    // Config when pointing to a daemon that has not yet updated
+    const sp::scanning::ScanMachineConfig backwards_compatible_scan_config{
+            .reorg_avoidance_increment       = 3,    // since older daemons ban clients that request a height > chain height, give cushion to be safe
+            .force_reorg_avoidance_increment = true, // be safe by making sure we always start the index below last known height
+            .max_chunk_size_hint             = 1000, // an older daemon won't respect this value anyway
+            .max_partialscan_attempts        = 3
+        };
+
+    const sp::scanning::mocks::AsyncScanContextLegacyConfig config{
+            .pending_chunk_queue_size = 1, // won't do any "gap filling" inside the async scanner
+            .max_get_blocks_attempts  = 3,
+            .trusted_daemon           = true
+        };
+
+    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
+        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+            {
+                cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req_get_blocks = req;
+                req_get_blocks.fail_on_high_height = true;
+                return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
+                    sp::mocks::ClientConnectionPool::http_mode::BIN,
+                    "/getblocks.bin",
+                    req_get_blocks,
+                    res);
+            };
+
+    sp::EnoteFindingContextLegacyMultithreaded enote_finding_context{legacy_base_spend_pubkey,
+        legacy_subaddress_map,
+        legacy_view_privkey,
+        async::get_default_threadpool()};
+
+    sp::scanning::mocks::AsyncScanContextLegacy scan_context_ledger{config,
+        enote_finding_context,
+        async::get_default_threadpool(),
+        rpc_get_blocks};
+
+    sp::SpEnoteStore user_enote_store{
+            /*refresh_index*/                   start_height == 0 ? 1 : start_height,
+            /*first_sp_allowed_block_in_chain*/ std::uint64_t(-1),
+            /*default_spendable_age*/           CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE
+        };
+
+    sp::mocks::ChunkConsumerMockLegacy chunk_consumer{legacy_base_spend_pubkey,
+        legacy_spend_privkey,
+        legacy_view_privkey,
+        user_enote_store};
+
+    sp::scanning::ScanContextNonLedgerDummy scan_context_nonledger{};
+
+    bool r = sp::refresh_enote_store(backwards_compatible_scan_config,
+        scan_context_nonledger,
+        scan_context_ledger,
+        chunk_consumer);
+    CHECK_AND_ASSERT_THROW_MES(r, "Failed to refresh enote store using old daemon version config");
+
+    return sp::get_balance(user_enote_store,
+        {sp::SpEnoteOriginStatus::ONCHAIN, sp::SpEnoteOriginStatus::UNCONFIRMED},
+        {sp::SpEnoteSpentStatus::SPENT_ONCHAIN, sp::SpEnoteSpentStatus::SPENT_UNCONFIRMED});
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void check_seraphis_scan(std::unique_ptr<tools::wallet2> &sendr_wallet,
     std::unique_ptr<tools::wallet2> &recvr_wallet,
     std::uint64_t sendr_wallet_expected_balance,
     std::uint64_t recvr_wallet_expected_balance,
     sp::mocks::ClientConnectionPool &conn_pool)
 {
+    // TEST 1: default config pointing to updated daemon
+    MDEBUG("Using default Seraphis lib scanner config");
+
     boost::multiprecision::uint128_t sp_balance_sendr_wallet = scan_chain(0/*start_height*/,
             rct::pk2rct(sendr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
             sendr_wallet->get_account().get_keys().m_spend_secret_key,
@@ -285,6 +359,28 @@ static void check_seraphis_scan(std::unique_ptr<tools::wallet2> &sendr_wallet,
         "sendr_wallet Seraphis lib balance incorrect");
     CHECK_AND_ASSERT_THROW_MES(sp_balance_recvr_wallet == boost::multiprecision::uint128_t(recvr_wallet_expected_balance),
         "recvr_wallet Seraphis lib balance incorrect");
+
+    // TODO: remove after hard fork
+    // TEST 2: config when pointing to a daemon that has not yet updated
+    MDEBUG("Using Seraphis lib scanner non-updated daemon config");
+
+    sp_balance_sendr_wallet = scan_using_old_daemon_version_config(0/*start_height*/,
+            rct::pk2rct(sendr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
+            sendr_wallet->get_account().get_keys().m_spend_secret_key,
+            sendr_wallet->get_account().get_keys().m_view_secret_key,
+            conn_pool
+        );
+    sp_balance_recvr_wallet = scan_using_old_daemon_version_config(0/*start_height*/,
+            rct::pk2rct(recvr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
+            recvr_wallet->get_account().get_keys().m_spend_secret_key,
+            recvr_wallet->get_account().get_keys().m_view_secret_key,
+            conn_pool
+        );
+
+    CHECK_AND_ASSERT_THROW_MES(sp_balance_sendr_wallet == boost::multiprecision::uint128_t(sendr_wallet_expected_balance),
+        "sendr_wallet Seraphis lib balance incorrect using old daemon version config");
+    CHECK_AND_ASSERT_THROW_MES(sp_balance_recvr_wallet == boost::multiprecision::uint128_t(recvr_wallet_expected_balance),
+        "recvr_wallet Seraphis lib balance incorrect using old daemon version config");
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
