@@ -189,6 +189,7 @@ static inline const std::string get_rpc_status(const bool trusted_daemon, const 
       uint64_t    start_height;
       bool        prune;
       bool        no_miner_tx;
+      bool        fail_on_high_height;
       uint64_t    pool_info_since;
       uint64_t    max_block_count;
 
@@ -199,6 +200,7 @@ static inline const std::string get_rpc_status(const bool trusted_daemon, const 
         KV_SERIALIZE(start_height)
         KV_SERIALIZE(prune)
         KV_SERIALIZE_OPT(no_miner_tx, false)
+        KV_SERIALIZE_OPT(fail_on_high_height, true) // default true maintains backwards compatibility for clients that relied on this behavior
         KV_SERIALIZE_OPT(pool_info_since, (uint64_t)0)
         KV_SERIALIZE_OPT(max_block_count, (uint64_t)COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT)
       END_KV_SERIALIZE_MAP()
