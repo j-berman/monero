@@ -13,7 +13,7 @@ USAGE = 'usage: functional_tests_rpc.py <python> <srcdir> <builddir> [<tests-to-
 DEFAULT_TESTS = [
   'address_book', 'bans', 'blockchain', 'cold_signing', 'daemon_info', 'get_output_distribution',
   'integrated_address', 'k_anonymity', 'mining', 'multisig', 'p2p', 'proofs', 'rpc_payment',
-  'sign_message', 'transfer', 'txpool', 'uri', 'validate_address', 'wallet'
+  'sign_message', 'transfer', 'txpool', 'uri', 'validate_address', 'wallet', 'wallet_scanner'
 ]
 try:
   python = sys.argv[1]
@@ -146,7 +146,7 @@ for test in tests:
   try:
     print('[TEST STARTED] ' + test)
     sys.stdout.flush()
-    cmd = [python, srcdir + '/' + test + ".py"]
+    cmd = [python, srcdir + '/' + test + ".py"] if test != 'wallet_scanner' else [FUNCTIONAL_TESTS_DIRECTORY + '/functional_tests', '--' + test]
     subprocess.check_call(cmd)
     PASS.append(test)
     print('[TEST PASSED] ' + test)
