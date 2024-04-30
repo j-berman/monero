@@ -290,7 +290,7 @@ static boost::multiprecision::uint128_t scan_using_old_daemon_version_config(con
         [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
             {
                 cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req_get_blocks = req;
-                req_get_blocks.fail_on_high_height = true;
+                req_get_blocks.high_height_ok = false;
                 return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
                     sp::mocks::ClientConnectionPool::http_mode::BIN,
                     "/getblocks.bin",

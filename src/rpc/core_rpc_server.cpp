@@ -708,7 +708,7 @@ namespace cryptonote
         crypto::hash last_block_hash;
         m_core.get_blockchain_top(last_block_height, last_block_hash);
 
-        if (req.fail_on_high_height && req.start_height > last_block_height)
+        if (!req.high_height_ok && req.start_height > last_block_height)
         {
           res.status = "Failed";
           return true;

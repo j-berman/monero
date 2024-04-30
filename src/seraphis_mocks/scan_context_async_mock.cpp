@@ -162,7 +162,7 @@ static void rpc_get_blocks_internal(const ChunkRequest &chunk_request,
     req.max_block_count = chunk_request.requested_chunk_size;
     req.prune = true;
     req.no_miner_tx = false;
-    req.fail_on_high_height = false;
+    req.high_height_ok = true;
 
     bool r = false;
     std::size_t try_count = 0;
