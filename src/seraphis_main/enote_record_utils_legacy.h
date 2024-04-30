@@ -150,4 +150,6 @@ void get_legacy_enote_record(const LegacyIntermediateEnoteRecord &intermediate_r
 */
 void legacy_outputs_to_enotes(const cryptonote::transaction &tx, std::vector<LegacyEnoteVariant> &enotes_out);
 
+bool has_view_tag(const LegacyEnoteVariant &enote);
+
 } //namespace sp

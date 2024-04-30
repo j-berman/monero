@@ -765,4 +765,9 @@ void legacy_outputs_to_enotes(const cryptonote::transaction &tx, std::vector<Leg
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
+bool has_view_tag(LegacyEnoteVariant &enote)
+{
+    return enote.is_type<LegacyEnoteV4>() || enote.is_type<LegacyEnoteV5>();
+}
+//-------------------------------------------------------------------------------------------------------------------
 } //namespace sp

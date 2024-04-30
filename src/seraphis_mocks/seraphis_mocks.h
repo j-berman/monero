@@ -50,3 +50,4 @@
 #include "tx_input_selection_output_context_mocks.h"
 #include "tx_input_selector_mocks.h"
 #include "tx_validation_context_mock.h"
+#include "wallet2_migration.h"

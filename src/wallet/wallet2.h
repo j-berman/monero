@@ -77,6 +77,7 @@
 class Serialization_portability_wallet_Test;
 class wallet_accessor_test;
 namespace multisig { class multisig_account; }
+namespace sp { namespace mocks { class SeraphisMigrationTools; }}
 
 namespace tools
 {
@@ -218,6 +219,7 @@ private:
     friend class ::wallet_accessor_test;
     friend class wallet_keys_unlocker;
     friend class wallet_device_callback;
+    friend class sp::mocks::SeraphisMigrationTools;
   public:
     static constexpr const std::chrono::seconds rpc_timeout = std::chrono::minutes(3) + std::chrono::seconds(30);
 

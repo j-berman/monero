@@ -41,7 +41,8 @@ set(seraphis_mocks_sources
   mock_tx_builders_outputs.cpp
   scan_chunk_consumer_mocks.cpp
   scan_context_async_mock.cpp
-  tx_input_selector_mocks.cpp)
+  tx_input_selector_mocks.cpp
+  wallet2_migration.cpp)
 
 monero_find_all_headers(seraphis_mocks_headers, "${CMAKE_CURRENT_SOURCE_DIR}")
 
