@@ -32,12 +32,12 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "seraphis_core/legacy_core_utils.h"
+#include "seraphis_impl/enote_finding_context_legacy.h"
 #include "seraphis_impl/enote_store.h"
 #include "seraphis_impl/enote_store_utils.h"
 #include "seraphis_impl/scan_context_simple.h"
 #include "seraphis_impl/scan_process_basic.h"
 #include "seraphis_main/contextual_enote_record_types.h"
-#include "seraphis_main/enote_finding_context.h"
 #include "seraphis_main/scan_machine_types.h"
 #include "seraphis_mocks/scan_chunk_consumer_mocks.h"
 #include "seraphis_mocks/scan_context_async_mock.h"
@@ -215,8 +215,14 @@ static boost::multiprecision::uint128_t scan_chain(const std::uint64_t start_hei
             .trusted_daemon           = true
         };
 
-    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
-        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+    const std::function<bool(
+        const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
+        cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
+    )> rpc_get_blocks =
+        [&conn_pool](
+            const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req,
+            cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res
+        )
             {
                 return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
                     sp::mocks::ClientConnectionPool::http_mode::BIN,
@@ -286,8 +292,14 @@ static boost::multiprecision::uint128_t scan_using_old_daemon_version_config(con
             .trusted_daemon           = true
         };
 
-    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> rpc_get_blocks =
-        [&conn_pool](const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+    const std::function<bool(
+        const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
+        cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
+    )> rpc_get_blocks =
+        [&conn_pool](
+            const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req,
+            cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res
+        )
             {
                 cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req_get_blocks = req;
                 req_get_blocks.high_height_ok = false;

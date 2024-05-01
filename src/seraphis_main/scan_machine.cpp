@@ -74,10 +74,18 @@ static std::uint64_t get_reorg_avoidance_depth(const std::uint64_t reorg_avoidan
     const bool force_reorg_avoidance_increment,
     const std::uint64_t num_reorg_avoidance_backoffs)
 {
-    // 1. start at a depth of zero
+    // 1. start at a depth of zero (unless `force_reorg_avoidance_increment` is true)
     // - this allows us to avoid accidentally reorging your data store if the scanning backend only has a portion
     //   of the blocks in your initial reorg avoidance depth range available when 'get chunk' is called (in the case
     //   where there wasn't actually a reorg and the backend is just catching up)
+    // - for example, if your refresh index is 100, your start index is 150, and your avoidance increment is 10, if
+    //   you start scanning but your scan context has only processed blocks 0-145 (out of let's say 200), then if we
+    //   include a reorg avoidance backoff for the first processed chunk, then blocks [140, ..) will be requested
+    //   from the scan context and only [140, 145] might be returned; when the chunk consumer gets those blocks, it
+    //   will think blocks 145-150 were reorged away; a scan context *could* avoid returning a partial chunk if it
+    //   knows there are unprocessed blocks in the chunk, but for robustness we can't assume all contexts will do so
+    // - `force_reorg_avoidance_increment` is useful when pointing to a daemon that fails if we request a start block
+    //   higher than chain tip, so our initial request for blocks starts at a block the daemon knows
     if (!force_reorg_avoidance_increment && num_reorg_avoidance_backoffs == 0)
         return 0;
 

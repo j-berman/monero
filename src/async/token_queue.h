@@ -51,7 +51,8 @@ enum class TokenQueueResult : unsigned char
     SUCCESS,
     QUEUE_EMPTY,
     TRY_LOCK_FAIL,
-    SHUTTING_DOWN
+    SHUTTING_DOWN,
+    QUEUE_NOT_EMPTY
 };
 
 /// async token queue
@@ -145,6 +146,15 @@ public:
             m_is_shutting_down = true;
         }
         m_condvar.notify_all();
+    }
+    /// reset the queue (queue must already be empty)
+    TokenQueueResult reset()
+    {
+        std::lock_guard<std::mutex> lock{m_mutex};
+        if (!m_queue.empty())
+            return TokenQueueResult::QUEUE_NOT_EMPTY;
+        m_is_shutting_down = false;
+        return TokenQueueResult::SUCCESS;
     }
 
 private:

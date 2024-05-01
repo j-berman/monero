@@ -47,40 +47,29 @@ std::size_t ClientConnectionPool::acquire_unused_http_client()
 {
     std::lock_guard<std::mutex> lock{m_http_client_pool_mutex};
 
-    std::size_t http_client_index_out = 0;
-
     // TODO: if m_http_client_pool.size() >= m_max_connections, wait until unused
 
     // Check if we have any clients available for use
-    bool found_unused_client = false;
     for (std::size_t i = 0; i < m_http_client_pool.size(); ++i)
     {
-        if (!m_http_client_pool[i].in_use)
-        {
-            http_client_index_out = i;
-            found_unused_client = true;
-            break;
-        }
+        if (m_http_client_pool[i].in_use)
+            continue;
+
+        m_http_client_pool[i].in_use = true;
+        return i;
     }
 
     // If we don't find an unused client, add a new one to the pool
-    if (!found_unused_client)
-    {
-        m_http_client_pool.emplace_back(pool_http_client_t{
-            .in_use = true,
-            .http_client = std::unique_ptr<epee::net_utils::http::abstract_http_client>(new net::http::client())
-        });
+    m_http_client_pool.emplace_back(pool_http_client_t{
+        .in_use = true,
+        .http_client = std::unique_ptr<epee::net_utils::http::abstract_http_client>(new net::http::client())
+    });
 
-        if (!m_proxy.empty())
-            m_http_client_pool.back().http_client->set_proxy(m_proxy);
-        m_http_client_pool.back().http_client->set_server(m_daemon_address, m_daemon_login, m_ssl_support);
+    if (!m_proxy.empty())
+        m_http_client_pool.back().http_client->set_proxy(m_proxy);
+    m_http_client_pool.back().http_client->set_server(m_daemon_address, m_daemon_login, m_ssl_support);
 
-        http_client_index_out = m_http_client_pool.size() - 1;
-    }
-
-    m_http_client_pool[http_client_index_out].in_use = true;
-
-    return http_client_index_out;
+    return m_http_client_pool.size() - 1;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void ClientConnectionPool::release_http_client(size_t http_client_index)

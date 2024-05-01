@@ -41,6 +41,7 @@
 #include "common/variant.h"
 #include "crypto/hash.h"
 #include "cryptonote_basic/cryptonote_basic.h"
+#include "cryptonote_config.h"
 #include "ringct/rctTypes.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "seraphis_main/enote_finding_context.h"
@@ -109,12 +110,15 @@ public:
     AsyncScanContextLegacy(const AsyncScanContextLegacyConfig &config,
             sp::EnoteFindingContextLegacy &enote_finding_context,
             async::Threadpool &threadpool,
-            const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> &_rpc_get_blocks) :
+            const std::function<bool(
+                const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
+                cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
+            )> &rpc_get_blocks) :
         m_config{config},
         m_enote_finding_context{enote_finding_context},
         m_scanner_ready{false},
         m_threadpool{threadpool},
-        rpc_get_blocks{_rpc_get_blocks}
+        rpc_get_blocks{rpc_get_blocks}
     {
         assert(config.pending_chunk_queue_size > 0);
         assert(config.max_get_blocks_attempts > 0);
@@ -126,11 +130,15 @@ public:
         wait_until_pending_queue_clears();
     }
 
+    /// disable copy/move (this is a scoped manager [reference wrapper])
+    AsyncScanContextLegacy& operator=(AsyncScanContextLegacy&&) = delete;
+
     /// Kick off the scanner starting from the provided index
-    void begin_scanning_from_index(const std::uint64_t start_index, const std::uint64_t max_chunk_size_hint);
+    void begin_scanning_from_index(const std::uint64_t start_index,
+        const std::uint64_t max_chunk_size_hint) override;
 
     /// Get the next chunk from the scanner. Must call begin_scanning_from_index once before get_onchain_chunk
-    std::unique_ptr<sp::scanning::LedgerChunk> get_onchain_chunk();
+    std::unique_ptr<sp::scanning::LedgerChunk> get_onchain_chunk() override;
 
     // TODO: implement below functions
     /// stop the current scanning process (should be no-throw no-fail)
@@ -140,7 +148,10 @@ public:
 
 private:
     /// abstracted function that gets blocks via RPC request
-    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> &rpc_get_blocks;
+    const std::function<bool(
+        const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
+        cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
+    )> &rpc_get_blocks;
 
     /// reset scanner state and kick off scanner
     void start_scanner(const std::uint64_t start_index,
@@ -164,13 +175,13 @@ private:
     void wait_until_pending_queue_clears();
 
     /// check if we should launch the next task to get the next chunk of blocks
-    bool check_launch_next_task(const std::unique_lock<std::mutex> &pending_queue_lock);
+    bool check_launch_next_task(const std::unique_lock<std::mutex> &pending_queue_lock) const;
 
     /// launch task to get the next chunk of blocks advancing the scanner's scan_index
-    void launch_next_chunk_task(const std::unique_lock<std::mutex> &pending_queue_lock);
+    bool try_launch_next_chunk_task(const std::unique_lock<std::mutex> &pending_queue_lock);
 
     /// launch the next chunk task if we should
-    void launch_next_task_if_room(bool chunk_is_terminal_chunk);
+    void try_launch_next_chunk_task(bool chunk_is_terminal_chunk);
 
     /// if a chunk is smaller than requested, need to fill gap to next chunk
     void fill_gap_if_needed(bool chunk_is_terminal_chunk,
@@ -178,7 +189,7 @@ private:
         const sp::scanning::ChunkContext &chunk_context);
 
     /// fetch chunk from daemon, parse it into chunk context and unscanned chunk
-    void handle_chunk_context(const ChunkRequest &chunk_request,
+    void handle_chunk_request(const ChunkRequest &chunk_request,
         sp::scanning::ChunkContext &chunk_context_out,
         LegacyUnscannedChunk &unscanned_chunk_out,
         bool &chunk_is_terminal_chunk_out);
@@ -197,10 +208,10 @@ private:
 private:
     /// config options
     const AsyncScanContextLegacyConfig &m_config;
-    std::uint64_t m_max_chunk_size_hint;
+    std::uint64_t m_max_chunk_size_hint{(uint64_t)COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT};
 
     /// finding context used to view scan enotes
-    sp::EnoteFindingContextLegacy &m_enote_finding_context;
+    const sp::EnoteFindingContextLegacy &m_enote_finding_context;
 
     /// pending chunks
     async::TokenQueue<PendingChunk> m_pending_chunk_queue{};

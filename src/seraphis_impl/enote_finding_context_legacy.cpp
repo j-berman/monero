@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //paired header
-#include "enote_finding_context.h"
+#include "enote_finding_context_legacy.h"
 
 //local headers
 #include "async/misc_utils.h"
@@ -47,7 +47,7 @@ namespace sp
 {
 //-------------------------------------------------------------------------------------------------------------------
 void EnoteFindingContextLegacySimple::view_scan_chunk(const LegacyUnscannedChunk &legacy_unscanned_chunk,
-    sp::scanning::ChunkData &chunk_data_out)
+    sp::scanning::ChunkData &chunk_data_out) const
 {
     for (const auto &blk : legacy_unscanned_chunk)
     {
@@ -95,8 +95,9 @@ void EnoteFindingContextLegacySimple::view_scan_chunk(const LegacyUnscannedChunk
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void EnoteFindingContextLegacyMultithreaded::view_scan_chunk(const LegacyUnscannedChunk &legacy_unscanned_chunk,
-    sp::scanning::ChunkData &chunk_data_out)
+void EnoteFindingContextLegacyMultithreaded::view_scan_chunk(
+    const LegacyUnscannedChunk &legacy_unscanned_chunk,
+    sp::scanning::ChunkData &chunk_data_out) const
 {
     // 1. make join signal
     async::join_signal_t join_signal{m_threadpool.make_join_signal()};

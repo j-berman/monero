@@ -29,7 +29,6 @@
 set(seraphis_main_sources
   contextual_enote_record_types.cpp
   contextual_enote_record_utils.cpp
-  enote_finding_context.cpp
   enote_record_utils.cpp
   enote_record_utils_legacy.cpp
   scan_balance_recovery_utils.cpp
@@ -60,7 +59,6 @@ monero_add_library(seraphis_main
 
 target_link_libraries(seraphis_main
   PUBLIC
-    async
     cncrypto
     common
     cryptonote_basic

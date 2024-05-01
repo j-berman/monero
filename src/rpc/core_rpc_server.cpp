@@ -719,7 +719,7 @@ namespace cryptonote
         {
           res.start_height = 0;
           res.current_height = last_block_height + 1;
-          res.top_block_hash = std::move(last_block_hash);
+          res.top_block_hash = last_block_hash;
           res.status = CORE_RPC_STATUS_OK;
           return true;
         }

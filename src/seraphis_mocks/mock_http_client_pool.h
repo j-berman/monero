@@ -49,6 +49,7 @@
 
 //forward declarations
 
+
 namespace sp
 {
 namespace mocks
@@ -87,10 +88,10 @@ public:
         typename COMMAND_TYPE::response &res)
     {
         // Acquire an http client from the connection pool
-        std::size_t http_client_index = acquire_unused_http_client();
+        std::size_t http_client_index = this->acquire_unused_http_client();
         CHECK_AND_ASSERT_THROW_MES(m_http_client_pool.size() > http_client_index, "http client index is too high");
         auto scope_exit_handler = epee::misc_utils::create_scope_leave_handler([this, http_client_index]{
-            release_http_client(http_client_index);
+            this->release_http_client(http_client_index);
         });
 
         // Do the RPC command

@@ -71,8 +71,19 @@ static void validate_get_blocks_res(const ChunkRequest &req,
         "mismatched blocks (" + boost::lexical_cast<std::string>(res.blocks.size()) + ") and output_indices (" +
         boost::lexical_cast<std::string>(res.output_indices.size()) + ") sizes from daemon");
 
+    for (std::size_t i = 0; i < res.blocks.size(); ++i)
+    {
+        const std::size_t num_txs = res.blocks[i].txs.size() + 1; // Add 1 for miner tx
+        const std::size_t num_output_indices = res.output_indices[i].indices.size();
+
+        THROW_WALLET_EXCEPTION_IF(num_txs != num_output_indices, tools::error::get_blocks_error,
+            "mismatched block txs (" + boost::lexical_cast<std::string>(num_txs) + ") and output_indices" +
+            " (" + boost::lexical_cast<std::string>(num_output_indices) + ") sizes from daemon");
+    }
+
     if (!res.blocks.empty())
     {
+        // current height == (top block index + 1)
         THROW_WALLET_EXCEPTION_IF(req.start_index >= res.current_height, tools::error::get_blocks_error,
             "returned non-empty blocks in getblocks.bin but requested start index is >= chain height");
     }
@@ -151,7 +162,10 @@ static bool is_terminal_chunk(const sp::scanning::ChunkContext &context, const s
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static void rpc_get_blocks_internal(const ChunkRequest &chunk_request,
-    const std::function<bool(const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&, cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&)> &rpc_get_blocks,
+    const std::function<bool(
+        const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
+        cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
+    )> &rpc_get_blocks,
     const std::uint64_t max_get_blocks_attempts,
     const bool trusted_daemon,
     cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res_out)
@@ -198,6 +212,60 @@ static void rpc_get_blocks_internal(const ChunkRequest &chunk_request,
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static void parse_rpc_block(const cryptonote::block_complete_entry &res_block_entry,
+    const std::size_t block_idx,
+    const std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::tx_output_indices> &output_indices,
+    sp::scanning::ChunkContext &chunk_context_out,
+    sp::LegacyUnscannedBlock &unscanned_block_out)
+{
+    unscanned_block_out.unscanned_txs.resize(1 + res_block_entry.txs.size());
+
+    // Parse block
+    cryptonote::block block;
+    bool r = cryptonote::parse_and_validate_block_from_blob(res_block_entry.block, block);
+    THROW_WALLET_EXCEPTION_IF(!r, tools::error::wallet_internal_error,
+        "failed to parse block blob" + std::to_string(block_idx));
+
+    THROW_WALLET_EXCEPTION_IF(res_block_entry.txs.size() != block.tx_hashes.size(),
+        tools::error::wallet_internal_error, "mismatched num txs to hashes at block" + std::to_string(block_idx))
+
+    unscanned_block_out.block_index = cryptonote::get_block_height(block);
+    unscanned_block_out.block_timestamp = block.timestamp;
+    unscanned_block_out.block_hash = rct::hash2rct(cryptonote::get_block_hash(block));
+    unscanned_block_out.prev_block_hash = rct::hash2rct(block.prev_id);
+
+    chunk_context_out.block_ids.emplace_back(unscanned_block_out.block_hash);
+    if (block_idx == 0)
+    {
+        chunk_context_out.start_index = unscanned_block_out.block_index;
+        chunk_context_out.prefix_block_id = unscanned_block_out.prev_block_hash;
+    }
+
+    crypto::hash miner_tx_hash = cryptonote::get_transaction_hash(block.miner_tx);
+
+    prepare_unscanned_legacy_transaction(miner_tx_hash,
+        block.miner_tx,
+        get_total_output_count_before_tx(output_indices[0].indices),
+        unscanned_block_out.unscanned_txs[0]);
+
+    // Parse txs
+    for (std::size_t tx_idx = 0; tx_idx < res_block_entry.txs.size(); ++tx_idx)
+    {
+        auto &unscanned_tx = unscanned_block_out.unscanned_txs[1+tx_idx];
+
+        cryptonote::transaction tx;
+        r = cryptonote::parse_and_validate_tx_base_from_blob(res_block_entry.txs[tx_idx].blob, tx);
+        THROW_WALLET_EXCEPTION_IF(!r, tools::error::wallet_internal_error,
+            "failed to parse tx blob at index " + std::to_string(tx_idx));
+
+        prepare_unscanned_legacy_transaction(block.tx_hashes[tx_idx],
+            std::move(tx),
+            get_total_output_count_before_tx(output_indices[1+tx_idx].indices),
+            unscanned_tx);
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void parse_rpc_get_blocks(const ChunkRequest &chunk_request,
     const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res,
     sp::scanning::ChunkContext &chunk_context_out,
@@ -205,81 +273,42 @@ static void parse_rpc_get_blocks(const ChunkRequest &chunk_request,
 {
     validate_get_blocks_res(chunk_request, res);
 
+    chunk_context_out.block_ids.clear();
+    unscanned_chunk_out.clear();
+
     // Older daemons can return more blocks than requested because they did not support a max_block_count req param.
     // The scanner expects requested_chunk_size blocks however, so we only care about the blocks up until that point.
     // Note the scanner can also return *fewer* blocks than requested if at chain tip or the chunk exceeded max size.
+    // Warning: fill_gap_if_needed will throw if we don't resize the chunk context before calling it
     const std::uint64_t num_blocks = std::min((std::uint64_t)res.blocks.size(), chunk_request.requested_chunk_size);
-
-    chunk_context_out.block_ids.clear();
-
-    unscanned_chunk_out.clear();
     unscanned_chunk_out.resize(num_blocks);
 
     if (num_blocks == 0)
     {
         // must have requested the tip of the chain
         chunk_context_out.prefix_block_id = rct::hash2rct(res.top_block_hash);
-        chunk_context_out.start_index = res.current_height;
+        chunk_context_out.start_index = res.current_height; // current height == (top block index + 1)
         return;
     }
 
-    // parse blocks and txs
+    // Parse blocks and txs
     for (std::size_t block_idx = 0; block_idx < num_blocks; ++block_idx)
     {
-        auto &unscanned_block = unscanned_chunk_out[block_idx];
-        unscanned_block.unscanned_txs.resize(1 + res.blocks[block_idx].txs.size());
+        const auto &res_block_entry = res.blocks[block_idx];
+        const auto &output_indices = res.output_indices[block_idx].indices;
+        auto &unscanned_block_out = unscanned_chunk_out[block_idx];
 
-        cryptonote::block block;
-        bool r = cryptonote::parse_and_validate_block_from_blob(res.blocks[block_idx].block, block);
-        THROW_WALLET_EXCEPTION_IF(!r, tools::error::wallet_internal_error,
-            "failed to parse block blob at index " + std::to_string(block_idx));
-
-        unscanned_block.block_index = cryptonote::get_block_height(block);
-        unscanned_block.block_timestamp = block.timestamp;
-        unscanned_block.block_hash = rct::hash2rct(cryptonote::get_block_hash(block));
-        unscanned_block.prev_block_hash = rct::hash2rct(block.prev_id);
-
-        chunk_context_out.block_ids.emplace_back(unscanned_block.block_hash);
-        if (block_idx == 0)
-        {
-            chunk_context_out.start_index = unscanned_block.block_index;
-            chunk_context_out.prefix_block_id = unscanned_block.prev_block_hash;
-        }
-
-        crypto::hash miner_tx_hash = cryptonote::get_transaction_hash(block.miner_tx);
-
-        prepare_unscanned_legacy_transaction(miner_tx_hash,
-            block.miner_tx,
-            get_total_output_count_before_tx(res.output_indices[block_idx].indices[0].indices),
-            unscanned_block.unscanned_txs[0]);
-
-        // parse txs
-        for (std::size_t tx_idx = 0; tx_idx < res.blocks[block_idx].txs.size(); ++tx_idx)
-        {
-            auto &unscanned_tx = unscanned_block.unscanned_txs[1+tx_idx];
-
-            cryptonote::transaction tx;
-            r = cryptonote::parse_and_validate_tx_base_from_blob(res.blocks[block_idx].txs[tx_idx].blob, tx);
-            THROW_WALLET_EXCEPTION_IF(!r, tools::error::wallet_internal_error,
-                "failed to parse tx blob at index " + std::to_string(tx_idx));
-
-            THROW_WALLET_EXCEPTION_IF(tx_idx >= block.tx_hashes.size(), tools::error::wallet_internal_error,
-                "unexpected number of tx hashes");
-
-            prepare_unscanned_legacy_transaction(block.tx_hashes[tx_idx],
-                std::move(tx),
-                get_total_output_count_before_tx(res.output_indices[block_idx].indices[1+tx_idx].indices),
-                unscanned_tx);
-        }
+        parse_rpc_block(res_block_entry,
+            block_idx,
+            output_indices,
+            chunk_context_out,
+            unscanned_block_out);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-bool AsyncScanContextLegacy::check_launch_next_task(const std::unique_lock<std::mutex> &pending_queue_lock)
+bool AsyncScanContextLegacy::check_launch_next_task(const std::unique_lock<std::mutex> &pending_queue_lock) const
 {
-    MDEBUG("Attempting to launch chunk task at " << m_scan_index.load(std::memory_order_relaxed)
-        << " (chunk_size_increment=" << m_max_chunk_size_hint << ")");
-
     THROW_WALLET_EXCEPTION_IF(!pending_queue_lock.owns_lock(), tools::error::wallet_internal_error,
         "Pending queue must be locked to check next task launch");
 
@@ -316,33 +345,41 @@ void AsyncScanContextLegacy::fill_gap_if_needed(bool chunk_is_terminal_chunk,
     const std::uint64_t &requested_chunk_size,
     const sp::scanning::ChunkContext &chunk_context)
 {
-    if (!chunk_is_terminal_chunk)
+    if (chunk_is_terminal_chunk)
+        return;
+
+    // If chunk was smaller than requested, will need to fill the gap
+    const std::size_t chunk_size = sp::scanning::chunk_size(chunk_context);
+
+    THROW_WALLET_EXCEPTION_IF(chunk_size > requested_chunk_size, tools::error::wallet_internal_error,
+        "chunk context is larger than requested");
+
+    const std::uint64_t gap = requested_chunk_size - chunk_size;
+    if (gap == 0)
+        return;
+
+    const std::uint64_t gap_start_index = chunk_context.start_index + chunk_size;
+
+    if (m_config.pending_chunk_queue_size > 1)
     {
-        // If chunk was smaller than requested, will need to fill the gap
-        const std::size_t chunk_size = sp::scanning::chunk_size(chunk_context);
-        const std::uint64_t gap = requested_chunk_size - chunk_size;
-        if (gap > 0)
-        {
-            const std::uint64_t gap_start_index = chunk_context.start_index + chunk_size;
+        // Launch a new task to fill the gap
+        std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
 
-            if (m_config.pending_chunk_queue_size > 1)
-            {
-                // Launch a new task to fill the gap
-                std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
+        const ChunkRequest next_chunk_request{
+                .start_index          = gap_start_index,
+                .requested_chunk_size = gap
+            };
 
-                const ChunkRequest next_chunk_request{
-                        .start_index          = gap_start_index,
-                        .requested_chunk_size = gap
-                    };
-
-                m_pending_chunk_queue.force_push(launch_chunk_task(next_chunk_request, lock));
-            }
-            else
-            {
-                // Advance scan index to the start of the gap for next task
-                m_scan_index.store(gap_start_index, std::memory_order_relaxed);
-            }
-        }
+        auto task = this->launch_chunk_task(next_chunk_request, lock);
+        m_pending_chunk_queue.force_push(std::move(task));
+    }
+    else
+    {
+        // Pull scan index back to the start of the gap for next task.
+        // - For serial scan contexts (when `m_config.pending_chunk_queue_size == 1`),
+        //   we can't launch a gap-filler task. Instead, we say the next serial task will start
+        //   at the gap start index.
+        m_scan_index.store(gap_start_index, std::memory_order_relaxed);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -406,18 +443,21 @@ void AsyncScanContextLegacy::update_chain_state(const sp::scanning::ChunkContext
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
-void AsyncScanContextLegacy::handle_chunk_context(const ChunkRequest &chunk_request,
+void AsyncScanContextLegacy::handle_chunk_request(const ChunkRequest &chunk_request,
     sp::scanning::ChunkContext &chunk_context_out,
     LegacyUnscannedChunk &unscanned_chunk_out,
     bool &chunk_is_terminal_chunk_out)
 {
     // Query daemon for chunk of blocks
     cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response res = AUTO_VAL_INIT(res);
-    rpc_get_blocks_internal(chunk_request,
-        rpc_get_blocks,
-        m_config.max_get_blocks_attempts,
-        m_config.trusted_daemon,
-        res);
+    {
+        async::fanout_token_t fanout_token{m_threadpool.launch_temporary_worker()};
+        rpc_get_blocks_internal(chunk_request,
+            rpc_get_blocks,
+            m_config.max_get_blocks_attempts,
+            m_config.trusted_daemon,
+            res);
+    }
 
     // Parse the result
     parse_rpc_get_blocks(chunk_request,
@@ -426,13 +466,13 @@ void AsyncScanContextLegacy::handle_chunk_context(const ChunkRequest &chunk_requ
         unscanned_chunk_out);
 
     // Update scanner's known top block height and hash
-    update_chain_state(chunk_context_out,
-        res.current_height,
+    this->update_chain_state(chunk_context_out,
+        res.current_height, // current height == (top block index + 1)
         res.top_block_hash,
         chunk_is_terminal_chunk_out);
 
     // Check if the chunk was smaller than requested and fill gap if needed
-    fill_gap_if_needed(chunk_is_terminal_chunk_out,
+    this->fill_gap_if_needed(chunk_is_terminal_chunk_out,
         chunk_request.requested_chunk_size,
         chunk_context_out);
 }
@@ -445,8 +485,6 @@ async::TaskVariant AsyncScanContextLegacy::chunk_task(const ChunkRequest &chunk_
     async::join_token_t &context_join_token_out,
     async::join_token_t &data_join_token_out)
 {
-    async::fanout_token_t fanout_token{m_threadpool.launch_temporary_worker()};
-
     // Check if canceled
     if (async::future_is_ready(context_stop_flag))
     {
@@ -460,7 +498,7 @@ async::TaskVariant AsyncScanContextLegacy::chunk_task(const ChunkRequest &chunk_
     bool chunk_is_terminal_chunk = false;
     try
     {
-        handle_chunk_context(chunk_request,
+        this->handle_chunk_request(chunk_request,
             chunk_context,
             unscanned_chunk,
             chunk_is_terminal_chunk);
@@ -484,7 +522,7 @@ async::TaskVariant AsyncScanContextLegacy::chunk_task(const ChunkRequest &chunk_
         return boost::none;
 
     // launch the next task if we expect more and the queue has room
-    launch_next_task_if_room(chunk_is_terminal_chunk);
+    this->try_launch_next_chunk_task(chunk_is_terminal_chunk);
 
     // Retrieved the chunk, now need to scan it
     m_num_scanning_chunks.fetch_add(1, std::memory_order_relaxed);
@@ -501,7 +539,7 @@ async::TaskVariant AsyncScanContextLegacy::chunk_task(const ChunkRequest &chunk_
 
     MDEBUG("Finished scanning chunk starting at " << chunk_request.start_index);
 
-    launch_next_task_if_room(chunk_is_terminal_chunk);
+    this->try_launch_next_chunk_task(chunk_is_terminal_chunk);
 
     return boost::none;
 }
@@ -522,10 +560,10 @@ PendingChunk AsyncScanContextLegacy::launch_chunk_task(const ChunkRequest &chunk
     std::promise<sp::scanning::ChunkData> chunk_data_handle{};
     std::shared_future<sp::scanning::ChunkContext> chunk_context_future = chunk_context_handle.get_future().share();
     std::shared_future<sp::scanning::ChunkData> chunk_data_future       = chunk_data_handle.get_future().share();
-    async::join_signal_t context_join_signal                        = m_threadpool.make_join_signal();
-    async::join_signal_t data_join_signal                           = m_threadpool.make_join_signal();
-    async::join_token_t context_join_token                          = m_threadpool.get_join_token(context_join_signal);
-    async::join_token_t data_join_token                             = m_threadpool.get_join_token(data_join_signal);
+    async::join_signal_t context_join_signal = m_threadpool.make_join_signal();
+    async::join_signal_t data_join_signal    = m_threadpool.make_join_signal();
+    async::join_token_t context_join_token   = m_threadpool.get_join_token(context_join_signal);
+    async::join_token_t data_join_token      = m_threadpool.get_join_token(data_join_signal);
 
     auto task =
         [
@@ -576,10 +614,13 @@ PendingChunk AsyncScanContextLegacy::launch_chunk_task(const ChunkRequest &chunk
         };
 }
 //-------------------------------------------------------------------------------------------------------------------
-void AsyncScanContextLegacy::launch_next_chunk_task(const std::unique_lock<std::mutex> &pending_queue_lock)
+bool AsyncScanContextLegacy::try_launch_next_chunk_task(const std::unique_lock<std::mutex> &pending_queue_lock)
 {
     THROW_WALLET_EXCEPTION_IF(!pending_queue_lock.owns_lock(), tools::error::wallet_internal_error,
         "Pending queue must be locked to launch the next chunk task");
+
+    if (!this->check_launch_next_task(pending_queue_lock))
+        return false;
 
     // Advance the scanner's scanning index
     const std::uint64_t start_index = m_scan_index.fetch_add(m_max_chunk_size_hint);
@@ -589,26 +630,25 @@ void AsyncScanContextLegacy::launch_next_chunk_task(const std::unique_lock<std::
             .requested_chunk_size = m_max_chunk_size_hint
         };
 
-    m_pending_chunk_queue.force_push(launch_chunk_task(next_chunk_request, pending_queue_lock));
+    auto task = this->launch_chunk_task(next_chunk_request, pending_queue_lock);
+    m_pending_chunk_queue.force_push(std::move(task));
+
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-void AsyncScanContextLegacy::launch_next_task_if_room(bool chunk_is_terminal_chunk)
+void AsyncScanContextLegacy::try_launch_next_chunk_task(const bool chunk_is_terminal_chunk)
 {
     // Don't need to launch the next task if found the terminal chunk, we're done!
-    if (!chunk_is_terminal_chunk)
-    {
-        std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
-        if (check_launch_next_task(lock))
-        {
-            launch_next_chunk_task(lock);
-        }
-    }
+    if (chunk_is_terminal_chunk)
+        return;
+    std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
+    this->try_launch_next_chunk_task(lock);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void AsyncScanContextLegacy::handle_terminal_chunk()
 {
     // Clear up everything left in the queue
-    wait_until_pending_queue_clears();
+    this->wait_until_pending_queue_clears();
 
     // Make sure we scanned to current tip
     if (m_last_scanned_index == m_num_blocks_in_chain)
@@ -623,7 +663,7 @@ void AsyncScanContextLegacy::handle_terminal_chunk()
         // The chain must have advanced since we started scanning, restart scanning from the highest scan
         MDEBUG("The chain advanced since we started scanning, restart from last scan");
         std::unique_lock<std::mutex> lock{m_pending_queue_mutex};
-        start_scanner(m_last_scanned_index, m_max_chunk_size_hint, lock);
+        this->start_scanner(m_last_scanned_index, m_max_chunk_size_hint, lock);
     }
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -657,25 +697,31 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::handle_end_co
 //-------------------------------------------------------------------------------------------------------------------
 void AsyncScanContextLegacy::wait_until_pending_queue_clears()
 {
-    // TODO: implement a clean safe cancel instead of waiting
+    // TODO: implement a faster cancel (adding ability to cancel http requests would be significant)
     MDEBUG("Waiting until pending queue clears");
 
     // Don't allow scheduling any more chunk tasks until the scanner is restarted
     m_scanner_ready.store(false, std::memory_order_relaxed);
 
+    m_pending_chunk_queue.shut_down();
+
     PendingChunk clear_chunk;
-    async::TokenQueueResult clear_chunk_result = m_pending_chunk_queue.try_pop(clear_chunk);
-    while (clear_chunk_result != async::TokenQueueResult::QUEUE_EMPTY)
+    async::TokenQueueResult clear_chunk_result = m_pending_chunk_queue.force_pop(clear_chunk);
+    while (clear_chunk_result != async::TokenQueueResult::SHUTTING_DOWN)
     {
         THROW_WALLET_EXCEPTION_IF(clear_chunk_result != async::TokenQueueResult::SUCCESS,
             tools::error::wallet_internal_error, "Failed to clear onchain chunks");
+
+        // Send stop signals
+        clear_chunk.pending_context.stop_signal.set_value();
+        clear_chunk.pending_data.stop_signal.set_value();
 
         // Wait until all work in the pending queue is done, not just contexts
         // TODO: wait until every task in the pool has returned
         m_threadpool.work_while_waiting(clear_chunk.pending_data.data_join_condition,
             async::DefaultPriorityLevels::MAX);
 
-        clear_chunk_result = m_pending_chunk_queue.try_pop(clear_chunk);
+        clear_chunk_result = m_pending_chunk_queue.force_pop(clear_chunk);
     }
 
     MDEBUG("Pending queue cleared");
@@ -690,6 +736,9 @@ void AsyncScanContextLegacy::start_scanner(const std::uint64_t start_index,
     THROW_WALLET_EXCEPTION_IF(!pending_queue_lock.owns_lock(),
         tools::error::wallet_internal_error, "Pending queue lock not owned");
 
+    THROW_WALLET_EXCEPTION_IF(m_pending_chunk_queue.reset() != async::TokenQueueResult::SUCCESS,
+        tools::error::wallet_internal_error, "Pending queue failed to reset");
+
     m_max_chunk_size_hint = max_chunk_size_hint;
     m_scanner_ready.store(true, std::memory_order_relaxed);
 
@@ -703,10 +752,7 @@ void AsyncScanContextLegacy::start_scanner(const std::uint64_t start_index,
     m_top_block_hash = rct::hash2rct(crypto::null_hash);
 
     // launch tasks until the queue fills up
-    while (check_launch_next_task(pending_queue_lock))
-    {
-        launch_next_chunk_task(pending_queue_lock);
-    };
+    while (this->try_launch_next_chunk_task(pending_queue_lock)) {};
 }
 //-------------------------------------------------------------------------------------------------------------------
 void AsyncScanContextLegacy::begin_scanning_from_index(const std::uint64_t start_index,
@@ -714,11 +760,12 @@ void AsyncScanContextLegacy::begin_scanning_from_index(const std::uint64_t start
 {
     std::lock_guard<std::mutex> lg{m_async_scan_context_mutex};
 
-    // Wait for any pending chunks to finish if there are any
-    wait_until_pending_queue_clears();
+    // Wait for any pending chunks to finish if there are any (it's possible the caller detected a reorg and wants
+    // to restart scanning from the reorged block)
+    this->wait_until_pending_queue_clears();
 
     std::unique_lock<std::mutex> pending_queue_lock{m_pending_queue_mutex};
-    start_scanner(start_index, max_chunk_size_hint, pending_queue_lock);
+    this->start_scanner(start_index, max_chunk_size_hint, pending_queue_lock);
 }
 //-------------------------------------------------------------------------------------------------------------------
 std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_chunk()
@@ -739,7 +786,7 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_c
         if (oldest_chunk_result == async::TokenQueueResult::QUEUE_EMPTY)
         {
             // We should be done scanning now
-            return handle_end_condition();
+            return this->handle_end_condition();
         }
         THROW_WALLET_EXCEPTION_IF(oldest_chunk_result != async::TokenQueueResult::SUCCESS,
             tools::error::wallet_internal_error, "Failed to remove earliest onchain chunk");
@@ -776,7 +823,7 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_c
     {
         MDEBUG("Encountered terminal chunk starting at " << oldest_context.start_index
             << " (expected to start at " << oldest_request.start_index << ")");
-        handle_terminal_chunk();
+        this->handle_terminal_chunk();
     }
 
     // We're ready to return the pending chunk now
