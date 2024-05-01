@@ -318,7 +318,8 @@ bool AsyncScanContextLegacy::check_launch_next_task(const std::unique_lock<std::
         return false;
     }
 
-    if (m_end_scan_index != 0 && m_scan_index.load(std::memory_order_relaxed) >= m_end_scan_index)
+    const std::uint64_t num_blocks_in_chain = m_num_blocks_in_chain.load(std::memory_order_relaxed);
+    if (num_blocks_in_chain != 0 && m_scan_index.load(std::memory_order_relaxed) >= num_blocks_in_chain)
     {
         MDEBUG("Scan tasks are scheduled to scan to chain tip, not launching another task");
         return false;
@@ -392,50 +393,41 @@ void AsyncScanContextLegacy::update_chain_state(const sp::scanning::ChunkContext
 
     MDEBUG("Updating chain state");
 
-    if (m_end_scan_index == 0)
+    // Update with the chain tip if it's higher than our known tip
+    if (num_blocks_in_chain > m_num_blocks_in_chain.load(std::memory_order_relaxed))
     {
-        m_end_scan_index = num_blocks_in_chain;
-        MDEBUG("Set m_end_scan_index: " << m_end_scan_index);
-    }
+        m_num_blocks_in_chain.store(num_blocks_in_chain, std::memory_order_relaxed);
 
-    if (top_block_hash != crypto::null_hash && rct::hash2rct(top_block_hash) != m_top_block_hash)
-    {
-        m_num_blocks_in_chain = num_blocks_in_chain;
+        // Note: the top block hash can be null if pointing to an older daemon
         m_top_block_hash = rct::hash2rct(top_block_hash);
-        MDEBUG("Updated top_block_hash " << top_block_hash
-            << " (num_blocks_in_chain=" << m_num_blocks_in_chain << ")");
-    }
-    else if (num_blocks_in_chain > m_num_blocks_in_chain)
-    {
-        m_num_blocks_in_chain = num_blocks_in_chain;
-        MDEBUG("Updated num_blocks_in_chain: " << m_num_blocks_in_chain);
+
+        MDEBUG("Updated m_num_blocks_in_chain " << num_blocks_in_chain
+            << " (m_top_block_hash=" << top_block_hash << ")");
     }
 
-    // Check if it's the scanner's final chunk
-    chunk_is_terminal_chunk_out = is_terminal_chunk(chunk_context, m_end_scan_index);
+    // Check if it's the scanner's terminal chunk (empty chunk context or reached tip of the chain)
+    const std::uint64_t n_blocks_in_chain = m_num_blocks_in_chain.load(std::memory_order_relaxed);
+    chunk_is_terminal_chunk_out = is_terminal_chunk(chunk_context, n_blocks_in_chain);
 
-    // When pointing to an older daemon version, we have to use the terminal chunk to set the top block hash since
-    // the daemon doesn't return it.
-    // Warning: it may not line up with m_num_blocks_in_chain in the event the chain has advanced past
-    // m_end_scan_index, in which case get_onchain_chunk will make sure the scanner resets and does another pass to
-    // finish when handling the terminal chunk.
-    if (top_block_hash == crypto::null_hash && chunk_is_terminal_chunk_out && !chunk_context.block_ids.empty())
+    // Use the terminal chunk to update the top block hash if the chunk isn't empty.
+    // - This is required if the daemon RPC did NOT provide the top block hash (e.g. when pointing to an older
+    //   daemon), in which case we have to use the last block ID in the terminal chunk to set the top block hash.
+    if (chunk_is_terminal_chunk_out && !chunk_context.block_ids.empty())
     {
         m_top_block_hash = chunk_context.block_ids[chunk_context.block_ids.size() - 1];
         MDEBUG("Used terminal chunk to update top_block_hash " << m_top_block_hash
-            << " (num_blocks_in_chain=" << m_num_blocks_in_chain << ")");
+            << " (num_blocks_in_chain=" << n_blocks_in_chain << ")");
     }
 
+    // Sanity check expected values at terminal chunk
     if (chunk_is_terminal_chunk_out)
     {
-        THROW_WALLET_EXCEPTION_IF(m_scan_index.load(std::memory_order_relaxed) < m_end_scan_index,
+        // The m_scan_index must be at the tip or later (if the async scanner scheduled chunk tasks way beyond tip)
+        THROW_WALLET_EXCEPTION_IF(m_scan_index.load(std::memory_order_relaxed) < n_blocks_in_chain,
             tools::error::wallet_internal_error,
-            "scan index is < m_end_scan_index even though we encountered the terminal chunk");
+            "scan index is < m_num_blocks_in_chain even though we encountered the terminal chunk");
 
-        THROW_WALLET_EXCEPTION_IF(m_end_scan_index == 0, tools::error::wallet_internal_error,
-            "expected >0 end scan index at terminal chunk");
-
-        THROW_WALLET_EXCEPTION_IF(m_num_blocks_in_chain == 0, tools::error::wallet_internal_error,
+        THROW_WALLET_EXCEPTION_IF(n_blocks_in_chain == 0, tools::error::wallet_internal_error,
             "expected >0 num blocks in the chain at terminal chunk");
 
         THROW_WALLET_EXCEPTION_IF(m_top_block_hash == rct::hash2rct(crypto::null_hash),
@@ -651,12 +643,11 @@ void AsyncScanContextLegacy::handle_terminal_chunk()
     this->wait_until_pending_queue_clears();
 
     // Make sure we scanned to current tip
-    if (m_last_scanned_index == m_num_blocks_in_chain)
+    if (m_last_scanned_index == m_num_blocks_in_chain.load(std::memory_order_relaxed))
     {
-        // We're good to go, advance the end scan index
+        // We're good to go
         MDEBUG("We're prepared for the end condition, we scanned to " << m_last_scanned_index);
-        m_end_scan_index = m_last_scanned_index;
-        m_scanner_ready.store(true, std::memory_order_relaxed); // mark the scanner ready for the end condition
+        m_scanner_finished = true;
     }
     else
     {
@@ -669,26 +660,27 @@ void AsyncScanContextLegacy::handle_terminal_chunk()
 //-------------------------------------------------------------------------------------------------------------------
 std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::handle_end_condition()
 {
-    MDEBUG("No pending chunks remaining, num blocks in chain " << m_num_blocks_in_chain
+    const std::uint64_t num_blocks_in_chain = m_num_blocks_in_chain.load(std::memory_order_relaxed);
+
+    MDEBUG("No pending chunks remaining, num blocks in chain " << num_blocks_in_chain
         << ", top hash " << m_top_block_hash << " , last scanned index " << m_last_scanned_index);
 
-    const bool unexpected_tip = m_num_blocks_in_chain == 0 || m_top_block_hash == rct::hash2rct(crypto::null_hash);
-    THROW_WALLET_EXCEPTION_IF(unexpected_tip, tools::error::wallet_internal_error,
-        "finished scanning but num blocks in chain or top block hash not set");
+    THROW_WALLET_EXCEPTION_IF(!m_scanner_finished, tools::error::wallet_internal_error,
+        "finished scanning but m_scanner_finished is not set");
 
-    THROW_WALLET_EXCEPTION_IF(m_last_scanned_index != m_num_blocks_in_chain,
+    THROW_WALLET_EXCEPTION_IF(num_blocks_in_chain == 0, tools::error::wallet_internal_error,
+        "finished scanning but num blocks in chain not set");
+
+    THROW_WALLET_EXCEPTION_IF(m_top_block_hash == rct::hash2rct(crypto::null_hash),
+        tools::error::wallet_internal_error, "finished scanning but top block hash not set");
+
+    THROW_WALLET_EXCEPTION_IF(m_last_scanned_index != num_blocks_in_chain,
         tools::error::wallet_internal_error, "finished scanning but did not scan to the tip of the chain");
-
-    THROW_WALLET_EXCEPTION_IF(m_last_scanned_index != m_end_scan_index, tools::error::wallet_internal_error,
-        "finished scanning but did not scan to expected end index");
-
-    // Scanner must be restarted to be usable again
-    m_scanner_ready.store(false, std::memory_order_relaxed);
 
     // Use an empty chunk to indicate to the caller the scanner is finished
     sp::scanning::ChunkContext empty_terminal_chunk{
             .prefix_block_id = m_top_block_hash,
-            .start_index     = m_num_blocks_in_chain,
+            .start_index     = num_blocks_in_chain,
             .block_ids       = {}
         };
 
@@ -741,14 +733,14 @@ void AsyncScanContextLegacy::start_scanner(const std::uint64_t start_index,
 
     m_max_chunk_size_hint = max_chunk_size_hint;
     m_scanner_ready.store(true, std::memory_order_relaxed);
+    m_scanner_finished = false;
 
     m_num_pending_chunks.store(0, std::memory_order_relaxed);
     m_num_scanning_chunks.store(0, std::memory_order_relaxed);
     m_scan_index.store(start_index, std::memory_order_relaxed);
     m_last_scanned_index = start_index;
-    m_end_scan_index = 0;
 
-    m_num_blocks_in_chain = 0;
+    m_num_blocks_in_chain.store(0, std::memory_order_relaxed);
     m_top_block_hash = rct::hash2rct(crypto::null_hash);
 
     // launch tasks until the queue fills up
@@ -771,8 +763,8 @@ void AsyncScanContextLegacy::begin_scanning_from_index(const std::uint64_t start
 std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_chunk()
 {
     std::lock_guard<std::mutex> lg{m_async_scan_context_mutex};
-    THROW_WALLET_EXCEPTION_IF(!m_scanner_ready.load(std::memory_order_relaxed), tools::error::wallet_internal_error,
-        "scanner is not ready for use");
+    THROW_WALLET_EXCEPTION_IF(!m_scanner_ready.load(std::memory_order_relaxed) && !m_scanner_finished,
+        tools::error::wallet_internal_error, "scanner is not ready for use and not finished scanning yet");
 
     // Get the chunk with the lowest requested start index
     PendingChunk oldest_chunk;
@@ -790,7 +782,13 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_c
         }
         THROW_WALLET_EXCEPTION_IF(oldest_chunk_result != async::TokenQueueResult::SUCCESS,
             tools::error::wallet_internal_error, "Failed to remove earliest onchain chunk");
+
+        THROW_WALLET_EXCEPTION_IF(m_scanner_finished, tools::error::wallet_internal_error,
+            "expected empty queue upon handling terminal chunk");
     }
+
+    THROW_WALLET_EXCEPTION_IF(!m_scanner_ready.load(std::memory_order_relaxed),
+        tools::error::wallet_internal_error, "scanner is not ready for use");
 
     sp::scanning::mocks::ChunkRequest &oldest_request = oldest_chunk.chunk_request;
     sp::scanning::PendingChunkContext &oldest_pending_context = oldest_chunk.pending_context;
@@ -813,15 +811,11 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_c
     sp::scanning::ChunkContext oldest_context = std::move(oldest_pending_context.chunk_context.get());
     m_last_scanned_index = oldest_context.start_index + sp::scanning::chunk_size(oldest_context);
 
-    // Make sure we got the expected chunk
-    THROW_WALLET_EXCEPTION_IF(m_end_scan_index > 0 && m_end_scan_index > oldest_request.start_index &&
-        oldest_request.start_index != oldest_context.start_index, tools::error::wallet_internal_error,
-        "Requested start index does not match actual start index");
-
     // Handle the terminal chunk
-    if (is_terminal_chunk(oldest_context, m_end_scan_index))
+    const std::uint64_t num_blocks_in_chain = m_num_blocks_in_chain.load(std::memory_order_relaxed);
+    if (is_terminal_chunk(oldest_context, num_blocks_in_chain))
     {
-        MDEBUG("Encountered terminal chunk starting at " << oldest_context.start_index
+        MDEBUG("Encountered potential terminal chunk starting at " << oldest_context.start_index
             << " (expected to start at " << oldest_request.start_index << ")");
         this->handle_terminal_chunk();
     }
@@ -830,8 +824,8 @@ std::unique_ptr<sp::scanning::LedgerChunk> AsyncScanContextLegacy::get_onchain_c
     std::vector<sp::scanning::PendingChunkData> pending_chunk_data;
     pending_chunk_data.emplace_back(std::move(oldest_chunk.pending_data));
 
-    if (m_num_blocks_in_chain > 0)
-        LOG_PRINT_L0("Block " << m_last_scanned_index << " / " << m_num_blocks_in_chain);
+    if (num_blocks_in_chain > 0)
+        LOG_PRINT_L0("Block " << m_last_scanned_index << " / " << num_blocks_in_chain);
 
     return std::make_unique<sp::scanning::AsyncLedgerChunk>(m_threadpool,
         std::move(oldest_chunk.pending_context),

@@ -216,6 +216,7 @@ private:
     /// pending chunks
     async::TokenQueue<PendingChunk> m_pending_chunk_queue{};
     std::atomic<bool> m_scanner_ready{false};
+    bool m_scanner_finished{false};
 
     /// scanner state
     std::atomic<std::uint64_t> m_num_pending_chunks{0};
@@ -225,7 +226,7 @@ private:
     std::uint64_t m_end_scan_index{0};
 
     /// chain state known to async scanner
-    std::uint64_t m_num_blocks_in_chain{0};
+    std::atomic<std::uint64_t> m_num_blocks_in_chain{0};
     rct::key m_top_block_hash{rct::hash2rct(crypto::null_hash)};
 
     /// threading helpers
