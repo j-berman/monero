@@ -28,8 +28,11 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "common/rpc_client.h"
-#include "cryptonote_basic/cryptonote_format_utils.h"
+//paired header
+#include "wallet_scanner.h"
+
+//local headers
+#include "misc_language.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "seraphis_core/legacy_core_utils.h"
 #include "seraphis_impl/enote_finding_context_legacy.h"
@@ -40,35 +43,34 @@
 #include "seraphis_main/contextual_enote_record_types.h"
 #include "seraphis_main/scan_machine_types.h"
 #include "seraphis_mocks/scan_chunk_consumer_mocks.h"
-#include "seraphis_mocks/scan_context_async_mock.h"
-#include "seraphis_mocks/mock_http_client_pool.h"
-#include "wallet/wallet2.h"
 
+//third party headers
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/thread/thread.hpp>
 
+//standard headers
 #include <algorithm>
-#include <memory>
-#include <string>
 
-const std::uint64_t fake_outs_count = 15;
-
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void reset(tools::t_daemon_rpc_client &daemon)
+namespace test
 {
-    printf("Resetting blockchain\n");
-    std::uint64_t height = daemon.get_height().height;
-    daemon.pop_blocks(height - 1);
-    daemon.flush_txpool();
-}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+const std::size_t SENDR_WALLET_IDX  = 0;
+const std::size_t RECVR_WALLET_IDX  = 1;
+const std::size_t NUM_WALLETS       = 2;
+
+const std::uint64_t FAKE_OUTS_COUNT = 15;
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static std::unique_ptr<tools::wallet2> generate_wallet(const std::string &daemon_addr,
     const boost::optional<epee::net_utils::http::login> &daemon_login,
     const epee::net_utils::ssl_options_t ssl_support)
 {
-    std::unique_ptr<tools::wallet2> wal(new tools::wallet2(cryptonote::MAINNET, 1, true/*unattended keeps spend key decrypted*/));
+    std::unique_ptr<tools::wallet2> wal(new tools::wallet2(
+        /*network*/                              cryptonote::MAINNET,
+        /*kdf rounds*/                           1,
+        /*unattended keeps spend key decrypted*/ true
+    ));
 
     wal->init(daemon_addr, daemon_login, "", 0UL, true/*trusted_daemon*/, ssl_support);
     wal->allow_mismatched_daemon_version(true);
@@ -78,88 +80,6 @@ static std::unique_ptr<tools::wallet2> generate_wallet(const std::string &daemon
     wal->generate("", "");
 
     return wal;
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void transfer(std::unique_ptr<tools::wallet2> &sendr_wallet,
-    cryptonote::account_public_address &dest_addr,
-    bool is_subaddress,
-    std::uint64_t amount_to_transfer,
-    cryptonote::transaction &tx_out)
-{
-    std::vector<cryptonote::tx_destination_entry> dsts;
-    dsts.reserve(1);
-
-    cryptonote::tx_destination_entry de;
-    de.addr = dest_addr;
-    de.is_subaddress = is_subaddress;
-    de.amount = amount_to_transfer;
-    dsts.push_back(de);
-
-    std::vector<tools::wallet2::pending_tx> ptx;
-    ptx = sendr_wallet->create_transactions_2(dsts, fake_outs_count, 0, 0, std::vector<uint8_t>(), 0, {});
-    CHECK_AND_ASSERT_THROW_MES(ptx.size() == 1, "unexpected num pending txs");
-    sendr_wallet->commit_tx(ptx[0]);
-
-    tx_out = std::move(ptx[0].tx);
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static std::uint64_t mine_tx(tools::t_daemon_rpc_client &daemon,
-    const crypto::hash &tx_hash,
-    const std::string &miner_addr_str)
-{
-    const std::string txs_hash = epee::string_tools::pod_to_hex(tx_hash);
-
-    // Make sure tx is in the pool
-    auto res = daemon.get_transactions(std::vector<std::string>{txs_hash});
-    CHECK_AND_ASSERT_THROW_MES(res.txs.size() == 1 && res.txs[0].tx_hash == txs_hash && res.txs[0].in_pool,
-        "tx not found in pool");
-
-    // Mine the tx
-    const std::uint64_t height = daemon.generateblocks(miner_addr_str, 1).height;
-
-    // Make sure tx was mined
-    res = daemon.get_transactions(std::vector<std::string>{txs_hash});
-    CHECK_AND_ASSERT_THROW_MES(res.txs.size() == 1 && res.txs[0].tx_hash == txs_hash
-        && res.txs[0].block_height == height, "tx not yet mined");
-
-    return daemon.get_last_block_header().block_header.reward;
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static void check_wallet2_scan(std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet,
-    std::uint64_t sendr_wallet_expected_balance,
-    std::uint64_t recvr_wallet_expected_balance,
-    const crypto::hash &tx_hash,
-    std::uint64_t transfer_amount)
-{
-    sendr_wallet->refresh(true);
-    recvr_wallet->refresh(true);
-    std::uint64_t sendr_wallet_final_balance = sendr_wallet->balance(0, true);
-    std::uint64_t recvr_wallet_final_balance = recvr_wallet->balance(0, true);
-
-    CHECK_AND_ASSERT_THROW_MES(sendr_wallet_final_balance == sendr_wallet_expected_balance,
-        "sendr_wallet has unexpected balance");
-    CHECK_AND_ASSERT_THROW_MES(recvr_wallet_final_balance == recvr_wallet_expected_balance,
-        "recvr_wallet has unexpected balance");
-
-    // Find all transfers with matching tx hash
-    tools::wallet2::transfer_container recvr_wallet_incoming_transfers;
-    recvr_wallet->get_transfers(recvr_wallet_incoming_transfers);
-
-    std::uint64_t received_amount = 0;
-    auto it = recvr_wallet_incoming_transfers.begin();
-    const auto end = recvr_wallet_incoming_transfers.end();
-    const auto is_same_hash = [&tx_hash](const tools::wallet2::transfer_details& td) { return td.m_txid == tx_hash; };
-    while ((it = std::find_if(it, end, is_same_hash)) != end)
-    {
-        CHECK_AND_ASSERT_THROW_MES(it->m_block_height > 0, "recvr_wallet did not see tx in chain");
-        received_amount += it->m_amount;
-        it++;
-    }
-    CHECK_AND_ASSERT_THROW_MES(received_amount == transfer_amount, "recvr_wallet did not receive correct amount");
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
@@ -188,20 +108,13 @@ static void add_default_subaddresses(const rct::key &legacy_base_spend_pubkey,
     }
 };
 //-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-static boost::multiprecision::uint128_t scan_chain(const std::uint64_t start_height,
-    const rct::key &legacy_base_spend_pubkey,
-    const crypto::secret_key &legacy_spend_privkey,
-    const crypto::secret_key &legacy_view_privkey,
-    sp::mocks::ClientConnectionPool &conn_pool)
+static SpTestScanConfig get_default_sp_scan_config()
 {
-    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
-    add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
-
     // Default config pointing to updated daemon
-    const sp::scanning::ScanMachineConfig updated_scan_config{
+    sp::scanning::ScanMachineConfig scan_machine_config{
             .reorg_avoidance_increment  = 1,
-            .max_chunk_size_hint        = 20, // the lower this is, the quicker feedback gets to the user on scanner progress
+            // the lower the max hint is, the quicker feedback gets to the user on scanner progress
+            .max_chunk_size_hint        = 20,
             .max_partialscan_attempts   = 0
         };
 
@@ -209,22 +122,169 @@ static boost::multiprecision::uint128_t scan_chain(const std::uint64_t start_hei
         (std::uint64_t)(boost::thread::hardware_concurrency() + 2),
         static_cast<std::uint64_t>(10));
 
-    const sp::scanning::mocks::AsyncScanContextLegacyConfig config{
+    sp::scanning::mocks::AsyncScanContextLegacyConfig scan_context_config{
             .pending_chunk_queue_size = updated_pending_chunk_queue_size,
             .max_get_blocks_attempts  = 3,
-            .trusted_daemon           = true
+            .trusted_daemon           = true,
+            .high_height_ok           = true
         };
 
+    return {
+        .scan_machine_config = std::move(scan_machine_config),
+        .scan_context_config = std::move(scan_context_config)
+    };
+}
+//-------------------------------------------------------------------------------------------------------------------
+static SpTestScanConfig get_single_member_queue_sp_scan_config()
+{
+    // Setting up the config that we'd use to point to a daemon that is not running the updates necessary to speed up
+    // the async scanner
+    sp::scanning::ScanMachineConfig backwards_compatible_scan_machine_config{
+            // since older daemons ban clients that request a height > chain height, give cushion to be safe
+            .reorg_avoidance_increment       = 3,
+            // be safe by making sure we always start the index below last known height
+            .force_reorg_avoidance_increment = true,
+            // an older daemon won't respect this max chunk size hint
+            .max_chunk_size_hint             = 1000,
+            .max_partialscan_attempts        = 3
+        };
+
+    sp::scanning::mocks::AsyncScanContextLegacyConfig backwards_compatible_scan_context_config{
+            // won't do any "gap filling" inside the async scanner
+            .pending_chunk_queue_size = 1,
+            .max_get_blocks_attempts  = 3,
+            .trusted_daemon           = true,
+            // older daemon configs don't support requesting too high of a height
+            .high_height_ok           = false
+        };
+
+    return {
+        .scan_machine_config = std::move(backwards_compatible_scan_machine_config),
+        .scan_context_config = std::move(backwards_compatible_scan_context_config)
+    };
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::reset()
+{
+    printf("Resetting blockchain\n");
+    std::uint64_t height = this->daemon()->get_height().height;
+    this->daemon()->pop_blocks(height - 1);
+    this->daemon()->flush_txpool();
+}
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::mine(const std::size_t wallet_idx, const std::uint64_t num_blocks)
+{
+    const std::string addr = this->wallet(wallet_idx)->get_account().get_public_address_str(cryptonote::MAINNET);
+    this->daemon()->generateblocks(addr, num_blocks);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::transfer(const std::size_t wallet_idx,
+    const cryptonote::account_public_address &dest_addr,
+    const bool is_subaddress,
+    const std::uint64_t amount_to_transfer,
+    cryptonote::transaction &tx_out)
+{
+    std::vector<cryptonote::tx_destination_entry> dsts;
+    dsts.reserve(1);
+
+    cryptonote::tx_destination_entry de;
+    de.addr = dest_addr;
+    de.is_subaddress = is_subaddress;
+    de.amount = amount_to_transfer;
+    dsts.push_back(de);
+
+    std::vector<tools::wallet2::pending_tx> ptx;
+    ptx = this->wallet(wallet_idx)->create_transactions_2(dsts, FAKE_OUTS_COUNT, 0, 0, std::vector<uint8_t>(), 0, {});
+    CHECK_AND_ASSERT_THROW_MES(ptx.size() == 1, "unexpected num pending txs");
+    this->wallet(wallet_idx)->commit_tx(ptx[0]);
+
+    tx_out = std::move(ptx[0].tx);
+}
+//-------------------------------------------------------------------------------------------------------------------
+std::uint64_t WalletScannerTest::mine_tx(const crypto::hash &tx_hash, const std::string &miner_addr_str)
+{
+    const std::string txs_hash = epee::string_tools::pod_to_hex(tx_hash);
+
+    // Make sure tx is in the pool
+    auto res = this->daemon()->get_transactions(std::vector<std::string>{txs_hash});
+    CHECK_AND_ASSERT_THROW_MES(res.txs.size() == 1 && res.txs[0].tx_hash == txs_hash && res.txs[0].in_pool,
+        "tx not found in pool");
+
+    // Mine the tx
+    const std::uint64_t height = this->daemon()->generateblocks(miner_addr_str, 1).height;
+
+    // Make sure tx was mined
+    res = this->daemon()->get_transactions(std::vector<std::string>{txs_hash});
+    CHECK_AND_ASSERT_THROW_MES(res.txs.size() == 1 && res.txs[0].tx_hash == txs_hash
+        && res.txs[0].block_height == height, "tx not yet mined");
+
+    return this->daemon()->get_last_block_header().block_header.reward;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::check_wallet2_scan(const ExpectedScanResults &res)
+{
+    auto &sendr_wallet = this->wallet(SENDR_WALLET_IDX);
+    auto &recvr_wallet = this->wallet(RECVR_WALLET_IDX);
+
+    sendr_wallet->refresh(true);
+    recvr_wallet->refresh(true);
+    const std::uint64_t sendr_final_balance = sendr_wallet->balance(0, true);
+    const std::uint64_t recvr_final_balance = recvr_wallet->balance(0, true);
+
+    CHECK_AND_ASSERT_THROW_MES(sendr_final_balance == res.sendr_expected_balance,
+        "sendr_wallet has unexpected balance");
+    CHECK_AND_ASSERT_THROW_MES(recvr_final_balance == res.recvr_expected_balance,
+        "recvr_wallet has unexpected balance");
+
+    // Find all transfers with matching tx hash
+    tools::wallet2::transfer_container recvr_wallet_incoming_transfers;
+    recvr_wallet->get_transfers(recvr_wallet_incoming_transfers);
+
+    std::uint64_t received_amount = 0;
+    auto it = recvr_wallet_incoming_transfers.begin();
+    const auto end = recvr_wallet_incoming_transfers.end();
+    const auto is_same_hash = [l_tx_hash = res.tx_hash](const tools::wallet2::transfer_details& td)
+        { return td.m_txid == l_tx_hash; };
+    while ((it = std::find_if(it, end, is_same_hash)) != end)
+    {
+        CHECK_AND_ASSERT_THROW_MES(it->m_block_height > 0, "recvr_wallet did not see tx in chain");
+        received_amount += it->m_amount;
+        it++;
+    }
+    CHECK_AND_ASSERT_THROW_MES(received_amount == res.transfer_amount,
+        "recvr_wallet did not receive correct amount");
+}
+//-------------------------------------------------------------------------------------------------------------------
+boost::multiprecision::uint128_t WalletScannerTest::sp_scan_chain(const std::size_t wallet_idx,
+    const SpTestScanConfig &config)
+{
+    auto &wallet = this->wallet(wallet_idx);
+
+    // Set up keys
+    const rct::key legacy_base_spend_pubkey = rct::pk2rct(
+        wallet->get_account().get_keys().m_account_address.m_spend_public_key
+    );
+    const crypto::secret_key legacy_spend_privkey = wallet->get_account().get_keys().m_spend_secret_key;
+    const crypto::secret_key legacy_view_privkey  = wallet->get_account().get_keys().m_view_secret_key;
+
+    // Set up subaddress map with default lookahead
+    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
+    add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
+
+    // Set up the getblocks.bin RPC requester
+    ConnectionPoolWrapper conn_pool_locker{*this};
     const std::function<bool(
         const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
         cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
     )> rpc_get_blocks =
-        [&conn_pool](
+        [&conn_pool_locker](
             const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req,
             cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res
         )
             {
-                return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
+                return conn_pool_locker.conn_pool()->rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
                     sp::mocks::ClientConnectionPool::http_mode::BIN,
                     "/getblocks.bin",
                     req,
@@ -235,13 +295,13 @@ static boost::multiprecision::uint128_t scan_chain(const std::uint64_t start_hei
         legacy_subaddress_map,
         legacy_view_privkey};
 
-    sp::scanning::mocks::AsyncScanContextLegacy scan_context_ledger{config,
+    sp::scanning::mocks::AsyncScanContextLegacy scan_context_ledger{config.scan_context_config,
         enote_finding_context,
         async::get_default_threadpool(),
         rpc_get_blocks};
 
     sp::SpEnoteStore user_enote_store{
-            /*refresh_index*/                   start_height == 0 ? 1 : start_height,
+            /*refresh_index*/                   1,
             /*first_sp_allowed_block_in_chain*/ std::uint64_t(-1),
             /*default_spendable_age*/           CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE
         };
@@ -253,157 +313,44 @@ static boost::multiprecision::uint128_t scan_chain(const std::uint64_t start_hei
 
     sp::scanning::ScanContextNonLedgerDummy scan_context_nonledger{};
 
-    bool r = sp::refresh_enote_store(updated_scan_config,
+    bool r = sp::refresh_enote_store(config.scan_machine_config,
         scan_context_nonledger,
         scan_context_ledger,
         chunk_consumer);
     CHECK_AND_ASSERT_THROW_MES(r, "Failed to refresh enote store");
 
-    // Now that we're done scanning, we can close all open connections and keep 1 open for more RPC calls
-    conn_pool.close_connections(1);
-
     return sp::get_balance(user_enote_store,
         {sp::SpEnoteOriginStatus::ONCHAIN, sp::SpEnoteOriginStatus::UNCONFIRMED},
         {sp::SpEnoteSpentStatus::SPENT_ONCHAIN, sp::SpEnoteSpentStatus::SPENT_UNCONFIRMED});
 }
 //-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-// TODO: remove after hard fork
-static boost::multiprecision::uint128_t scan_using_old_daemon_version_config(const std::uint64_t start_height,
-    const rct::key &legacy_base_spend_pubkey,
-    const crypto::secret_key &legacy_spend_privkey,
-    const crypto::secret_key &legacy_view_privkey,
-    sp::mocks::ClientConnectionPool &conn_pool)
+void WalletScannerTest::check_seraphis_scan(const ExpectedScanResults &res)
 {
-    std::unordered_map<rct::key, cryptonote::subaddress_index> legacy_subaddress_map{};
-    add_default_subaddresses(legacy_base_spend_pubkey, legacy_view_privkey, legacy_subaddress_map);
+    const std::vector<SpTestScanConfig> test_configs = {
+        get_default_sp_scan_config(),
+        get_single_member_queue_sp_scan_config()
+    };
 
-    // Config when pointing to a daemon that has not yet updated
-    const sp::scanning::ScanMachineConfig backwards_compatible_scan_config{
-            .reorg_avoidance_increment       = 3,    // since older daemons ban clients that request a height > chain height, give cushion to be safe
-            .force_reorg_avoidance_increment = true, // be safe by making sure we always start the index below last known height
-            .max_chunk_size_hint             = 1000, // an older daemon won't respect this value anyway
-            .max_partialscan_attempts        = 3
-        };
+    for (const auto &config : test_configs)
+    {
+        const auto sp_balance_sendr_wallet = this->sp_scan_chain(SENDR_WALLET_IDX, config);
+        const auto sp_balance_recvr_wallet = this->sp_scan_chain(RECVR_WALLET_IDX, config);
 
-    const sp::scanning::mocks::AsyncScanContextLegacyConfig config{
-            .pending_chunk_queue_size = 1, // won't do any "gap filling" inside the async scanner
-            .max_get_blocks_attempts  = 3,
-            .trusted_daemon           = true
-        };
+        const auto sendr_expected_balance = boost::multiprecision::uint128_t(res.sendr_expected_balance);
+        const auto recvr_expected_balance = boost::multiprecision::uint128_t(res.recvr_expected_balance);
 
-    const std::function<bool(
-        const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request&,
-        cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response&
-    )> rpc_get_blocks =
-        [&conn_pool](
-            const cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request &req,
-            cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response &res
-        )
-            {
-                cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req_get_blocks = req;
-                req_get_blocks.high_height_ok = false;
-                return conn_pool.rpc_command<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST>(
-                    sp::mocks::ClientConnectionPool::http_mode::BIN,
-                    "/getblocks.bin",
-                    req_get_blocks,
-                    res);
-            };
-
-    sp::EnoteFindingContextLegacyMultithreaded enote_finding_context{legacy_base_spend_pubkey,
-        legacy_subaddress_map,
-        legacy_view_privkey,
-        async::get_default_threadpool()};
-
-    sp::scanning::mocks::AsyncScanContextLegacy scan_context_ledger{config,
-        enote_finding_context,
-        async::get_default_threadpool(),
-        rpc_get_blocks};
-
-    sp::SpEnoteStore user_enote_store{
-            /*refresh_index*/                   start_height == 0 ? 1 : start_height,
-            /*first_sp_allowed_block_in_chain*/ std::uint64_t(-1),
-            /*default_spendable_age*/           CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE
-        };
-
-    sp::mocks::ChunkConsumerMockLegacy chunk_consumer{legacy_base_spend_pubkey,
-        legacy_spend_privkey,
-        legacy_view_privkey,
-        user_enote_store};
-
-    sp::scanning::ScanContextNonLedgerDummy scan_context_nonledger{};
-
-    bool r = sp::refresh_enote_store(backwards_compatible_scan_config,
-        scan_context_nonledger,
-        scan_context_ledger,
-        chunk_consumer);
-    CHECK_AND_ASSERT_THROW_MES(r, "Failed to refresh enote store using old daemon version config");
-
-    return sp::get_balance(user_enote_store,
-        {sp::SpEnoteOriginStatus::ONCHAIN, sp::SpEnoteOriginStatus::UNCONFIRMED},
-        {sp::SpEnoteSpentStatus::SPENT_ONCHAIN, sp::SpEnoteSpentStatus::SPENT_UNCONFIRMED});
+        CHECK_AND_ASSERT_THROW_MES(sp_balance_sendr_wallet == sendr_expected_balance,
+            "sendr_wallet Seraphis lib balance incorrect");
+        CHECK_AND_ASSERT_THROW_MES(sp_balance_recvr_wallet == recvr_expected_balance,
+            "recvr_wallet Seraphis lib balance incorrect");
+    }
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static void check_seraphis_scan(std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet,
-    std::uint64_t sendr_wallet_expected_balance,
-    std::uint64_t recvr_wallet_expected_balance,
-    sp::mocks::ClientConnectionPool &conn_pool)
+ExpectedScanResults WalletScannerTest::init_normal_transfer_test()
 {
-    // TEST 1: default config pointing to updated daemon
-    MDEBUG("Using default Seraphis lib scanner config");
-
-    boost::multiprecision::uint128_t sp_balance_sendr_wallet = scan_chain(0/*start_height*/,
-            rct::pk2rct(sendr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
-            sendr_wallet->get_account().get_keys().m_spend_secret_key,
-            sendr_wallet->get_account().get_keys().m_view_secret_key,
-            conn_pool
-        );
-    boost::multiprecision::uint128_t sp_balance_recvr_wallet = scan_chain(0/*start_height*/,
-            rct::pk2rct(recvr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
-            recvr_wallet->get_account().get_keys().m_spend_secret_key,
-            recvr_wallet->get_account().get_keys().m_view_secret_key,
-            conn_pool
-        );
-
-    CHECK_AND_ASSERT_THROW_MES(sp_balance_sendr_wallet == boost::multiprecision::uint128_t(sendr_wallet_expected_balance),
-        "sendr_wallet Seraphis lib balance incorrect");
-    CHECK_AND_ASSERT_THROW_MES(sp_balance_recvr_wallet == boost::multiprecision::uint128_t(recvr_wallet_expected_balance),
-        "recvr_wallet Seraphis lib balance incorrect");
-
-    // TODO: remove after hard fork
-    // TEST 2: config when pointing to a daemon that has not yet updated
-    MDEBUG("Using Seraphis lib scanner non-updated daemon config");
-
-    sp_balance_sendr_wallet = scan_using_old_daemon_version_config(0/*start_height*/,
-            rct::pk2rct(sendr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
-            sendr_wallet->get_account().get_keys().m_spend_secret_key,
-            sendr_wallet->get_account().get_keys().m_view_secret_key,
-            conn_pool
-        );
-    sp_balance_recvr_wallet = scan_using_old_daemon_version_config(0/*start_height*/,
-            rct::pk2rct(recvr_wallet->get_account().get_keys().m_account_address.m_spend_public_key),
-            recvr_wallet->get_account().get_keys().m_spend_secret_key,
-            recvr_wallet->get_account().get_keys().m_view_secret_key,
-            conn_pool
-        );
-
-    CHECK_AND_ASSERT_THROW_MES(sp_balance_sendr_wallet == boost::multiprecision::uint128_t(sendr_wallet_expected_balance),
-        "sendr_wallet Seraphis lib balance incorrect using old daemon version config");
-    CHECK_AND_ASSERT_THROW_MES(sp_balance_recvr_wallet == boost::multiprecision::uint128_t(recvr_wallet_expected_balance),
-        "recvr_wallet Seraphis lib balance incorrect using old daemon version config");
-}
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-// Tests
-//-------------------------------------------------------------------------------------------------------------------
-static void check_normal_transfer(tools::t_daemon_rpc_client &daemon,
-    std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet,
-    sp::mocks::ClientConnectionPool &conn_pool)
-{
-    printf("Checking normal transfer\n");
+    auto &sendr_wallet = this->wallet(SENDR_WALLET_IDX);
+    auto &recvr_wallet = this->wallet(RECVR_WALLET_IDX);
 
     // Assert sendr_wallet has enough money to send to recvr_wallet
     std::uint64_t amount_to_transfer = 1000000000000;
@@ -413,46 +360,36 @@ static void check_normal_transfer(tools::t_daemon_rpc_client &daemon,
         "sendr_wallet does not have enough money");
 
     // Save initial state
-    std::uint64_t sendr_wallet_init_balance = sendr_wallet->balance(0, true);
-    std::uint64_t recvr_wallet_init_balance = recvr_wallet->balance(0, true);
+    std::uint64_t sendr_init_balance = sendr_wallet->balance(0, true);
+    std::uint64_t recvr_init_balance = recvr_wallet->balance(0, true);
 
     // Send from sendr_wallet to recvr_wallet's primary adddress
     cryptonote::transaction tx;
     cryptonote::account_public_address dest_addr = recvr_wallet->get_account().get_keys().m_account_address;
-    transfer(sendr_wallet, dest_addr, false/*is_subaddress*/, amount_to_transfer, tx);
+    this->transfer(SENDR_WALLET_IDX, dest_addr, false/*is_subaddress*/, amount_to_transfer, tx);
     std::uint64_t fee = cryptonote::get_tx_fee(tx);
     crypto::hash tx_hash = cryptonote::get_transaction_hash(tx);
 
     // Mine the tx
-    const std::string sender_addr = sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET);
-    std::uint64_t block_reward = mine_tx(daemon, tx_hash, sender_addr);
+    std::string sender_addr = sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET);
+    std::uint64_t block_reward = this->mine_tx(tx_hash, sender_addr);
 
-    // Use wallet2 to scan tx and make sure it's in the chain
-    std::uint64_t sendr_wallet_expected_balance = sendr_wallet_init_balance - amount_to_transfer - fee + block_reward;
-    std::uint64_t recvr_wallet_expected_balance = recvr_wallet_init_balance + amount_to_transfer;
-    check_wallet2_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            tx_hash,
-            amount_to_transfer
-        );
+    // Calculate expected balances
+    std::uint64_t sendr_expected_balance = sendr_init_balance - amount_to_transfer - fee + block_reward;
+    std::uint64_t recvr_expected_balance = recvr_init_balance + amount_to_transfer;
 
-    // Use Seraphis lib to scan chain
-    check_seraphis_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            conn_pool
-        );
+    return ExpectedScanResults{
+        .sendr_expected_balance = sendr_expected_balance,
+        .recvr_expected_balance = recvr_expected_balance,
+        .tx_hash                = std::move(tx_hash),
+        .transfer_amount        = amount_to_transfer
+    };
 }
 //-------------------------------------------------------------------------------------------------------------------
-static void check_sweep_single(tools::t_daemon_rpc_client &daemon,
-    std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet,
-    sp::mocks::ClientConnectionPool &conn_pool)
+ExpectedScanResults WalletScannerTest::init_sweep_single_test()
 {
-    printf("Checking sweep single\n");
+    auto &sendr_wallet = this->wallet(SENDR_WALLET_IDX);
+    auto &recvr_wallet = this->wallet(RECVR_WALLET_IDX);
 
     sendr_wallet->refresh(true);
     recvr_wallet->refresh(true);
@@ -478,8 +415,8 @@ static void check_sweep_single(tools::t_daemon_rpc_client &daemon,
     }
 
     // Save initial state
-    std::uint64_t sendr_wallet_init_balance = sendr_wallet->balance(0, true);
-    std::uint64_t recvr_wallet_init_balance = recvr_wallet->balance(0, true);
+    std::uint64_t sendr_init_balance = sendr_wallet->balance(0, true);
+    std::uint64_t recvr_init_balance = recvr_wallet->balance(0, true);
 
     // Sweep single output from sendr_wallet to recvr_wallet so no change
     cryptonote::transaction tx;
@@ -488,7 +425,7 @@ static void check_sweep_single(tools::t_daemon_rpc_client &daemon,
             recvr_wallet->get_account().get_keys().m_account_address,
             false /*is_subaddress*/,
             1 /*outputs*/,
-            fake_outs_count,
+            FAKE_OUTS_COUNT,
             0 /*unlock_time*/,
             0 /*priority*/,
             std::vector<uint8_t>() /*extra*/
@@ -502,34 +439,24 @@ static void check_sweep_single(tools::t_daemon_rpc_client &daemon,
 
     // Mine the tx
     const std::string sender_addr = sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET);
-    std::uint64_t block_reward = mine_tx(daemon, tx_hash, sender_addr);
+    std::uint64_t block_reward = this->mine_tx(tx_hash, sender_addr);
 
-    // Use wallet2 to scan tx and make sure it's in the chain
-    std::uint64_t sendr_wallet_expected_balance = sendr_wallet_init_balance - amount + block_reward;
-    std::uint64_t recvr_wallet_expected_balance = recvr_wallet_init_balance + (amount - fee);
-    check_wallet2_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            tx_hash,
-            (amount - fee)
-        );
+    // Calculate expected balances
+    std::uint64_t sendr_expected_balance = sendr_init_balance - amount + block_reward;
+    std::uint64_t recvr_expected_balance = recvr_init_balance + (amount - fee);
 
-    // Use Seraphis lib to scan chain
-    check_seraphis_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            conn_pool
-        );
+    return ExpectedScanResults{
+        .sendr_expected_balance = sendr_expected_balance,
+        .recvr_expected_balance = recvr_expected_balance,
+        .tx_hash                = std::move(tx_hash),
+        .transfer_amount        = (amount - fee)
+    };
 }
 //-------------------------------------------------------------------------------------------------------------------
-static void check_transfer_to_subaddress(tools::t_daemon_rpc_client &daemon,
-    std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet,
-    sp::mocks::ClientConnectionPool &conn_pool)
+ExpectedScanResults WalletScannerTest::init_subaddress_transfer_test()
 {
-    printf("Checking transfer to subaddress\n");
+    auto &sendr_wallet = this->wallet(SENDR_WALLET_IDX);
+    auto &recvr_wallet = this->wallet(RECVR_WALLET_IDX);
 
     // Assert sendr_wallet has enough money to send to recvr_wallet
     std::uint64_t amount_to_transfer = 1000000000000;
@@ -539,46 +466,36 @@ static void check_transfer_to_subaddress(tools::t_daemon_rpc_client &daemon,
         "sendr_wallet does not have enough money");
 
     // Save initial state
-    std::uint64_t sendr_wallet_init_balance = sendr_wallet->balance(0, true);
-    std::uint64_t recvr_wallet_init_balance = recvr_wallet->balance(0, true);
+    std::uint64_t sendr_init_balance = sendr_wallet->balance(0, true);
+    std::uint64_t recvr_init_balance = recvr_wallet->balance(0, true);
 
     // Send from sendr_wallet to recvr_wallet subaddress major idx 0, minor idx 1
     cryptonote::transaction tx;
     cryptonote::account_public_address dest_addr = recvr_wallet->get_subaddress({0, 1});
-    transfer(sendr_wallet, dest_addr, true/*is_subaddress*/, amount_to_transfer, tx);
+    this->transfer(SENDR_WALLET_IDX, dest_addr, true/*is_subaddress*/, amount_to_transfer, tx);
     std::uint64_t fee = cryptonote::get_tx_fee(tx);
     crypto::hash tx_hash = cryptonote::get_transaction_hash(tx);
 
     // Mine the tx
     const std::string sender_addr = sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET);
-    std::uint64_t block_reward = mine_tx(daemon, tx_hash, sender_addr);
+    std::uint64_t block_reward = this->mine_tx(tx_hash, sender_addr);
 
-    // Use wallet2 to scan tx and make sure it's in the chain
-    std::uint64_t sendr_wallet_expected_balance = sendr_wallet_init_balance - amount_to_transfer - fee + block_reward;
-    std::uint64_t recvr_wallet_expected_balance = recvr_wallet_init_balance + amount_to_transfer;
-    check_wallet2_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            tx_hash,
-            amount_to_transfer
-        );
+    // Calculate expected balances
+    std::uint64_t sendr_expected_balance = sendr_init_balance - amount_to_transfer - fee + block_reward;
+    std::uint64_t recvr_expected_balance = recvr_init_balance + amount_to_transfer;
 
-    // Use Seraphis lib to scan chain
-    check_seraphis_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            conn_pool
-        );
+    return ExpectedScanResults{
+        .sendr_expected_balance = sendr_expected_balance,
+        .recvr_expected_balance = recvr_expected_balance,
+        .tx_hash                = std::move(tx_hash),
+        .transfer_amount        = amount_to_transfer
+    };
 }
 //-------------------------------------------------------------------------------------------------------------------
-static void check_transfer_to_multiple_subaddresses(tools::t_daemon_rpc_client &daemon,
-    std::unique_ptr<tools::wallet2> &sendr_wallet,
-    std::unique_ptr<tools::wallet2> &recvr_wallet,
-    sp::mocks::ClientConnectionPool &conn_pool)
+ExpectedScanResults WalletScannerTest::init_multiple_subaddresses_test()
 {
-    printf("Checking transfer to multiple subaddresses\n");
+    auto &sendr_wallet = this->wallet(SENDR_WALLET_IDX);
+    auto &recvr_wallet = this->wallet(RECVR_WALLET_IDX);
 
     // Assert sendr_wallet has enough money to send to recvr_wallet
     std::uint64_t amount_to_transfer = 1000000000000;
@@ -588,8 +505,8 @@ static void check_transfer_to_multiple_subaddresses(tools::t_daemon_rpc_client &
         "sendr_wallet does not have enough money");
 
     // Save initial state
-    std::uint64_t sendr_wallet_init_balance = sendr_wallet->balance(0, true);
-    std::uint64_t recvr_wallet_init_balance = recvr_wallet->balance(0, true);
+    std::uint64_t sendr_init_balance = sendr_wallet->balance(0, true);
+    std::uint64_t recvr_init_balance = recvr_wallet->balance(0, true);
 
     // Send from sendr_wallet to 2 recvr_wallet subaddresses
     cryptonote::transaction tx;
@@ -608,7 +525,7 @@ static void check_transfer_to_multiple_subaddresses(tools::t_daemon_rpc_client &
         }
 
         std::vector<tools::wallet2::pending_tx> ptx;
-        ptx = sendr_wallet->create_transactions_2(dsts, fake_outs_count, 0, 0, std::vector<uint8_t>(), 0, {});
+        ptx = sendr_wallet->create_transactions_2(dsts, FAKE_OUTS_COUNT, 0, 0, std::vector<uint8_t>(), 0, {});
         CHECK_AND_ASSERT_THROW_MES(ptx.size() == 1, "unexpected num pending txs");
         sendr_wallet->commit_tx(ptx[0]);
 
@@ -624,56 +541,98 @@ static void check_transfer_to_multiple_subaddresses(tools::t_daemon_rpc_client &
 
     // Mine the tx
     const std::string sender_addr = sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET);
-    std::uint64_t block_reward = mine_tx(daemon, tx_hash, sender_addr);
+    std::uint64_t block_reward = this->mine_tx(tx_hash, sender_addr);
 
     // Use wallet2 to scan tx and make sure it's in the chain
-    std::uint64_t sendr_wallet_expected_balance = sendr_wallet_init_balance - amount_to_transfer - fee + block_reward;
-    std::uint64_t recvr_wallet_expected_balance = recvr_wallet_init_balance + amount_to_transfer;
-    check_wallet2_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            tx_hash,
-            amount_to_transfer
-        );
+    std::uint64_t sendr_expected_balance = sendr_init_balance - amount_to_transfer - fee + block_reward;
+    std::uint64_t recvr_expected_balance = recvr_init_balance + amount_to_transfer;
 
-    // Use Seraphis lib to scan chain
-    check_seraphis_scan(sendr_wallet,
-            recvr_wallet,
-            sendr_wallet_expected_balance,
-            recvr_wallet_expected_balance,
-            conn_pool
-        );
+    return ExpectedScanResults{
+        .sendr_expected_balance = sendr_expected_balance,
+        .recvr_expected_balance = recvr_expected_balance,
+        .tx_hash                = std::move(tx_hash),
+        .transfer_amount        = amount_to_transfer
+    };
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool wallet_scanner(const std::string& daemon_addr)
+//-------------------------------------------------------------------------------------------------------------------
+// Tests
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::check_normal_transfer()
 {
-    const boost::optional<epee::net_utils::http::login> daemon_login = boost::none;
-    const epee::net_utils::ssl_options_t ssl_support = epee::net_utils::ssl_support_t::e_ssl_support_disabled;
+    printf("Checking normal transfer\n");
+    const ExpectedScanResults res = this->init_normal_transfer_test();
+
+    this->check_wallet2_scan(res);
+    this->check_seraphis_scan(res);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::check_sweep_single()
+{
+    printf("Checking sweep single\n");
+    const ExpectedScanResults res = this->init_sweep_single_test();
+
+    this->check_wallet2_scan(res);
+    this->check_seraphis_scan(res);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::check_subaddress_transfer()
+{
+    printf("Checking transfer to subaddress\n");
+    const ExpectedScanResults res = this->init_subaddress_transfer_test();
+
+    this->check_wallet2_scan(res);
+    this->check_seraphis_scan(res);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void WalletScannerTest::check_multiple_subaddresses_transfer()
+{
+    printf("Checking transfer to multiple subaddresses\n");
+    const ExpectedScanResults res = this->init_multiple_subaddresses_test();
+
+    this->check_wallet2_scan(res);
+    this->check_seraphis_scan(res);
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool WalletScannerTest::run()
+{
+    SCOPE_LOCK_MUTEX(m_wallets_mutex);
+    SCOPE_LOCK_MUTEX(m_daemon_mutex);
 
     // Reset chain
-    tools::t_daemon_rpc_client daemon(daemon_addr, daemon_login, ssl_support);
-    reset(daemon);
-
-    // Create wallets
-    std::unique_ptr<tools::wallet2> sendr_wallet = generate_wallet(daemon_addr, daemon_login, ssl_support);
-    std::unique_ptr<tools::wallet2> recvr_wallet = generate_wallet(daemon_addr, daemon_login, ssl_support);
+    this->reset();
 
     // Mine to sender
     printf("Mining to sender wallet\n");
-    daemon.generateblocks(sendr_wallet->get_account().get_public_address_str(cryptonote::MAINNET), 80);
-
-    // Initialize Seraphis lib connection pool
-    sp::mocks::ClientConnectionPool conn_pool(daemon_addr, daemon_login, ssl_support);
+    this->mine(SENDR_WALLET_IDX, 80);
 
     // Run the tests
-    check_normal_transfer(daemon, sendr_wallet, recvr_wallet, conn_pool);
-    check_sweep_single(daemon, sendr_wallet, recvr_wallet, conn_pool);
-    check_transfer_to_subaddress(daemon, sendr_wallet, recvr_wallet, conn_pool);
-    check_transfer_to_multiple_subaddresses(daemon, sendr_wallet, recvr_wallet, conn_pool);
+    this->check_normal_transfer();
+    this->check_sweep_single();
+    this->check_subaddress_transfer();
+    this->check_multiple_subaddresses_transfer();
 
     // TODO: add test that advances chain AFTER scanner starts (use conditional variables)
     // TODO: add reorg tests (both after scanning and while scanning)
 
     return true;
 }
+//-------------------------------------------------------------------------------------------------------------------
+WalletScannerTest::WalletScannerTest(const std::string &daemon_addr):
+    m_daemon_addr(daemon_addr)
+{
+    const boost::optional<epee::net_utils::http::login> daemon_login = boost::none;
+    const epee::net_utils::ssl_options_t ssl_support = epee::net_utils::ssl_support_t::e_ssl_support_disabled;
+
+    m_daemon = std::make_unique<tools::t_daemon_rpc_client>(m_daemon_addr, daemon_login, ssl_support);
+
+    m_wallets.reserve(NUM_WALLETS);
+    for (std::size_t i = 0; i < NUM_WALLETS; ++i)
+    {
+        m_wallets.push_back(generate_wallet(m_daemon_addr, daemon_login, ssl_support));
+    }
+
+    m_conn_pool = std::make_unique<sp::mocks::ClientConnectionPool>(m_daemon_addr, daemon_login, ssl_support);
+}
+//-------------------------------------------------------------------------------------------------------------------
+} //namespace test

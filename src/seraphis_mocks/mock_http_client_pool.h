@@ -77,6 +77,11 @@ public:
         m_http_client_pool.reserve(max_connections);
     }
 
+    ~ClientConnectionPool()
+    {
+        this->close_connections();
+    }
+
 //member functions
     enum http_mode { JSON, BIN, JSON_RPC };
 
@@ -133,6 +138,8 @@ private:
         bool in_use;
         std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client;
     };
+
+    // TODO: investigate possibility of removing the need for this internal mutex and avoid lock contention
     mutable std::mutex m_http_client_pool_mutex;
     mutable std::vector<pool_http_client_t> m_http_client_pool;
 };

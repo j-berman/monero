@@ -123,22 +123,18 @@ int main(int argc, char* argv[])
     size_t transactions_per_second = command_line::get_arg(vm, arg_tx_per_second);
     size_t repeat_count = command_line::get_arg(vm, arg_test_repeat_count);
 
-    bool success = true;
     for(size_t i = 0; i != repeat_count; i++)
     {
-      success = transactions_flow_test(working_folder, path_source_wallet, path_target_wallet, daemon_addr_a, daemon_addr_b, amount_to_transfer, mix_in_factor, transactions_count, transactions_per_second);
-      if (!success)
-        break;
+      if (!transactions_flow_test(working_folder, path_source_wallet, path_target_wallet, daemon_addr_a, daemon_addr_b, amount_to_transfer, mix_in_factor, transactions_count, transactions_per_second))
+        return 1;
     }
-
-    if (!success)
-      return 1;
   }
 
   if (command_line::get_arg(vm, arg_wallet_scanner))
   {
     std::string daemon_addr = command_line::get_arg(vm, arg_daemon_addr_a);
-    if (!wallet_scanner(daemon_addr))
+    test::WalletScannerTest wallet_scanner{daemon_addr};
+    if (!wallet_scanner.run())
       return 1;
   }
   }

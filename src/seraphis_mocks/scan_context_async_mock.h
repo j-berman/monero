@@ -37,6 +37,7 @@
 #pragma once
 
 //local headers
+#include "async/mutex.h"
 #include "async/threadpool.h"
 #include "common/variant.h"
 #include "crypto/hash.h"
@@ -58,6 +59,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 //forward declarations
@@ -96,6 +98,9 @@ struct AsyncScanContextLegacyConfig final
     std::uint64_t max_get_blocks_attempts{3};
     /// whether or not user trusts the daemon's results
     bool trusted_daemon{false};
+    /// whether or not the daemon returns a successful response to getblocks.bin when the request includes a height
+    /// that is higher than chain tip
+    bool high_height_ok{true};
 };
 //-------------------------------------------------------------------------------------------------------------------
 ////
@@ -124,11 +129,7 @@ public:
         assert(config.max_get_blocks_attempts > 0);
     }
 
-    ~AsyncScanContextLegacy()
-    {
-        std::lock_guard<std::mutex> lock{m_async_scan_context_mutex};
-        wait_until_pending_queue_clears();
-    }
+    ~AsyncScanContextLegacy();
 
     /// disable copy/move (this is a scoped manager [reference wrapper])
     AsyncScanContextLegacy& operator=(AsyncScanContextLegacy&&) = delete;
@@ -155,12 +156,10 @@ private:
 
     /// reset scanner state and kick off scanner
     void start_scanner(const std::uint64_t start_index,
-        const std::uint64_t max_chunk_size_hint,
-        const std::unique_lock<std::mutex> &pending_queue_lock);
+        const std::uint64_t max_chunk_size_hint);
 
     /// launch task to get a chunk of blocks, returns a pending chunk composed of futures
-    PendingChunk launch_chunk_task(const ChunkRequest &chunk_request,
-        const std::unique_lock<std::mutex> &pending_queue_lock);
+    PendingChunk launch_chunk_task(const ChunkRequest &chunk_request);
 
     // do the actual task handling chunks and resolve chunk promises as soon as ready
     async::TaskVariant chunk_task(const ChunkRequest &chunk_request,
@@ -168,23 +167,22 @@ private:
         std::shared_future<void> &data_stop_flag_out,
         std::shared_ptr<std::promise<sp::scanning::ChunkContext>> &chunk_context_ptr_out,
         std::shared_ptr<std::promise<sp::scanning::ChunkData>> &chunk_data_ptr_out,
-        async::join_token_t &context_join_token_out,
-        async::join_token_t &data_join_token_out);
+        async::join_token_t &context_join_token_out);
 
-    /// wait until all chunks in the queue have been fetched and scanned
-    void wait_until_pending_queue_clears();
+    /// close queue to further tasks and wait until all tasks in the queue have completed
+    void close_and_clear_pending_queue();
 
     /// check if we should launch the next task to get the next chunk of blocks
-    bool check_launch_next_task(const std::unique_lock<std::mutex> &pending_queue_lock) const;
+    bool check_launch_next_task() const;
 
     /// launch task to get the next chunk of blocks advancing the scanner's scan_index
-    bool try_launch_next_chunk_task(const std::unique_lock<std::mutex> &pending_queue_lock);
+    bool try_launch_next_chunk_task();
 
     /// launch the next chunk task if we should
     void try_launch_next_chunk_task(bool chunk_is_terminal_chunk);
 
     /// if a chunk is smaller than requested, need to fill gap to next chunk
-    void fill_gap_if_needed(bool chunk_is_terminal_chunk,
+    void try_fill_gap(bool chunk_is_terminal_chunk,
         const std::uint64_t &requested_chunk_size,
         const sp::scanning::ChunkContext &chunk_context);
 
@@ -197,7 +195,7 @@ private:
     /// update the async scan context's known chain height and top block hash
     void update_chain_state(const sp::scanning::ChunkContext &chunk_context,
         const std::uint64_t num_blocks_in_chain,
-        const crypto::hash &top_block_hash,
+        const rct::key &top_block_hash,
         bool &chunk_is_terminal_chunk_out);
 
     /// once the scanner reaches the terminal chunk, prepare it for the end condition
@@ -231,8 +229,8 @@ private:
 
     /// threading helpers
     async::Threadpool &m_threadpool;
-    std::mutex m_async_scan_context_mutex;
-    std::mutex m_pending_queue_mutex;
+    async::Mutex m_async_scan_context_mutex;
+    async::Mutex m_pending_queue_mutex;
     std::mutex m_chain_state_mutex;
 };
 //-------------------------------------------------------------------------------------------------------------------

@@ -109,7 +109,9 @@ static std::uint64_t get_estimated_start_scan_index(const std::uint64_t reorg_av
 {
     // 1. set reorg avoidance depth
     const std::uint64_t reorg_avoidance_depth{
-            get_reorg_avoidance_depth(reorg_avoidance_increment, force_reorg_avoidance_increment, num_reorg_avoidance_backoffs)
+            get_reorg_avoidance_depth(reorg_avoidance_increment,
+                force_reorg_avoidance_increment,
+                num_reorg_avoidance_backoffs)
         };
 
     // 2. initial block to scan = max(desired first block - reorg depth, chunk consumer's min scan index)
