@@ -379,6 +379,13 @@ void AsyncScanContextLegacy::try_fill_gap(bool chunk_is_terminal_chunk,
             };
 
         SCOPE_LOCK_MUTEX(m_pending_queue_mutex);
+
+        if (!m_scanner_ready.load(std::memory_order_relaxed))
+        {
+            MDEBUG("Pending queue is not available for use, not filling gap");
+            return;
+        }
+
         auto task = this->launch_chunk_task(next_chunk_request);
         m_pending_chunk_queue.force_push(std::move(task));
     }
