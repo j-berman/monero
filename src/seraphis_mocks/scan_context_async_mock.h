@@ -181,6 +181,9 @@ private:
     /// launch the next chunk task if we should
     void try_launch_next_chunk_task(bool chunk_is_terminal_chunk);
 
+    /// push the next chunk task into the pending queue
+    bool push_next_chunk_task(const ChunkRequest &next_chunk_request);
+
     /// if a chunk is smaller than requested, need to fill gap to next chunk
     void try_fill_gap(bool chunk_is_terminal_chunk,
         const std::uint64_t &requested_chunk_size,

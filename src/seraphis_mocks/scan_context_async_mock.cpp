@@ -379,15 +379,7 @@ void AsyncScanContextLegacy::try_fill_gap(bool chunk_is_terminal_chunk,
             };
 
         SCOPE_LOCK_MUTEX(m_pending_queue_mutex);
-
-        if (!m_scanner_ready.load(std::memory_order_relaxed))
-        {
-            MDEBUG("Pending queue is not available for use, not filling gap");
-            return;
-        }
-
-        auto task = this->launch_chunk_task(next_chunk_request);
-        m_pending_chunk_queue.force_push(std::move(task));
+        this->push_next_chunk_task(next_chunk_request);
     }
     else
     {
@@ -646,10 +638,7 @@ bool AsyncScanContextLegacy::try_launch_next_chunk_task()
             .requested_chunk_size = m_max_chunk_size_hint
         };
 
-    auto task = this->launch_chunk_task(next_chunk_request);
-    m_pending_chunk_queue.force_push(std::move(task));
-
-    return true;
+    return this->push_next_chunk_task(next_chunk_request);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void AsyncScanContextLegacy::try_launch_next_chunk_task(const bool chunk_is_terminal_chunk)
@@ -659,6 +648,23 @@ void AsyncScanContextLegacy::try_launch_next_chunk_task(const bool chunk_is_term
         return;
     SCOPE_LOCK_MUTEX(m_pending_queue_mutex);
     this->try_launch_next_chunk_task();
+}
+//-------------------------------------------------------------------------------------------------------------------
+bool AsyncScanContextLegacy::push_next_chunk_task(const ChunkRequest &next_chunk_request)
+{
+    THROW_WALLET_EXCEPTION_IF(!m_pending_queue_mutex.thread_owns_lock(), tools::error::wallet_internal_error,
+        "this thread does not own the pending queue mutex");
+
+    if (!m_scanner_ready.load(std::memory_order_relaxed))
+    {
+        MDEBUG("Pending queue is not available for use, not pushing next chunk task");
+        return false;
+    }
+
+    auto task = this->launch_chunk_task(next_chunk_request);
+    m_pending_chunk_queue.force_push(std::move(task));
+
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void AsyncScanContextLegacy::handle_terminal_chunk()
