@@ -16005,17 +16005,6 @@ std::string wallet2::get_rpc_status(const std::string &s) const
   return "<error>";
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::throw_on_rpc_response_error(bool r, const epee::json_rpc::error &error, const std::string &status, const char *method) const
-{
-  THROW_WALLET_EXCEPTION_IF(error.code, tools::error::wallet_coded_rpc_error, method, error.code, get_rpc_server_error_message(error.code));
-  THROW_WALLET_EXCEPTION_IF(!r, tools::error::no_connection_to_daemon, method);
-  // empty string -> not connection
-  THROW_WALLET_EXCEPTION_IF(status.empty(), tools::error::no_connection_to_daemon, method);
-
-  THROW_WALLET_EXCEPTION_IF(status == CORE_RPC_STATUS_BUSY, tools::error::daemon_busy, method);
-  THROW_WALLET_EXCEPTION_IF(status == CORE_RPC_STATUS_PAYMENT_REQUIRED, tools::error::payment_required, method);
-}
-//----------------------------------------------------------------------------------------------------
 
 bool wallet2::save_to_file(const std::string& path_to_file, const std::string& raw, bool is_printable) const
 {
