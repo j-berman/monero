@@ -1031,7 +1031,6 @@ class TransferTest():
         assert sender_wallet.get_balance().balance == expected_sender_balance
 
         print('Checking scan_tx on incoming txs before refresh')
-        restore_wallet(receiver_wallet, seeds[1])
         receiver_wallet.scan_tx([txid, miner_txid])
         receiver_wallet.refresh()
         res = receiver_wallet.get_transfers()
