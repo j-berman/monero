@@ -34,9 +34,6 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "wallet/wallet2.h"
 
-//third party headers
-#include <boost/multiprecision/cpp_int.hpp>
-
 //standard headers
 #include <memory>
 #include <string>
