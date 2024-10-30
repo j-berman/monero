@@ -122,6 +122,10 @@ std::uint64_t WalletScannerTest::mine_tx(const crypto::hash &tx_hash, const std:
 
     // Make sure tx was mined
     res = this->daemon()->get_transactions(std::vector<std::string>{txs_hash});
+    printf("Txs size: %lu\n", res.txs.size());
+    printf("Expected hash: %s, expected height: %lu\n", txs_hash.c_str(), height);
+    printf("First tx hash: %s\n", res.txs.empty() ? "<none>" : res.txs[0].tx_hash.c_str());
+    printf("First tx block height: %lu\n", res.txs.empty() ? 0 : res.txs[0].block_height);
     CHECK_AND_ASSERT_THROW_MES(res.txs.size() == 1 && res.txs[0].tx_hash == txs_hash
         && res.txs[0].block_height == height, "tx not yet mined");
 
