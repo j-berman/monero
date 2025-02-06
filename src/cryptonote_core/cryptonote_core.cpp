@@ -889,6 +889,30 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
+  static bool is_canonical_fcmp_plus_plus_layout(const uint64_t reference_block, const uint8_t n_tree_layers, const std::size_t n_inputs, const std::size_t n_outputs, const fcmp_pp::FcmpPpProof &proof)
+  {
+    // Must have non-0 reference block since tree does not have elems at genesis
+    if (reference_block == 0)
+      return false;
+    // Tree must have layers if FCMP++ is included
+    if (n_tree_layers == 0)
+      return false;
+    if (n_inputs == 0 || n_inputs > FCMP_PLUS_PLUS_MAX_INPUTS)
+      return false;
+    if (n_outputs == 0 || n_outputs > FCMP_PLUS_PLUS_MAX_OUTPUTS)
+      return false;
+    if (proof.empty())
+      return false;
+    const std::size_t act_sz = proof.size();
+    if (act_sz == 0)
+      return false;
+    // TODO: Warning: this is a slow function as is
+    const std::size_t exp_sz = fcmp_pp::proof_len(n_inputs, n_tree_layers);
+    if (act_sz != exp_sz)
+      return false;
+    return true;
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::handle_incoming_tx_accumulated_batch(std::vector<tx_verification_batch_info> &tx_info, bool keeped_by_block)
   {
     bool ret = true;
@@ -911,7 +935,8 @@ namespace cryptonote
 
       if (tx_info[n].tx->version < 2)
         continue;
-      const rct::rctSig &rv = tx_info[n].tx->rct_signatures;
+      const cryptonote::transaction *tx = tx_info[n].tx;
+      const rct::rctSig &rv = tx->rct_signatures;
       switch (rv.type) {
         case rct::RCTTypeNull:
           // coinbase should not come here, so we reject for all other types
@@ -964,6 +989,18 @@ namespace cryptonote
           }
           rvv.push_back(&rv); // delayed batch verification
           break;
+        case rct::RCTTypeFcmpPlusPlus:
+          if (!is_canonical_bulletproof_plus_layout(rv.p.bulletproofs_plus) ||
+              !is_canonical_fcmp_plus_plus_layout(rv.p.reference_block, rv.p.n_tree_layers, tx->vin.size(), tx->vout.size(), rv.p.fcmp_pp))
+          {
+            MERROR_VER("fcmp_plus_plus does not have canonical form");
+            set_semantics_failed(tx_info[n].tx_hash);
+            tx_info[n].tvc.m_verifivation_failed = true;
+            tx_info[n].result = false;
+            break;
+          }
+          rvv.push_back(&rv); // delayed batch verification
+          break;
         default:
           MERROR_VER("Unknown rct type: " << rv.type);
           set_semantics_failed(tx_info[n].tx_hash);
@@ -981,7 +1018,7 @@ namespace cryptonote
       {
         if (!tx_info[n].result)
           continue;
-        if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus)
+        if (tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproof2 && tx_info[n].tx->rct_signatures.type != rct::RCTTypeCLSAG && tx_info[n].tx->rct_signatures.type != rct::RCTTypeBulletproofPlus && tx_info[n].tx->rct_signatures.type != rct::RCTTypeFcmpPlusPlus)
           continue;
         if (assumed_bad || !rct::verRctSemanticsSimple(tx_info[n].tx->rct_signatures))
         {

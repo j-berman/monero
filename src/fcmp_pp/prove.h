@@ -54,6 +54,12 @@ struct ProofParams final
     uint64_t reference_block;
     std::vector<ProofInput> proof_inputs;
 };
+
+struct FcmpVerifyHelperData final
+{
+    uint8_t *tree_root;
+    std::vector<crypto::key_image> key_images;
+};
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t *rerandomize_output(const OutputBytes output);
 
