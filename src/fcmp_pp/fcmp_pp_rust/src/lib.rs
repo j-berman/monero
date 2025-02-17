@@ -541,12 +541,14 @@ pub extern "C" fn selene_branch_blind() -> CResult<BranchBlind<<Selene as Cipher
 
 //-------------------------------------------------------------------------------------- Fcmp
 
+#[derive(Clone)]
 struct SalInput {
     x: Scalar,
     y: Scalar,
     rerandomized_output: RerandomizedOutput,
 }
 
+#[derive(Clone)]
 pub struct FcmpProveInput {
     sal_input: SalInput,
     path: Path<Curves>,
@@ -610,6 +612,60 @@ pub unsafe extern "C" fn fcmp_prove_input_new(
         c2_branch_blinds,
     };
     CResult::ok(fcmp_prove_input)
+}
+
+/// # Safety
+///
+/// This function assumes that the sum_input_masks and sum_output_masks are 32 byte Ed25519 scalars,
+/// and that the inputs are a slice of inputs returned from fcmp_prove_input_new.
+#[no_mangle]
+pub unsafe extern "C" fn balance_last_pseudo_out(
+    sum_input_masks: *const u8,
+    sum_output_masks: *const u8,
+    inputs: FcmpProveInputSlice,
+) -> CResult<FcmpProveInput, ()> {
+    let mut sum_input_masks = ed25519_scalar_from_bytes(sum_input_masks);
+    let sum_output_masks = ed25519_scalar_from_bytes(sum_output_masks);
+
+    let inputs: &[*const FcmpProveInput] = inputs.into();
+    let mut inputs: Vec<FcmpProveInput> = inputs.iter().map(|x| unsafe { x.read() }).collect();
+
+    if inputs.len() == 0 {
+        return CResult::err(());
+    }
+
+    // Get the sum of the input commitment masks excluding the last one
+    for i in 0..inputs.len() - 1 {
+        sum_input_masks += inputs[i].sal_input.rerandomized_output.r_c();
+    }
+
+    // Re-calculate the last scalar so that the sum of inputs == sum of outputs
+    let new_last_r_c = sum_output_masks - sum_input_masks;
+
+    // Update the last r_c on the last reandomized output, which also updates its C_tilde
+    // TODO: remove cloning, modify the inputs slice directly
+    let mut last_input = inputs.last().unwrap().clone();
+    let last_commitment = last_input.path.output.C();
+    last_input.sal_input.rerandomized_output.set_r_c(last_commitment, new_last_r_c);
+
+    // Blind the updated C blind (this is expensive)
+    let new_c_blind = ScalarDecomposition::new(last_input.sal_input.rerandomized_output.c_blind()).unwrap();
+    let new_blinded_c_blind = CBlind::new(EdwardsPoint::generator(), new_c_blind);
+    last_input.output_blinds.set_c_blind(new_blinded_c_blind);
+
+    CResult::ok(last_input)
+}
+
+/// # Safety
+///
+/// This function assumes that the inputs are a slice of inputs returned from fcmp_prove_input_new.
+#[no_mangle]
+pub unsafe extern "C" fn read_input_pseudo_out(
+    input: *const FcmpProveInput,
+) -> *const u8 {
+    // Read the input without consuming it
+    let input: &FcmpProveInput = unsafe { &*input };
+    c_u8_32(input.sal_input.rerandomized_output.input().C_tilde().to_bytes())
 }
 
 /// # Safety

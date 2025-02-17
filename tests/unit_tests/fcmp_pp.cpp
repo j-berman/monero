@@ -244,6 +244,9 @@ TEST(fcmp_pp, prove)
         if (fcmp_prove_inputs.size() < N_INPUTS)
             continue;
 
+        // This test does not have outputs, but this is where this would go if it did
+        // fcmp_pp::balance_last_pseudo_out(sum_output_masks, fcmp_prove_inputs);
+
         LOG_PRINT_L1("Constructing proof");
         const crypto::hash tx_hash{};
         const std::size_t n_layers = 1 + tree_depth;

@@ -1285,11 +1285,10 @@ done:
 
         if (is_fcmp_pp)
         {
-          // FIXME: the last pseudo out (rerandomized output's C_tilde) must be updated to make sure the sum of input masks == sum of output masks
-
           // TODO: separate function once this is finalized
           std::vector<const uint8_t *> fcmp_prove_inputs;
           fcmp_prove_inputs.reserve(inamounts.size());
+          key sum_input_masks = zero();
           for (i = 0; i < inamounts.size(); i++)
           {
             // Collect x and y
@@ -1303,6 +1302,8 @@ done:
             const auto &rerandomized_output = rerandomized_outputs[i];
             const auto &fcmp_pp_input = fcmp_pp_params.proof_inputs[i];
 
+            // Collecting sum of input masks to balance the last pseudo out
+            sc_add(sum_input_masks.bytes, sum_input_masks.bytes, inSk[i].mask.bytes);
             pseudoOuts[i] = rct::pt2rct(fcmp_pp::pseudo_out(rerandomized_output));
 
             // TODO: separate SAL from membership proof. Implement SAL in hw device interface
@@ -1316,6 +1317,10 @@ done:
 
             fcmp_prove_inputs.emplace_back(std::move(fcmp_prove_input));
           }
+
+          // Now we need to update the last pseudo out to make sure sum of the input masks == sum of output masks
+          fcmp_pp::balance_last_pseudo_out(sum_input_masks.bytes, sumout.bytes, fcmp_prove_inputs);
+          pseudoOuts.back() = rct::pt2rct(fcmp_pp::read_input_pseudo_out(fcmp_prove_inputs.back()));
 
           const key full_message = get_pre_mlsag_hash(rv,hwdev);
 
