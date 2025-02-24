@@ -27,6 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set(carrot_impl_sources
+  carrot_tx_builder_inputs.cpp
   carrot_tx_builder_utils.cpp
   carrot_tx_format_utils.cpp
 )
@@ -40,7 +41,7 @@ monero_add_library(carrot_impl
 target_link_libraries(carrot_impl
   PUBLIC
     carrot_core
-    cryptonote_basic
+    cryptonote_format_utils_basic
   PRIVATE
     ${EXTRA_LIBRARIES})
 
