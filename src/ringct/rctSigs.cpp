@@ -1288,6 +1288,7 @@ done:
           // TODO: separate function once this is finalized
           std::vector<const uint8_t *> fcmp_prove_inputs;
           fcmp_prove_inputs.reserve(inamounts.size());
+          key sum_input_masks = zero();
           for (i = 0; i < inamounts.size(); i++)
           {
             // Collect x and y
@@ -1301,6 +1302,8 @@ done:
             const auto &rerandomized_output = rerandomized_outputs[i];
             const auto &fcmp_pp_input = fcmp_pp_params.proof_inputs[i];
 
+            // Collecting sum of input masks to balance the last pseudo out
+            sc_add(sum_input_masks.bytes, sum_input_masks.bytes, inSk[i].mask.bytes);
             pseudoOuts[i] = rct::pt2rct(fcmp_pp::pseudo_out(rerandomized_output));
 
             // TODO: separate SAL from membership proof. Implement SAL in hw device interface
@@ -1314,6 +1317,10 @@ done:
 
             fcmp_prove_inputs.emplace_back(std::move(fcmp_prove_input));
           }
+
+          // Now we need to update the last pseudo out to make sure sum of the input masks == sum of output masks
+          fcmp_pp::balance_last_pseudo_out(sum_input_masks.bytes, sumout.bytes, fcmp_prove_inputs);
+          pseudoOuts.back() = rct::pt2rct(fcmp_pp::read_input_pseudo_out(fcmp_prove_inputs.back()));
 
           const key full_message = get_pre_mlsag_hash(rv,hwdev);
 
@@ -1472,8 +1479,7 @@ done:
         {
           CHECK_AND_ASSERT_MES(rvp, false, "rctSig pointer is NULL");
           const rctSig &rv = *rvp;
-          CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
-              false, "verRctSemanticsSimple called on non simple rctSig");
+          CHECK_AND_ASSERT_MES(is_rct_simple(rv.type), false, "verRctSemanticsSimple called on non simple rctSig");
           const bool bulletproof = is_rct_bulletproof(rv.type);
           const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
           if (bulletproof || bulletproof_plus)
@@ -1482,7 +1488,14 @@ done:
               CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_plus_amounts(rv.p.bulletproofs_plus), false, "Mismatched sizes of outPk and bulletproofs_plus");
             else
               CHECK_AND_ASSERT_MES(rv.outPk.size() == n_bulletproof_amounts(rv.p.bulletproofs), false, "Mismatched sizes of outPk and bulletproofs");
-            if (is_rct_clsag(rv.type))
+            if (rv.type == RCTTypeFcmpPlusPlus)
+            {
+              CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for FCMP++");
+              CHECK_AND_ASSERT_MES(rv.p.CLSAGs.empty(), false, "CLSAGs are not empty for FCMP++");
+              // WARNING: proof_len is slow
+              CHECK_AND_ASSERT_MES(rv.p.fcmp_pp.size() == fcmp_pp::proof_len(rv.p.pseudoOuts.size(), rv.p.n_tree_layers), false, "Unexpected FCMP++ proof size");
+            }
+            else if (is_rct_clsag(rv.type))
             {
               CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for CLSAG");
               CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.p.CLSAGs.size(), false, "Mismatched sizes of rv.p.pseudoOuts and rv.p.CLSAGs");
@@ -1601,10 +1614,34 @@ done:
       {
         PERF_TIMER(verRctNonSemanticsSimple);
 
-        CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
-            false, "verRctNonSemanticsSimple called on non simple rctSig");
+        CHECK_AND_ASSERT_MES(is_rct_simple(rv.type), false, "verRctNonSemanticsSimple called on non simple rctSig");
         const bool bulletproof = is_rct_bulletproof(rv.type);
         const bool bulletproof_plus = is_rct_bulletproof_plus(rv.type);
+        const keyV &pseudoOuts = (bulletproof || bulletproof_plus) ? rv.p.pseudoOuts : rv.pseudoOuts;
+
+        const key message = get_pre_mlsag_hash(rv, hw::get_device("default"));
+
+        if (is_rct_fcmp(rv.type))
+        {
+          CHECK_AND_ASSERT_MES(rv.type == rct::RCTTypeFcmpPlusPlus, false, "verRctNonSemanticsSimple called on unsupported FCMP type");
+
+          // Type conversion on pseudo outs
+          std::vector<crypto::ec_point> pseudo_outs;
+          pseudo_outs.reserve(pseudoOuts.size());
+          for (const auto &po : pseudoOuts)
+            pseudo_outs.emplace_back(rct::rct2pt(po));
+
+          bool r = fcmp_pp::verify(rct::rct2hash(message),
+              rv.p.fcmp_pp,
+              rv.p.n_tree_layers,
+              rv.p.fcmp_ver_helper_data.tree_root,
+              pseudo_outs,
+              rv.p.fcmp_ver_helper_data.key_images);
+
+          CHECK_AND_ASSERT_MES(r, false, "Failed to verify FCMP++ proof");
+          return true;
+        }
+
         // semantics check is early, and mixRing/MGs aren't resolved yet
         if (bulletproof || bulletproof_plus)
           CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() == rv.mixRing.size(), false, "Mismatched sizes of rv.p.pseudoOuts and mixRing");
@@ -1616,10 +1653,6 @@ done:
         std::deque<bool> results(threads);
         tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
         tools::threadpool::waiter waiter(tpool);
-
-        const keyV &pseudoOuts = bulletproof || bulletproof_plus ? rv.p.pseudoOuts : rv.pseudoOuts;
-
-        const key message = get_pre_mlsag_hash(rv, hw::get_device("default"));
 
         results.clear();
         results.resize(rv.mixRing.size());

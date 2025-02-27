@@ -51,8 +51,14 @@ struct ProofInput final
 
 struct ProofParams final
 {
-    crypto::hash reference_block;
+    uint64_t reference_block;
     std::vector<ProofInput> proof_inputs;
+};
+
+struct FcmpVerifyHelperData final
+{
+    uint8_t *tree_root;
+    std::vector<crypto::key_image> key_images;
 };
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t *rerandomize_output(const OutputBytes output);
@@ -89,6 +95,12 @@ uint8_t *fcmp_prove_input_new(const uint8_t *x,
     const uint8_t *output_blinds,
     const std::vector<const uint8_t *> &selene_branch_blinds,
     const std::vector<const uint8_t *> &helios_branch_blinds);
+
+void balance_last_pseudo_out(const uint8_t *sum_input_masks,
+    const uint8_t *sum_output_masks,
+    std::vector<const uint8_t *> &fcmp_prove_inputs_inout);
+
+crypto::ec_point read_input_pseudo_out(const uint8_t *fcmp_prove_input);
 
 FcmpPpProof prove(const crypto::hash &signable_tx_hash,
     const std::vector<const uint8_t *> &fcmp_prove_inputs,

@@ -49,6 +49,7 @@ static constexpr const size_t RCT_VER_CACHE_SIZE = 8192;
 using rct_ver_cache_t = ::tools::data_cache<::crypto::hash, RCT_VER_CACHE_SIZE>;
 
 /**
+ * TODO: update for FCMP param
  * @brief Cached version of rct::verRctNonSemanticsSimple
  *
  * This function will not affect how the transaction is serialized and it will never modify the
@@ -80,19 +81,10 @@ bool ver_rct_non_semantics_simple_cached
 (
     transaction& tx,
     const rct::ctkeyM& mix_ring,
+    const crypto::ec_point& tree_root,
     rct_ver_cache_t& cache,
     std::uint8_t rct_type_to_cache
 );
-
-/**
- * @brief Verify the semantics of a group of RingCT signatures as a batch (if applicable)
- *
- * Coinbase txs or other transaction with a RingCT type of RCTTypeNull will fail to verify.
- *
- * @param rvv list of signatures to verify
- * @return true if all signatures verified semantics successfully, false otherwise
- */
-bool ver_mixed_rct_semantics(std::vector<const rct::rctSig*> rvv);
 
 /**
  * @brief Used to provide transaction info that skips the mempool to block handling code 
