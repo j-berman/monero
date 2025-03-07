@@ -42,7 +42,6 @@ namespace fcmp_pp
 //----------------------------------------------------------------------------------------------------------------------
 struct ProofInput final
 {
-    uint8_t *rerandomized_output;
     uint8_t *path;
     uint8_t *output_blinds;
     std::vector<const uint8_t *> selene_branch_blinds;
