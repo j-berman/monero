@@ -16,6 +16,7 @@ use ec_divisors::{DivisorCurve, ScalarDecomposition};
 use full_chain_membership_proofs::tree::{hash_grow, hash_trim};
 
 use monero_fcmp_plus_plus::{
+    fcmps,
     fcmps::{
         BranchBlind, Branches, CBlind, Fcmp, IBlind, IBlindBlind, OBlind, OutputBlinds, Path,
         TreeRoot,
@@ -26,6 +27,8 @@ use monero_fcmp_plus_plus::{
 };
 
 use monero_generators::{FCMP_U, FCMP_V, T};
+
+use std::os::raw::c_int;
 
 // TODO: everything allocated with Box::into_raw needs to be freed manually using from_raw when done
 // https://doc.rust-lang.org/std/boxed/struct.Box.html#method.from_raw
@@ -104,6 +107,17 @@ fn ed25519_scalar_from_bytes(ed25519_scalar: *const u8) -> Scalar {
 
 fn hash_array_from_bytes(h: *const u8) -> [u8; 32] {
     unsafe { core::slice::from_raw_parts(h, 32) }.try_into().unwrap()
+}
+
+// @TODO: this is horrible :(, expose direct read/write for Input in the fcmp-plus-plus crate
+fn input_from_bytes(input_bytes: &[u8]) -> std::io::Result<Input> {
+    let mut rerandomized_output_bytes = [0u8; 8 * 32];
+    if input_bytes.len() != 4 * 32 {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "passed input slice wrong size"));
+    }
+    rerandomized_output_bytes[0..4*32].copy_from_slice(input_bytes);
+    let rerandomized_output = RerandomizedOutput::read(&mut rerandomized_output_bytes.as_slice())?;
+    Ok(rerandomized_output.input())
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
@@ -366,55 +380,36 @@ pub unsafe extern "C" fn path_new(
 //---------------------------------------------- RerandomizedOutput
 
 #[no_mangle]
-pub extern "C" fn rerandomize_output(output: OutputBytes) -> CResult<RerandomizedOutput, ()> {
-    // TODO: CResult::err() on failure of output decompression
-    // TODO: take in a de-compressed output
-    let output = Output::new(
+pub unsafe extern "C" fn rerandomize_output(output: OutputBytes,
+    rerandomized_output_bytes: *mut u8
+) -> c_int {
+    let Ok(output) = Output::new(
         ed25519_point_from_bytes(output.O),
         ed25519_point_from_bytes(output.I),
         ed25519_point_from_bytes(output.C),
-    )
-    .unwrap();
+    ) else { return -1 };
+
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts_mut(rerandomized_output_bytes, 8 * 32);
 
     let rerandomized_output = RerandomizedOutput::new(&mut OsRng, output);
-    CResult::ok(rerandomized_output)
-}
-
-//---------------------------------------------- PseudoOut
-
-/// # Safety
-///
-/// This function assumes that the rerandomized output being passed in input was
-/// allocated on the heap and returned through a CResult instance.
-#[no_mangle]
-pub unsafe extern "C" fn pseudo_out(output: *const RerandomizedOutput) -> *const u8 {
-    let rerandomized_output = unsafe { output.read() };
-    c_u8_32(rerandomized_output.input().C_tilde().to_bytes())
-}
-
-//---------------------------------------------- FCMPInput
-
-/// # Safety
-///
-/// This function assumes that the rerandomized output being passed in input was
-/// allocated on the heap and returned through a CResult instance.
-
-#[no_mangle]
-pub extern "C" fn fcmp_input_ref(output: *const RerandomizedOutput) -> *mut u8 {
-    let rerandomized_output = unsafe { output.read() };
-    return Box::into_raw(Box::new(rerandomized_output.input())) as *mut u8;
+    if rerandomized_output.write(&mut rerandomized_output_bytes).is_err() { -1 } else { 0 }
 }
 
 //---------------------------------------------- OBlind
 
 /// # Safety
 ///
-/// This function assumes that the rerandomized output being passed in input was
-/// allocated on the heap and returned through a CResult instance.
+/// This function assumes that the rerandomized output byte buffer being passed
+/// in is 8*32 bytes.
 #[no_mangle]
-pub unsafe extern "C" fn o_blind(output: *const RerandomizedOutput) -> CResult<Scalar, ()> {
-    let rerandomized_output = unsafe { output.read() };
-    CResult::ok(rerandomized_output.o_blind())
+pub unsafe extern "C" fn o_blind(rerandomized_output_bytes: *const u8,
+    o_blind: *mut Scalar
+) -> c_int {
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts(rerandomized_output_bytes, 8 * 32);
+    match RerandomizedOutput::read(&mut rerandomized_output_bytes) {
+        Ok(rerandomized_output) => { o_blind.write(rerandomized_output.o_blind()); 0 }
+        Err(_) => -1
+    }
 }
 
 /// # Safety
@@ -437,12 +432,17 @@ pub unsafe extern "C" fn blind_o_blind(
 
 /// # Safety
 ///
-/// This function assumes that the rerandomized output being passed in input was
-/// allocated on the heap and returned through a CResult instance.
+/// This function assumes that the rerandomized output byte buffer being passed
+/// in is 8*32 bytes.
 #[no_mangle]
-pub unsafe extern "C" fn c_blind(output: *const RerandomizedOutput) -> CResult<Scalar, ()> {
-    let rerandomized_output = unsafe { output.read() };
-    CResult::ok(rerandomized_output.c_blind())
+pub unsafe extern "C" fn c_blind(rerandomized_output_bytes: *const u8,
+    c_blind: *mut Scalar
+) -> c_int {
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts(rerandomized_output_bytes, 8 * 32);
+    match RerandomizedOutput::read(&mut rerandomized_output_bytes) {
+        Ok(rerandomized_output) => { c_blind.write(rerandomized_output.c_blind()); 0 }
+        Err(_) => -1
+    }
 }
 
 /// # Safety
@@ -465,12 +465,17 @@ pub unsafe extern "C" fn blind_c_blind(
 
 /// # Safety
 ///
-/// This function assumes that the rerandomized output being passed in input was
-/// allocated on the heap and returned through a CResult instance.
+/// This function assumes that the rerandomized output byte buffer being passed
+/// in is 8*32 bytes.
 #[no_mangle]
-pub unsafe extern "C" fn i_blind(output: *const RerandomizedOutput) -> CResult<Scalar, ()> {
-    let rerandomized_output = unsafe { output.read() };
-    CResult::ok(rerandomized_output.i_blind())
+pub unsafe extern "C" fn i_blind(rerandomized_output_bytes: *const u8,
+    i_blind: *mut Scalar
+) -> c_int {
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts(rerandomized_output_bytes, 8 * 32);
+    match RerandomizedOutput::read(&mut rerandomized_output_bytes) {
+        Ok(rerandomized_output) => { i_blind.write(rerandomized_output.i_blind()); 0 }
+        Err(_) => -1
+    }
 }
 
 /// # Safety
@@ -493,12 +498,17 @@ pub unsafe extern "C" fn blind_i_blind(
 
 /// # Safety
 ///
-/// This function assumes that the rerandomized output being passed in input was
-/// allocated on the heap and returned through a CResult instance.
+/// This function assumes that the rerandomized output byte buffer being passed
+/// in is 8*32 bytes.
 #[no_mangle]
-pub unsafe extern "C" fn i_blind_blind(output: *const RerandomizedOutput) -> CResult<Scalar, ()> {
-    let rerandomized_output = unsafe { output.read() };
-    CResult::ok(rerandomized_output.i_blind_blind())
+pub unsafe extern "C" fn i_blind_blind(rerandomized_output_bytes: *const u8,
+    i_blind_blind: *mut Scalar
+) -> c_int {
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts(rerandomized_output_bytes, 8 * 32);
+    match RerandomizedOutput::read(&mut rerandomized_output_bytes) {
+        Ok(rerandomized_output) => { i_blind_blind.write(rerandomized_output.i_blind_blind()); 0 }
+        Err(_) => -1
+    }
 }
 
 /// # Safety
@@ -559,22 +569,80 @@ pub extern "C" fn selene_branch_blind() -> CResult<BranchBlind<<Selene as Cipher
 //-------------------------------------------------------------------------------------- Fcmp
 
 #[derive(Clone)]
-struct SalInput {
-    x: Scalar,
-    y: Scalar,
+pub struct FcmpPpProveInput {
     rerandomized_output: RerandomizedOutput,
-}
 
-#[derive(Clone)]
-pub struct FcmpProveInput {
-    sal_input: SalInput,
+    // FCMP-specific
     path: Path<Curves>,
     output_blinds: OutputBlinds<EdwardsPoint>,
     c1_branch_blinds: Vec<BranchBlind<<Selene as Ciphersuite>::G>>,
     c2_branch_blinds: Vec<BranchBlind<<Helios as Ciphersuite>::G>>,
+
+    // SA/L-specific, ignore when only doing membership proofs
+    x: Scalar,
+    y: Scalar
 }
 
-pub type FcmpProveInputSlice = Slice<*const FcmpProveInput>;
+pub type FcmpPpProveInputSlice = Slice<*const FcmpPpProveInput>;
+
+unsafe fn prove_membership_native(inputs: &[*const FcmpPpProveInput], n_tree_layers: usize) -> Option<Fcmp<Curves>> {
+    let paths = inputs.iter().cloned().map(|x| (*x).path.clone()).collect();
+    let output_blinds = inputs.iter().cloned().map(|x| (*x).output_blinds.clone()).collect();
+
+    let c1_branch_blinds: Vec<_> = inputs
+        .iter()
+        .cloned()
+        .map(|x| (*x).c1_branch_blinds.clone())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .flatten()
+        .collect();
+    let c2_branch_blinds: Vec<_> = inputs
+        .iter()
+        .cloned()
+        .map(|x| (*x).c2_branch_blinds.clone())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .flatten()
+        .collect();
+
+    let branches = Branches::new(paths).unwrap();
+
+    assert_eq!(branches.necessary_c1_blinds(), c1_branch_blinds.len());
+    assert_eq!(branches.necessary_c2_blinds(), c2_branch_blinds.len());
+
+    let n_branch_blinds = (c1_branch_blinds.len() + c2_branch_blinds.len()) / inputs.len();
+    assert_eq!(n_tree_layers, n_branch_blinds + 1);
+
+    let blinded_branches = branches
+        .blind(output_blinds, c1_branch_blinds, c2_branch_blinds)
+        .unwrap();
+
+    Fcmp::prove(&mut OsRng, FCMP_PARAMS(), blinded_branches).ok()
+}
+
+/// # Safety
+///
+/// This function assumes that RerandomizedOutput/Path/OutputBlinds were
+/// allocated on the heap (via Box::into_raw(Box::new())), and the branch
+/// blinds are slices of BranchBlind allocated on the heap (via CResult).
+#[no_mangle]
+pub unsafe extern "C" fn fcmp_prove_input_new(rerandomized_output_bytes: *const u8,
+    path: *const Path<Curves>,
+    output_blinds: *const OutputBlinds<EdwardsPoint>,
+    selene_branch_blinds: SeleneBranchBlindSlice,
+    helios_branch_blinds: HeliosBranchBlindSlice 
+) -> CResult<FcmpPpProveInput, ()> {
+    let zero = [0u8; 32];
+    let pzero = &zero as *const u8;
+    fcmp_pp_prove_input_new(pzero,
+        pzero,
+        rerandomized_output_bytes,
+        path,
+        output_blinds,
+        selene_branch_blinds,
+        helios_branch_blinds)
+}
 
 /// # Safety
 ///
@@ -583,23 +651,21 @@ pub type FcmpProveInputSlice = Slice<*const FcmpProveInput>;
 /// (via Box::into_raw(Box::new())), and the branch blinds are slices of
 /// BranchBlind allocated on the heap (via CResult).
 #[no_mangle]
-pub unsafe extern "C" fn fcmp_prove_input_new(
+pub unsafe extern "C" fn fcmp_pp_prove_input_new(
     x: *const u8,
     y: *const u8,
-    rerandomized_output: *const RerandomizedOutput,
+    rerandomized_output_bytes: *const u8,
     path: *const Path<Curves>,
     output_blinds: *const OutputBlinds<EdwardsPoint>,
     selene_branch_blinds: SeleneBranchBlindSlice,
     helios_branch_blinds: HeliosBranchBlindSlice,
-) -> CResult<FcmpProveInput, ()> {
+) -> CResult<FcmpPpProveInput, ()> {
     // SAL
     let x = ed25519_scalar_from_bytes(x);
     let y = ed25519_scalar_from_bytes(y);
-    let rerandomized_output = unsafe { rerandomized_output.read() };
-    let sal_input = SalInput {
-        x,
-        y,
-        rerandomized_output,
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts(rerandomized_output_bytes, 8 * 32);
+    let Ok(rerandomized_output) = RerandomizedOutput::read(&mut rerandomized_output_bytes) else {
+        return CResult::err(());
     };
 
     // Path and output blinds
@@ -621,12 +687,14 @@ pub unsafe extern "C" fn fcmp_prove_input_new(
         .map(|x| unsafe { (*x.to_owned()).clone() })
         .collect();
 
-    let fcmp_prove_input = FcmpProveInput {
-        sal_input,
+    let fcmp_prove_input = FcmpPpProveInput {
+        rerandomized_output,
         path,
         output_blinds,
         c1_branch_blinds,
         c2_branch_blinds,
+        x,
+        y
     };
     CResult::ok(fcmp_prove_input)
 }
@@ -639,13 +707,13 @@ pub unsafe extern "C" fn fcmp_prove_input_new(
 pub unsafe extern "C" fn balance_last_pseudo_out(
     sum_input_masks: *const u8,
     sum_output_masks: *const u8,
-    inputs: FcmpProveInputSlice,
-) -> CResult<FcmpProveInput, ()> {
+    inputs: FcmpPpProveInputSlice,
+) -> CResult<FcmpPpProveInput, ()> {
     let mut sum_input_masks = ed25519_scalar_from_bytes(sum_input_masks);
     let sum_output_masks = ed25519_scalar_from_bytes(sum_output_masks);
 
-    let inputs: &[*const FcmpProveInput] = inputs.into();
-    let mut inputs: Vec<FcmpProveInput> = inputs.iter().map(|x| unsafe { x.read() }).collect();
+    let inputs: &[*const FcmpPpProveInput] = inputs.into();
+    let mut inputs: Vec<FcmpPpProveInput> = inputs.iter().map(|x| unsafe { x.read() }).collect();
 
     if inputs.len() == 0 {
         return CResult::err(());
@@ -653,7 +721,7 @@ pub unsafe extern "C" fn balance_last_pseudo_out(
 
     // Get the sum of the input commitment masks excluding the last one
     for i in 0..inputs.len() - 1 {
-        sum_input_masks += inputs[i].sal_input.rerandomized_output.r_c();
+        sum_input_masks += inputs[i].rerandomized_output.r_c();
     }
 
     // Re-calculate the last scalar so that the sum of inputs == sum of outputs
@@ -663,10 +731,10 @@ pub unsafe extern "C" fn balance_last_pseudo_out(
     // TODO: remove cloning, modify the inputs slice directly
     let mut last_input = inputs.last().unwrap().clone();
     let last_commitment = last_input.path.output.C();
-    last_input.sal_input.rerandomized_output.set_r_c(last_commitment, new_last_r_c);
+    last_input.rerandomized_output.set_r_c(last_commitment, new_last_r_c);
 
     // Blind the updated C blind (this is expensive)
-    let new_c_blind = ScalarDecomposition::new(last_input.sal_input.rerandomized_output.c_blind()).unwrap();
+    let new_c_blind = ScalarDecomposition::new(last_input.rerandomized_output.c_blind()).unwrap();
     let new_blinded_c_blind = CBlind::new(EdwardsPoint::generator(), new_c_blind);
     last_input.output_blinds.set_c_blind(new_blinded_c_blind);
 
@@ -678,42 +746,40 @@ pub unsafe extern "C" fn balance_last_pseudo_out(
 /// This function assumes that the inputs are a slice of inputs returned from fcmp_prove_input_new.
 #[no_mangle]
 pub unsafe extern "C" fn read_input_pseudo_out(
-    input: *const FcmpProveInput,
+    input: *const FcmpPpProveInput,
 ) -> *const u8 {
     // Read the input without consuming it
-    let input: &FcmpProveInput = unsafe { &*input };
-    c_u8_32(input.sal_input.rerandomized_output.input().C_tilde().to_bytes())
+    let input: &FcmpPpProveInput = unsafe { &*input };
+    c_u8_32(input.rerandomized_output.input().C_tilde().to_bytes())
 }
 
 /// # Safety
 ///
 /// This function assumes that the signable_tx_hash is 32 bytes and that the inputs are a slice
-/// of inputs returned from fcmp_prove_input_new.
+/// of inputs returned from fcmp_pp_prove_input_new.
 #[no_mangle]
 pub unsafe extern "C" fn prove(
     signable_tx_hash: *const u8,
-    inputs: FcmpProveInputSlice,
+    inputs: FcmpPpProveInputSlice,
     n_tree_layers: usize,
 ) -> CResult<*const u8, ()> {
     let signable_tx_hash = unsafe { core::slice::from_raw_parts(signable_tx_hash, 32) };
     let signable_tx_hash: [u8; 32] = signable_tx_hash.try_into().unwrap();
 
-    // Collect inputs into a vec
-    let inputs: &[*const FcmpProveInput] = inputs.into();
-    let inputs: Vec<FcmpProveInput> = inputs.iter().map(|x| unsafe { x.read() }).collect();
+    let inputs: &[*const FcmpPpProveInput] = inputs.into();
 
     // SAL proofs
     let sal_proofs = inputs
         .iter()
+        .cloned()
         .map(|prove_input| {
-            let sal_input = &prove_input.sal_input;
-            let rerandomized_output = &sal_input.rerandomized_output;
-            let x = sal_input.x;
-            let y = sal_input.y;
+            let rerandomized_output = &(*prove_input).rerandomized_output;
+            let x = &(*prove_input).x;
+            let y = &(*prove_input).y;
 
             assert_eq!(
-                prove_input.path.output.O(),
-                EdwardsPoint((*x * *EdwardsPoint::generator()) + (*y * *EdwardsPoint(T())))
+                (*prove_input).path.output.O(),
+                EdwardsPoint((**x * *EdwardsPoint::generator()) + (**y * *EdwardsPoint(T())))
             );
 
             let input = rerandomized_output.input();
@@ -722,44 +788,17 @@ pub unsafe extern "C" fn prove(
             let (key_image, spend_auth_and_linkability) =
                 SpendAuthAndLinkability::prove(&mut OsRng, signable_tx_hash, opening);
 
-            assert_eq!(prove_input.path.output.I() * x, key_image);
+            assert_eq!((*prove_input).path.output.I() * x, key_image);
 
             (input, spend_auth_and_linkability)
         })
         .collect();
 
-    let paths = inputs.iter().map(|x| x.path.clone()).collect();
-    let output_blinds = inputs.iter().map(|x| x.output_blinds.clone()).collect();
-
-    let c1_branch_blinds: Vec<_> = inputs
-        .iter()
-        .map(|x| x.c1_branch_blinds.clone())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .flatten()
-        .collect();
-    let c2_branch_blinds: Vec<_> = inputs
-        .iter()
-        .map(|x| x.c2_branch_blinds.clone())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .flatten()
-        .collect();
-
-    let branches = Branches::new(paths).unwrap();
-
-    assert_eq!(branches.necessary_c1_blinds(), c1_branch_blinds.len());
-    assert_eq!(branches.necessary_c2_blinds(), c2_branch_blinds.len());
-
-    let n_branch_blinds = (c1_branch_blinds.len() + c2_branch_blinds.len()) / inputs.len();
-    assert_eq!(n_tree_layers, n_branch_blinds + 1);
-
-    let blinded_branches = branches
-        .blind(output_blinds, c1_branch_blinds, c2_branch_blinds)
-        .unwrap();
-
     // Membership proof
-    let fcmp = Fcmp::prove(&mut OsRng, FCMP_PARAMS(), blinded_branches).unwrap();
+    let fcmp = match prove_membership_native(inputs, n_tree_layers) {
+        Some(x) => x,
+        None => return CResult::err(())
+    };
 
     // Combine SAL proofs and membership proof
     let fcmp_plus_plus = FcmpPlusPlus::new(sal_proofs, fcmp);
@@ -779,15 +818,20 @@ pub unsafe extern "C" fn prove(
 /// This function assumes that the signable_tx_hash, x, and y are 32 bytes, sal_proof_out is
 /// FCMP_PP_SAL_PROOF_SIZE_V1 bytes, and that the rerandomized output is returned from rerandomize_output().
 #[no_mangle]
-pub extern "C" fn fcmp_pp_prove_sal(signable_tx_hash: *const u8,
+pub unsafe extern "C" fn fcmp_pp_prove_sal(signable_tx_hash: *const u8,
     x: *const u8,
     y: *const u8,
-    rerandomized_output: *const RerandomizedOutput,
+    rerandomized_output_bytes: *const u8,
     sal_proof_out: *mut u8
 ) -> CResult<(), ()> {
     let signable_tx_hash = hash_array_from_bytes(signable_tx_hash);
 
-    let Some(opening) = OpenedInputTuple::open(unsafe { (*rerandomized_output).clone() },
+    let mut rerandomized_output_bytes = core::slice::from_raw_parts(rerandomized_output_bytes, 8 * 32);
+    let Ok(rerandomized_output) = RerandomizedOutput::read(&mut rerandomized_output_bytes) else {
+        return CResult::err(());
+    };
+
+    let Some(opening) = OpenedInputTuple::open(rerandomized_output,
         &ed25519_scalar_from_bytes(x),
         &ed25519_scalar_from_bytes(y)
     ) else {
@@ -804,6 +848,36 @@ pub extern "C" fn fcmp_pp_prove_sal(signable_tx_hash: *const u8,
         Ok(_) => CResult::ok(()),
         Err(_) => CResult::err(()) 
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fcmp_pp_prove_membership(inputs: FcmpPpProveInputSlice,
+    n_tree_layers: usize,
+    fcmp_proof_out: *mut u8,
+    fcmp_proof_out_len: *mut usize
+) -> CResult<(), ()> {
+    let inputs: &[*const FcmpPpProveInput] = inputs.into();
+    let capacity = fcmp_proof_out_len.read();
+    let proof_size = fcmp_proof_size(inputs.len(), n_tree_layers);
+    if capacity < proof_size {
+        return CResult::err(())
+    }
+    fcmp_proof_out_len.write(proof_size);
+    let mut buf_out = core::slice::from_raw_parts_mut(fcmp_proof_out, proof_size);
+
+    match prove_membership_native(inputs, n_tree_layers) {
+        Some(fcmp) => match fcmp.write(&mut buf_out) {
+            Ok(_) => CResult::ok(()),
+            Err(_) => CResult::err(())
+        },
+        None => CResult::err(())
+    }
+}
+
+// TODO: cache a static global table for proof lens by n_inputs and n_tree_layers bc the calc is slow
+#[no_mangle]
+pub extern "C" fn fcmp_proof_size(n_inputs: usize, n_tree_layers: usize) -> usize {
+    Fcmp::<Curves>::proof_size(n_inputs, n_tree_layers)
 }
 
 // TODO: cache a static global table for proof lens by n_inputs and n_tree_layers bc the calc is slow
@@ -868,7 +942,7 @@ pub unsafe extern "C" fn verify(
     let mut c1_verifier = generalized_bulletproofs::Generators::batch_verifier();
     let mut c2_verifier = generalized_bulletproofs::Generators::batch_verifier();
 
-    fcmp_plus_plus
+    match fcmp_plus_plus
         .verify(
             &mut OsRng,
             &mut ed_verifier,
@@ -879,11 +953,12 @@ pub unsafe extern "C" fn verify(
             signable_tx_hash,
             key_images,
         )
-        .unwrap();
-
-    ed_verifier.verify_vartime()
-        && SELENE_GENERATORS().verify(c1_verifier)
-        && HELIOS_GENERATORS().verify(c2_verifier)
+    {
+        Ok(()) => ed_verifier.verify_vartime()
+            && SELENE_GENERATORS().verify(c1_verifier)
+            && HELIOS_GENERATORS().verify(c2_verifier),
+        Err(_) => false
+    }    
 }
 
 /// # Safety
@@ -892,14 +967,17 @@ pub unsafe extern "C" fn verify(
 /// allocated via a CResult, key_image is 32 bytes, and sal_proof is FCMP_PP_SAL_PROOF_SIZE_V1 bytes
 #[no_mangle]
 pub unsafe extern "C" fn fcmp_pp_verify_sal(signable_tx_hash: *const u8,
-    input: *const Input,
+    input_bytes: *const u8,
     key_image: *const u8,
     sal_proof: *const u8
 ) -> bool {
     let signable_tx_hash = hash_array_from_bytes(signable_tx_hash);
-    let input = unsafe { *input };
+    let input_bytes = core::slice::from_raw_parts(input_bytes, 4 * 32);
+    let Ok(input) = input_from_bytes(input_bytes) else {
+        return false;
+    };
     let key_image = ed25519_point_from_bytes(key_image);
-    let Ok(sal_proof) = SpendAuthAndLinkability::read(&mut unsafe { core::slice::from_raw_parts(sal_proof, 12*32) }) else { // @TODO: remove magic number
+    let Ok(sal_proof) = SpendAuthAndLinkability::read(&mut core::slice::from_raw_parts(sal_proof, 12*32)) else { // @TODO: remove magic number
         return false;
     };
 
@@ -908,6 +986,52 @@ pub unsafe extern "C" fn fcmp_pp_verify_sal(signable_tx_hash: *const u8,
     sal_proof.verify(&mut OsRng, &mut ed_verifier, signable_tx_hash, &input, key_image);
 
     ed_verifier.verify_vartime()
+}
+
+/// # Safety
+///
+/// This function assumes that each element of inputs is heap allocated via a
+/// CResult, [fcmp_proof, fcmp_proof+fcmp_proof_len) is a valid readable range
+#[no_mangle]
+pub unsafe extern "C" fn fcmp_pp_verify_membership(inputs: Slice<[u8; 4 * 32]>,
+    tree_root: *const TreeRoot<Selene, Helios>,
+    n_tree_layers: usize,
+    fcmp_proof: *const u8,
+    fcmp_proof_len: usize
+) -> bool {
+    let inputs: &[[u8; 4 * 32]] = inputs.into();
+    let Ok(inputs) = inputs
+        .iter()
+        .map(|i| { let i = input_from_bytes(&mut i.as_slice())?; fcmps::Input::new(i.O_tilde(), i.I_tilde(), i.R(), i.C_tilde())})
+        .collect::<Result<Vec<_>, _>>()
+        else { return false };
+
+    let tree_root = tree_root.read();
+
+    let mut fcmp_proof_buf = core::slice::from_raw_parts(fcmp_proof, fcmp_proof_len);
+    let fcmp = match Fcmp::read(&mut fcmp_proof_buf, inputs.len(), n_tree_layers) {
+        Ok(p) => p,
+        Err(_) => return false
+    };
+
+    let mut c1_verifier = generalized_bulletproofs::Generators::batch_verifier();
+    let mut c2_verifier = generalized_bulletproofs::Generators::batch_verifier();
+
+    match fcmp
+        .verify(
+            &mut OsRng,
+            &mut c1_verifier,
+            &mut c2_verifier,
+            FCMP_PARAMS(),
+            tree_root,
+            n_tree_layers,
+            &inputs
+        )
+    {
+        Ok(()) => SELENE_GENERATORS().verify(c1_verifier)
+            && HELIOS_GENERATORS().verify(c2_verifier),
+        Err(_) => false
+    }
 }
 
 // https://github.com/rust-lang/rust/issues/79609

@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2024, The Monero Project
+// Copyright (c) 2025, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -28,29 +28,39 @@
 
 #pragma once
 
-extern "C"
+//local headers
+#include "address_device.h"
+#include "carrot_core/device_ram_borrowed.h"
+
+//third party headers
+
+//standard headers
+
+//forward declarations
+
+namespace carrot
 {
-#include "crypto-ops.h"
-}
-#include "crypto.h"
-
-namespace crypto
+struct cryptonote_hierarchy_address_device_ram_borrowed:
+    public cryptonote_hierarchy_address_device,
+    public view_incoming_key_ram_borrowed_device
 {
+    cryptonote_hierarchy_address_device_ram_borrowed(
+        const crypto::public_key &cryptonote_account_spend_pubkey,
+        const crypto::secret_key &k_view_incoming):
+        view_incoming_key_ram_borrowed_device(k_view_incoming),
+        m_cryptonote_account_spend_pubkey(cryptonote_account_spend_pubkey)
+    {}
 
-public_key get_G();
-public_key get_H();
-public_key get_T();
-public_key get_U();
-public_key get_V();
-ge_p3 get_G_p3();
-ge_p3 get_H_p3();
-ge_p3 get_T_p3();
-ge_p3 get_U_p3();
-ge_p3 get_V_p3();
-ge_cached get_G_cached();
-ge_cached get_H_cached();
-ge_cached get_T_cached();
-ge_cached get_U_cached();
-ge_cached get_V_cached();
+    crypto::public_key get_cryptonote_account_spend_pubkey() const override
+    {
+        return m_cryptonote_account_spend_pubkey;
+    }
 
-} //namespace crypto
+    void make_legacy_subaddress_extension(const std::uint32_t major_index,
+        const std::uint32_t minor_index,
+        crypto::secret_key &legacy_subaddress_extension_out) const override;
+
+protected:
+    const crypto::public_key &m_cryptonote_account_spend_pubkey;
+};
+} //namespace carrot
