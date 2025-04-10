@@ -51,7 +51,7 @@ public:
     static threadpool instance(8);
     return instance;
   }
-  static threadpool *getNewForUnitTests(unsigned max_threads = 0) {
+  static threadpool *getNewInstance(unsigned max_threads = 0) {
     return new threadpool(max_threads);
   }
 

@@ -77,6 +77,7 @@ using FcmpPpProof = std::vector<uint8_t>;
 
 struct ProofInput final
 {
+    FcmpRerandomizedOutputCompressed rerandomized_output;
     uint8_t *path;
     uint8_t *output_blinds;
     std::vector<const uint8_t *> selene_branch_blinds;

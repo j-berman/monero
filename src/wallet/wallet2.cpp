@@ -1255,7 +1255,8 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_has_ever_refreshed_from_node(false),
   m_allow_mismatched_daemon_version(false),
   m_curve_trees(fcmp_pp::curve_trees::curve_trees_v1()),
-  m_tree_cache(fcmp_pp::curve_trees::TreeCacheV1(m_curve_trees, m_max_reorg_depth))
+  m_tree_cache(TreeCacheV1(m_curve_trees, m_max_reorg_depth)),
+  m_blinds_cache(BlindsCacheV1(m_curve_trees))
 {
 }
 
@@ -2347,6 +2348,7 @@ void wallet2::process_new_scanned_transaction(
       .commitment = rct::commit(enote_scan_info->amount, enote_scan_info->amount_blinding_factor)
     };
     m_tree_cache.register_output(output_pair, cryptonote::get_last_locked_block_index(tx.unlock_time, height));
+    m_blinds_cache.add_output(output_pair);
 
     // money received callbacks
     LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
@@ -3105,6 +3107,9 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
   const auto tree_sync_post_check = epee::misc_utils::create_scope_leave_handler([&, this]() {
     // Check for matching top block in m_blockchain <> m_tree_cache after sync
     assert_top_block_match(m_blockchain, m_tree_cache);
+
+    // Updates blinds cache's n_tree_layers and calculates more branch blinds if necessary
+    m_blinds_cache.set_n_tree_layers(m_curve_trees->n_layers(m_tree_cache.get_n_leaf_tuples()));
   });
 
   try
@@ -3876,6 +3881,12 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
     return;
   }
 
+  // Initiate calculation for needed branch blinds. Calling this early to
+  // minimize impact on the scanner. It may start using significant CPU to do
+  // these calculations, and can potentially finish all calculations before the
+  // daemon even responds with the first request.
+  m_blinds_cache.calc_needed_branch_blinds_async();
+
   received_money = false;
   blocks_fetched = 0;
   uint64_t added_blocks = 0;
@@ -3976,6 +3987,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
           const crypto::hash genesis_hash = get_block_hash(b);
           m_blockchain.push_back(genesis_hash);
           m_tree_cache.clear();
+          m_blinds_cache.clear();
           short_chain_history.clear();
           get_short_chain_history(short_chain_history);
           fast_refresh(stop_height, blocks_start_height, short_chain_history, true);
@@ -4291,6 +4303,7 @@ bool wallet2::clear()
   m_skip_to_height = 0;
   m_background_sync_data = background_sync_data_t{};
   m_tree_cache.clear();
+  m_blinds_cache.clear();
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -4317,6 +4330,7 @@ void wallet2::clear_soft(bool keep_key_images)
   m_blockchain.push_back(genesis_hash);
   m_last_block_reward = cryptonote::get_outs_money_amount(b.miner_tx);
   m_tree_cache.clear();
+  m_blinds_cache.clear();
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::clear_user_data()
@@ -5307,6 +5321,7 @@ void wallet2::setup_new_blockchain()
   m_blockchain.push_back(genesis_hash);
   m_last_block_reward = cryptonote::get_outs_money_amount(b.miner_tx);
   m_tree_cache.clear();
+  m_blinds_cache.clear();
   add_subaddress_account(tr("Primary account"));
 }
 
@@ -9939,12 +9954,7 @@ void wallet2::transfer_selected_rct(std::vector<cryptonote::tx_destination_entry
     if (use_fcmp)
     {
       fcmp_pp_params.proof_inputs.emplace_back();
-
-      const auto output_pair = td.get_output_pair();
-      const auto output_tuple = fcmp_pp::curve_trees::output_to_tuple(output_pair);
-      src.rerandomized_output = fcmp_pp::rerandomize_output(output_tuple.to_output_bytes());
-
-      const bool r = fcmp_pp::set_fcmp_pp_proof_input(output_pair, m_tree_cache, src.rerandomized_output, m_curve_trees, fcmp_pp_params.proof_inputs.back());
+      const bool r = fcmp_pp::set_fcmp_pp_proof_input(td.get_output_pair(), m_tree_cache, m_blinds_cache, m_curve_trees, fcmp_pp_params.proof_inputs.back());
       THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "failed to set FCMP++ prove input");
 
       src.outputs.emplace_back(std::move(real_oe));

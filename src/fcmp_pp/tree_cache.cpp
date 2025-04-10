@@ -41,19 +41,6 @@ namespace fcmp_pp
 namespace curve_trees
 {
 //----------------------------------------------------------------------------------------------------------------------
-static OutputRef get_output_ref(const OutputPair &o)
-{
-    static_assert(sizeof(o.output_pubkey) == sizeof(o.commitment), "unexpected size of output pubkey & commitment");
-
-    static const std::size_t N_ELEMS = 2;
-    static_assert(sizeof(o) == (N_ELEMS * sizeof(crypto::public_key)), "unexpected size of output pair");
-
-    const crypto::public_key data[N_ELEMS] = {o.output_pubkey, rct::rct2pk(o.commitment)};
-    crypto::hash h;
-    crypto::cn_fast_hash(data, N_ELEMS * sizeof(crypto::public_key), h);
-    return h;
-};
-//----------------------------------------------------------------------------------------------------------------------
 static void assign_new_output(const OutputPair &output_pair,
     const LeafIdx leaf_idx,
     RegisteredOutputs &registered_outputs_inout)

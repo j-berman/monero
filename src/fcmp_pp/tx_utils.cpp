@@ -34,10 +34,21 @@ namespace fcmp_pp
 //----------------------------------------------------------------------------------------------------------------------
 bool set_fcmp_pp_proof_input(const curve_trees::OutputPair &output_pair,
     const curve_trees::TreeCacheV1 &tree_cache,
-    const FcmpRerandomizedOutputCompressed &rerandomized_output,
+    curve_trees::BlindsCacheV1 &blinds_cache,
     const std::shared_ptr<curve_trees::CurveTreesV1> &curve_trees,
     ProofInput &proof_input_out)
 {
+    // Get branch blinds
+    const std::size_t n_layers = curve_trees->n_layers(tree_cache.get_n_leaf_tuples());
+
+    // TODO: getting more than 1 input's branch blinds at a time is optimal
+    const std::size_t n_inputs = 1;
+    proof_input_out.selene_branch_blinds = blinds_cache.get_c1_branch_blinds(n_layers, n_inputs);
+    proof_input_out.helios_branch_blinds = blinds_cache.get_c2_branch_blinds(n_layers, n_inputs);
+
+    // Get output blinds
+    proof_input_out.output_blinds = blinds_cache.get_output_blinds(output_pair, proof_input_out.rerandomized_output);
+
     // Get path ready to be used in the FCMP++ proof
     fcmp_pp::curve_trees::CurveTreesV1::Path path;
     bool r = tree_cache.get_output_path(output_pair, path);
@@ -57,42 +68,6 @@ bool set_fcmp_pp_proof_input(const curve_trees::OutputPair &output_pair,
         path_for_proof.output_idx,
         {helios_scalar_chunks.data(), helios_scalar_chunks.size()},
         {selene_scalar_chunks.data(), selene_scalar_chunks.size()});
-
-    // Collect blinds for rerandomized output
-    // TODO: read blinds from a cache
-    {
-        const auto o_blind = fcmp_pp::o_blind(rerandomized_output);
-        const auto i_blind = fcmp_pp::i_blind(rerandomized_output);
-        const auto i_blind_blind = fcmp_pp::i_blind_blind(rerandomized_output);
-        const auto c_blind = fcmp_pp::c_blind(rerandomized_output);
-
-        const auto blinded_o_blind = fcmp_pp::blind_o_blind(o_blind);
-        const auto blinded_i_blind = fcmp_pp::blind_i_blind(i_blind);
-        const auto blinded_i_blind_blind = fcmp_pp::blind_i_blind_blind(i_blind_blind);
-        const auto blinded_c_blind = fcmp_pp::blind_c_blind(c_blind);
-
-        proof_input_out.output_blinds = fcmp_pp::output_blinds_new(blinded_o_blind,
-            blinded_i_blind,
-            blinded_i_blind_blind,
-            blinded_c_blind);
-    }
-
-    // Collect branch blinds
-    // TODO: read blinds from a cache
-    {
-        const std::size_t n_selene_layers = path.c1_layers.size();
-        const std::size_t n_helios_layers = path.c2_layers.size();
-
-        const bool is_selene_root = n_selene_layers > n_helios_layers;
-
-        const std::size_t n_selene_layers_excl_root = n_selene_layers - (is_selene_root ? 1 : 0);
-        const std::size_t n_helios_layers_excl_root = n_helios_layers - (is_selene_root ? 0 : 1);
-
-        for (std::size_t i = 0; i < n_selene_layers_excl_root; ++i)
-            proof_input_out.selene_branch_blinds.emplace_back(fcmp_pp::selene_branch_blind());
-        for (std::size_t i = 0; i < n_helios_layers_excl_root; ++i)
-            proof_input_out.helios_branch_blinds.emplace_back(fcmp_pp::helios_branch_blind());
-    }
 
     return true;
 }

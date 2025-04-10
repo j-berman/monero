@@ -1113,7 +1113,7 @@ done:
     
     //RCT simple    
     //for post-rct only
-    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, xmr_amount txnFee, const ctkeyM & mixRing, const keyV &amount_keys, const std::vector<unsigned int> & index, ctkeyV &outSk, const std::vector<FcmpRerandomizedOutputCompressed> rerandomized_outputs, const fcmp_pp::ProofParams &fcmp_pp_params, const RCTConfig &rct_config, hw::device &hwdev) {
+    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, xmr_amount txnFee, const ctkeyM & mixRing, const keyV &amount_keys, const std::vector<unsigned int> & index, ctkeyV &outSk, const fcmp_pp::ProofParams &fcmp_pp_params, const RCTConfig &rct_config, hw::device &hwdev) {
         const bool bulletproof_or_plus = rct_config.range_proof_type > RangeProofBorromean;
         const bool is_fcmp_pp = rct_config.bp_version == 0 || rct_config.bp_version >= 5;
         CHECK_AND_ASSERT_THROW_MES(inamounts.size() > 0, "Empty inamounts");
@@ -1130,8 +1130,6 @@ done:
         }
         else // is_fcmp_pp
         {
-          CHECK_AND_ASSERT_THROW_MES(rerandomized_outputs.size() > 0, "Empty rerandomized_outputs");
-          CHECK_AND_ASSERT_THROW_MES(rerandomized_outputs.size() == inamounts.size(), "Different number of rerandomized_outputs/inamounts");
           CHECK_AND_ASSERT_THROW_MES(fcmp_pp_params.proof_inputs.size() > 0, "Empty FCMP++ proof inputs");
           CHECK_AND_ASSERT_THROW_MES(fcmp_pp_params.proof_inputs.size() == inamounts.size(), "Different number of proof inputs/inamounts");
           for (size_t n = 0; n < fcmp_pp_params.proof_inputs.size(); ++n) {
@@ -1285,11 +1283,10 @@ done:
             sc_0((unsigned char *)ySk.data);
             const uint8_t *y = (uint8_t *) ySk.data;
 
-            const FcmpRerandomizedOutputCompressed &rerandomized_output = rerandomized_outputs.at(i);
             const auto &fcmp_pp_input = fcmp_pp_params.proof_inputs[i];
 
             // store C~
-            memcpy(&pseudoOuts[i], &rerandomized_output.input.C_tilde, sizeof(rct::key));
+            memcpy(&pseudoOuts[i], &fcmp_pp_input.rerandomized_output.input.C_tilde, sizeof(rct::key));
 
             // Collecting sum of input masks to balance the last pseudo out
             sc_add(sum_input_masks.bytes, sum_input_masks.bytes, inSk[i].mask.bytes);
@@ -1297,7 +1294,7 @@ done:
             // TODO: separate SAL from membership proof. Implement SAL in hw device interface
             auto fcmp_prove_input = fcmp_pp::fcmp_pp_prove_input_new(x,
                 y,
-                rerandomized_output,
+                fcmp_pp_input.rerandomized_output,
                 fcmp_pp_input.path,
                 fcmp_pp_input.output_blinds,
                 fcmp_pp_input.selene_branch_blinds,
@@ -1365,7 +1362,7 @@ done:
         return rv;
     }
 
-    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const ctkeyV & inPk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, const keyV &amount_keys, const std::vector<FcmpRerandomizedOutputCompressed> rerandomized_outputs, const fcmp_pp::ProofParams &fcmp_pp_params, xmr_amount txnFee, unsigned int mixin, const RCTConfig &rct_config, hw::device &hwdev) {
+    rctSig genRctSimple(const key &message, const ctkeyV & inSk, const ctkeyV & inPk, const keyV & destinations, const vector<xmr_amount> &inamounts, const vector<xmr_amount> &outamounts, const keyV &amount_keys, const fcmp_pp::ProofParams &fcmp_pp_params, xmr_amount txnFee, unsigned int mixin, const RCTConfig &rct_config, hw::device &hwdev) {
         std::vector<unsigned int> index;
         index.resize(inPk.size());
         ctkeyM mixRing;
@@ -1375,7 +1372,7 @@ done:
           mixRing[i].resize(mixin+1);
           index[i] = populateFromBlockchainSimple(mixRing[i], inPk[i], mixin);
         }
-        return genRctSimple(message, inSk, destinations, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, rerandomized_outputs, fcmp_pp_params, rct_config, hwdev);
+        return genRctSimple(message, inSk, destinations, inamounts, outamounts, txnFee, mixRing, amount_keys, index, outSk, fcmp_pp_params, rct_config, hwdev);
     }
 
     //RingCT protocol

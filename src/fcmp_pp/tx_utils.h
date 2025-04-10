@@ -30,6 +30,7 @@
 
 #include <memory>
 
+#include "blinds_cache.h"
 #include "curve_trees.h"
 #include "prove.h"
 #include "tree_cache.h"
@@ -40,7 +41,7 @@ namespace fcmp_pp
 //----------------------------------------------------------------------------------------------------------------------
 bool set_fcmp_pp_proof_input(const curve_trees::OutputPair &output_pair,
     const curve_trees::TreeCacheV1 &tree_cache,
-    const FcmpRerandomizedOutputCompressed &randomized_output,
+    curve_trees::BlindsCacheV1 &blinds_cache,
     const std::shared_ptr<curve_trees::CurveTreesV1> &curve_trees,
     ProofInput &proof_input_out);
 //----------------------------------------------------------------------------------------------------------------------

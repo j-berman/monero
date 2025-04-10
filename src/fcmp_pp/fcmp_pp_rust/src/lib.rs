@@ -504,12 +504,20 @@ pub unsafe extern "C" fn output_blinds_new(
     i_blind_blind: *const IBlindBlind<EdwardsPoint>,
     c_blind: *const CBlind<EdwardsPoint>,
 ) -> CResult<OutputBlinds<EdwardsPoint>, ()> {
-    CResult::ok(OutputBlinds::new(
-        o_blind.read(),
-        i_blind.read(),
-        i_blind_blind.read(),
-        c_blind.read(),
-    ))
+    // Don't consume the blinds
+    let o_blind = &*o_blind;
+    let i_blind = &*i_blind;
+    let i_blind_blind = &*i_blind_blind;
+    let c_blind = &*c_blind;
+
+    let ob = OutputBlinds::new(
+        o_blind.clone(),
+        i_blind.clone(),
+        i_blind_blind.clone(),
+        c_blind.clone(),
+    );
+
+    CResult::ok(ob)
 }
 
 //---------------------------------------------- BranchBlind

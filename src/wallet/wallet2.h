@@ -57,6 +57,7 @@
 #include "common/util.h"
 #include "crypto/chacha.h"
 #include "crypto/hash.h"
+#include "fcmp_pp/blinds_cache.h"
 #include "fcmp_pp/curve_trees.h"
 #include "fcmp_pp/tree_cache.h"
 #include "multisig/multisig_account.h"
@@ -889,6 +890,7 @@ private:
 
     using CurveTreesV1 = fcmp_pp::curve_trees::CurveTreesV1;
     using TreeCacheV1 = fcmp_pp::curve_trees::TreeCacheV1;
+    using BlindsCacheV1 = fcmp_pp::curve_trees::BlindsCacheV1;
 
     /*!
      * \brief  Generates a wallet or restores one. Assumes the multisig setup
@@ -2083,6 +2085,7 @@ private:
 
     std::shared_ptr<CurveTreesV1> m_curve_trees;
     TreeCacheV1 m_tree_cache;
+    BlindsCacheV1 m_blinds_cache;
   };
 }
 BOOST_CLASS_VERSION(tools::wallet2, 32)

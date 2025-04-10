@@ -142,6 +142,19 @@ OutputTuple output_to_tuple(const OutputPair &output_pair)
     };
 }
 //----------------------------------------------------------------------------------------------------------------------
+OutputPairRef get_output_ref(const OutputPair &o)
+{
+    static_assert(sizeof(o.output_pubkey) == sizeof(o.commitment), "unexpected size of output pubkey & commitment");
+
+    static const std::size_t N_ELEMS = 2;
+    static_assert(sizeof(o) == (N_ELEMS * sizeof(crypto::public_key)), "unexpected size of output pair");
+
+    const crypto::public_key data[N_ELEMS] = {o.output_pubkey, rct::rct2pk(o.commitment)};
+    crypto::hash h;
+    crypto::cn_fast_hash(data, N_ELEMS * sizeof(crypto::public_key), h);
+    return h;
+};
+//----------------------------------------------------------------------------------------------------------------------
 std::shared_ptr<CurveTreesV1> curve_trees_v1(const std::size_t selene_chunk_width, const std::size_t helios_chunk_width)
 {
     std::unique_ptr<Selene> selene(new Selene());

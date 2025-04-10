@@ -64,7 +64,6 @@ using LastLockedBlockIdx = BlockIdx;
 using CreatedBlockIdx = BlockIdx;
 using NumOutputs      = std::size_t;
 
-using OutputRef = crypto::hash;
 
 struct BlockMeta final
 {
@@ -152,7 +151,7 @@ using LockedOutsByLastLockedBlock = std::unordered_map<LastLockedBlockIdx, std::
 using LockedOutputRefs       = std::unordered_map<LastLockedBlockIdx, NumOutputs>;
 using LockedOutputsByCreated = std::unordered_map<CreatedBlockIdx, LockedOutputRefs>;
 
-using RegisteredOutputs = std::unordered_map<OutputRef, AssignedLeafIdx>;
+using RegisteredOutputs = std::unordered_map<OutputPairRef, AssignedLeafIdx>;
 using LeafCache         = std::unordered_map<ChildChunkIdx, CachedLeafChunk>;
 using ChildChunkCache   = std::unordered_map<ChildChunkIdx, CachedTreeElemChunk>;
 

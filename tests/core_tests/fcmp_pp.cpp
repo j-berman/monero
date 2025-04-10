@@ -34,6 +34,7 @@
 #include "ringct/bulletproofs_plus.h"
 #include "chaingen.h"
 #include "blockchain_db/blockchain_db_utils.h"
+#include "fcmp_pp/blinds_cache.h"
 #include "fcmp_pp/curve_trees.h"
 #include "fcmp_pp/fcmp_pp_types.h"
 #include "fcmp_pp/prove.h"
@@ -45,9 +46,8 @@ using namespace epee;
 using namespace crypto;
 using namespace cryptonote;
 
-using Selene = fcmp_pp::curve_trees::Selene;
-using Helios = fcmp_pp::curve_trees::Helios;
-using TreeCacheV1 = fcmp_pp::curve_trees::TreeCache<Selene, Helios>;
+using BlindsCacheV1 = fcmp_pp::curve_trees::BlindsCacheV1;
+using TreeCacheV1 = fcmp_pp::curve_trees::TreeCacheV1;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Tests
@@ -96,8 +96,23 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
     blk_r = blk_last;
   }
 
+  // We're going to spend the last output in the first block
+  // Note: I'm using the last otuput because first output doesn't have enough to cover min fee without changes to fee code
+  // TODO: change the fee checking code for FCMP++
+  const auto &spending_out = blocks[0].miner_tx.vout.back();
+  const auto o_idx = blocks[0].miner_tx.vout.size() - 1;
+
+  const auto &output_pubkey = boost::get<txout_to_key>(spending_out.target).key;
+  const rct::key C = rct::zeroCommitVartime(spending_out.amount);
+  const fcmp_pp::curve_trees::OutputPair output_pair{.output_pubkey = output_pubkey, .commitment = C};
+
+  // Prepare the blinds
+  const auto curve_trees = fcmp_pp::curve_trees::curve_trees_v1();
+  BlindsCacheV1 blinds_cache(curve_trees, curve_trees->n_layers(500), 1/*n_inputs*/);
+  blinds_cache.add_output(output_pair);
+
   // Build the FCMP++ curve tree
-  TreeCacheV1 tree_cache(fcmp_pp::curve_trees::curve_trees_v1());
+  TreeCacheV1 tree_cache(curve_trees);
   std::vector<crypto::hash> new_block_hashes;
   std::vector<fcmp_pp::curve_trees::OutsByLastLockedBlock> outs_by_last_locked_blocks;
   uint64_t first_output_id = 0;
@@ -110,16 +125,7 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
     first_output_id = outs_meta.next_output_id;
   }
 
-  // We're going to spend the last output in the first block
-  // Note: I'm using the last otuput because first output doesn't have enough to cover min fee without changes to fee code
-  // TODO: change the fee checking code for FCMP++
-  const auto &spending_out = blocks[0].miner_tx.vout.back();
-  const auto o_idx = blocks[0].miner_tx.vout.size() - 1;
-
   // Register the output with the TreeCache to know its location in the tree
-  const auto &output_pubkey = boost::get<txout_to_key>(spending_out.target).key;
-  const rct::key C = rct::zeroCommitVartime(spending_out.amount);
-  const fcmp_pp::curve_trees::OutputPair output_pair{.output_pubkey = output_pubkey, .commitment = C};
   tree_cache.register_output(output_pair, cryptonote::get_last_locked_block_index(blocks[0].miner_tx.unlock_time, 0));
 
   // Build the tree, keeping track of output's path in the tree
@@ -170,14 +176,9 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
     return false;
   }
 
-  // Re-randomize output
-  const auto output_tuple = fcmp_pp::curve_trees::output_to_tuple(output_pair);
-  src.rerandomized_output = fcmp_pp::rerandomize_output(output_tuple.to_output_bytes());
-
   // Set FCMP++ params
   fcmp_pp_params.proof_inputs.emplace_back();
-  const auto curve_trees = fcmp_pp::curve_trees::curve_trees_v1();
-  bool r = fcmp_pp::set_fcmp_pp_proof_input(output_pair, tree_cache, src.rerandomized_output, curve_trees, fcmp_pp_params.proof_inputs.back());
+  bool r = fcmp_pp::set_fcmp_pp_proof_input(output_pair, tree_cache, blinds_cache, curve_trees, fcmp_pp_params.proof_inputs.back());
   CHECK_AND_ASSERT_MES(r, false, "failed to set FCMP++ prove input");
 
   crypto::secret_key tx_key;

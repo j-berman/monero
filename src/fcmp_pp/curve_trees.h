@@ -147,6 +147,8 @@ struct OutputContext final
 static_assert(sizeof(OutputPair)    == (32+32),   "db expects 64 bytes for output pairs");
 static_assert(sizeof(OutputContext) == (8+32+32), "db expects 72 bytes for output context");
 
+using OutputPairRef = crypto::hash;
+
 using OutsByLastLockedBlock = std::unordered_map<uint64_t, std::vector<OutputContext>>;
 
 // Ed25519 points (can go from OutputTuple -> LeafTuple)
@@ -205,6 +207,8 @@ template<typename C>
 typename C::Point get_new_parent(const std::unique_ptr<C> &curve, const typename C::Chunk &new_children);
 //----------------------------------------------------------------------------------------------------------------------
 OutputTuple output_to_tuple(const OutputPair &output_pair);
+//----------------------------------------------------------------------------------------------------------------------
+OutputPairRef get_output_ref(const OutputPair &output_pair);
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 // This class is useful to help update the curve trees merkle tree without needing to keep the entire tree in memory
