@@ -30,6 +30,8 @@
 
 #include "prove.h"
 
+#include <algorithm>
+
 
 namespace fcmp_pp
 {
@@ -67,7 +69,8 @@ static bool need_more_c1_blinds(const std::size_t prepare_n_min_inputs,
     const uint8_t n_tree_layers,
     const std::size_t n_c1_branch_blinds)
 {
-    const std::size_t n_needed = (prepare_n_min_inputs + n_inputs) * n_c1_branch_blinds_needed_per_input(n_tree_layers);
+    const std::size_t n_inputs_needed = std::max(prepare_n_min_inputs, n_inputs);
+    const std::size_t n_needed = n_inputs_needed * n_c1_branch_blinds_needed_per_input(n_tree_layers);
     return n_c1_branch_blinds < n_needed;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -76,7 +79,8 @@ static bool need_more_c2_blinds(const std::size_t prepare_n_min_inputs,
     const uint8_t n_tree_layers,
     const std::size_t n_c2_branch_blinds)
 {
-    const std::size_t n_needed = (prepare_n_min_inputs + n_inputs) * n_c2_branch_blinds_needed_per_input(n_tree_layers);
+    const std::size_t n_inputs_needed = std::max(prepare_n_min_inputs, n_inputs);
+    const std::size_t n_needed = n_inputs_needed * n_c2_branch_blinds_needed_per_input(n_tree_layers);
     return n_c2_branch_blinds < n_needed;
 }
 //----------------------------------------------------------------------------------------------------------------------
