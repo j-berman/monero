@@ -32,6 +32,8 @@
 
 #include "crypto/crypto.h"
 #include "fcmp_pp_rust/fcmp++.h"
+#include "serialization/crypto.h"
+#include "serialization/serialization.h"
 
 // TODO: consolidate more FCMP++ types into this file
 
@@ -94,6 +96,77 @@ struct FcmpVerifyHelperData final
 {
     const uint8_t *tree_root; // borrowing, *not* owning
     std::vector<crypto::key_image> key_images;
+};
+
+using OutputBlind = std::vector<uint8_t>;
+using OutputBlinds = std::vector<uint8_t>;
+using BranchBlind = std::vector<uint8_t>;
+
+struct SerializableFcmpInput final
+{
+    crypto::ec_point O_tilde;
+    crypto::ec_point I_tilde;
+    crypto::ec_point R;
+    crypto::ec_point C_tilde;
+
+    template <class Archive>
+    inline void serialize(Archive &a, const unsigned int ver)
+    {
+        a & O_tilde;
+        a & I_tilde;
+        a & R;
+        a & C_tilde;
+    }
+
+    BEGIN_SERIALIZE_OBJECT()
+        FIELD(O_tilde)
+        FIELD(I_tilde)
+        FIELD(R)
+        FIELD(C_tilde)
+    END_SERIALIZE()
+};
+static_assert(sizeof(SerializableFcmpInput) == sizeof(::FcmpInputCompressed), "Size mismatch FCMP inputs");
+
+struct SerializableRerandomizedOutput final
+{
+    SerializableFcmpInput input;
+
+    crypto::ec_point r_o;
+    crypto::ec_point r_i;
+    crypto::ec_point r_r_i;
+    crypto::ec_point r_c;
+
+    template <class Archive>
+    inline void serialize(Archive &a, const unsigned int ver)
+    {
+        a & input;
+        a & r_o;
+        a & r_i;
+        a & r_r_i;
+        a & r_c;
+    }
+
+    BEGIN_SERIALIZE_OBJECT()
+        FIELD(input)
+        FIELD(r_o)
+        FIELD(r_i)
+        FIELD(r_r_i)
+        FIELD(r_c)
+    END_SERIALIZE()
+};
+static_assert(sizeof(SerializableRerandomizedOutput) == sizeof(::FcmpRerandomizedOutputCompressed),
+    "Size mismatch FCMP re-randomized outputs");
+
+// Serializable re-randomzed output to C re-randomized output
+static inline const FcmpRerandomizedOutputCompressed &sro2cro(const SerializableRerandomizedOutput &sro)
+{
+    return (const FcmpRerandomizedOutputCompressed&) sro;
+};
+
+// C re-randomzed output to Serializable re-randomized output
+static inline const SerializableRerandomizedOutput &cro2sro(const FcmpRerandomizedOutputCompressed &sro)
+{
+    return (const SerializableRerandomizedOutput&) sro;
 };
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------

@@ -103,6 +103,14 @@ const unsafe fn slice_from_raw_parts_0able<'a, T>(p: *const T, len: usize) -> &'
     }
 }
 
+fn buf_to_slice(buf: Vec<u8>) -> Slice<u8> {
+    // Leak the buf into a ptr that the C++ can handle
+    // TODO: Use Box::leak instead, and then in destructor convert back to box https://doc.rust-lang.org/std/boxed/struct.Box.html#method.leak
+    let len = buf.len();
+    let ptr = buf.leak().as_ptr();
+    Slice::<u8>{ buf: ptr, len }
+}
+
 fn ed25519_point_from_bytes(ed25519_point: *const u8) -> EdwardsPoint {
     let mut ed25519_point = unsafe { core::slice::from_raw_parts(ed25519_point, 32) };
     // TODO: Return an error here (instead of unwrapping)
@@ -392,6 +400,37 @@ pub unsafe extern "C" fn blind_o_blind(
     }
 }
 
+macro_rules! buf_conversion_fns {
+    ($typename:ident, $trait:ty, $to_buf_fn:ident, $from_buf_fn:ident) => {
+        #[no_mangle]
+        pub unsafe extern "C" fn $to_buf_fn(
+            blind: *const $typename<$trait>,
+        ) -> CResult<Slice<u8>, ()> {
+            let blind = blind.read();
+            let mut buf = vec![];
+            let Ok(_) = blind.write(&mut buf) else {
+                // TODO: no empty err
+                return CResult::err(());
+            };
+            CResult::ok(buf_to_slice(buf))
+        }
+
+        #[no_mangle]
+        pub unsafe extern "C" fn $from_buf_fn(
+            blind: Slice<u8>,
+        ) -> CResult<$typename<$trait>, ()> {
+            let mut buf: &[u8] = blind.into();
+            let Ok(blind) = $typename::<$trait>::read(&mut buf) else {
+                // TODO: no empty err
+                return CResult::err(());
+            };
+            CResult::ok(blind)
+        }
+    };
+}
+
+buf_conversion_fns!(OBlind, EdwardsPoint, o_blind_to_buf, o_blind_from_buf);
+
 //---------------------------------------------- CBlind
 
 /// # Safety
@@ -424,6 +463,8 @@ pub unsafe extern "C" fn blind_c_blind(
         CResult::err(())
     }
 }
+
+buf_conversion_fns!(CBlind, EdwardsPoint, c_blind_to_buf, c_blind_from_buf);
 
 //---------------------------------------------- IBlind
 
@@ -458,6 +499,8 @@ pub unsafe extern "C" fn blind_i_blind(
     }
 }
 
+buf_conversion_fns!(IBlind, EdwardsPoint, i_blind_to_buf, i_blind_from_buf);
+
 //---------------------------------------------- IBlindBlind
 
 /// # Safety
@@ -491,6 +534,13 @@ pub unsafe extern "C" fn blind_i_blind_blind(
     }
 }
 
+buf_conversion_fns!(
+    IBlindBlind,
+    EdwardsPoint,
+    i_blind_blind_to_buf,
+    i_blind_blind_from_buf
+);
+
 //---------------------------------------------- OutputBlinds
 
 /// # Safety
@@ -520,6 +570,13 @@ pub unsafe extern "C" fn output_blinds_new(
     CResult::ok(ob)
 }
 
+buf_conversion_fns!(
+    OutputBlinds,
+    EdwardsPoint,
+    output_blinds_to_buf,
+    output_blinds_from_buf
+);
+
 //---------------------------------------------- BranchBlind
 
 #[no_mangle]
@@ -537,6 +594,19 @@ pub extern "C" fn selene_branch_blind() -> CResult<BranchBlind<<Selene as Cipher
         ScalarDecomposition::new(<Selene as Ciphersuite>::F::random(&mut OsRng)).unwrap(),
     ))
 }
+
+buf_conversion_fns!(
+    BranchBlind,
+    <Helios as Ciphersuite>::G,
+    helios_branch_blind_to_buf,
+    helios_branch_blind_from_buf
+);
+buf_conversion_fns!(
+    BranchBlind,
+    <Selene as Ciphersuite>::G,
+    selene_branch_blind_to_buf,
+    selene_branch_blind_from_buf
+);
 
 //-------------------------------------------------------------------------------------- Fcmp
 

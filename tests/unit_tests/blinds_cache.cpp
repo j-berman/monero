@@ -32,6 +32,10 @@
 #include "curve_trees.h"
 #include "fcmp_pp/blinds_cache.h"
 #include "fcmp_pp/curve_trees.h"
+#include "fcmp_pp/fcmp_pp_types.h"
+#include "fcmp_pp/prove.h"
+#include "serialization/binary_utils.h"
+#include "string_tools.h"
 
 using Selene = fcmp_pp::curve_trees::Selene;
 using Helios = fcmp_pp::curve_trees::Helios;
@@ -64,7 +68,7 @@ TEST(blinds_cache, add_many_outputs)
     auto curve_trees = fcmp_pp::curve_trees::curve_trees_v1();
     auto blinds_cache = new fcmp_pp::curve_trees::BlindsCache<Selene, Helios>(curve_trees);
 
-    const std::size_t INIT_LEAVES = 10;
+    const std::size_t INIT_LEAVES = 16;
     auto outputs = test::generate_random_outputs(*curve_trees, 0, INIT_LEAVES);
     CHECK_AND_ASSERT_THROW_MES(outputs.size() == INIT_LEAVES, "unexpected size of outputs");
 
@@ -105,6 +109,76 @@ TEST(blinds_cache, get_branch_blinds)
     LOG_PRINT_L0("Got c2 branch blinds " << c2_branch_blinds.size());
 
     delete blinds_cache;
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(blinds_cache, serialization)
+{
+    auto curve_trees = fcmp_pp::curve_trees::curve_trees_v1();
+    auto blinds_cache = new fcmp_pp::curve_trees::BlindsCache<Selene, Helios>(curve_trees);
+
+    // Start the calculation on branch blinds
+    blinds_cache->calc_needed_branch_blinds_async();
+
+    // Add an output to the cache
+    const std::size_t INIT_LEAVES = 1;
+    auto outputs = test::generate_random_outputs(*curve_trees, 0, INIT_LEAVES);
+    CHECK_AND_ASSERT_THROW_MES(outputs.size() == INIT_LEAVES, "unexpected size of outputs");
+    const auto &output_pair = outputs[0].output_pair;
+    blinds_cache->add_output(output_pair);
+
+    // Serialize the blinds_cache object
+    std::string blob;
+    ASSERT_TRUE(serialization::dump_binary(*blinds_cache, blob));
+
+    // Make sure the output is present in the serialized string
+    const auto output_ref = fcmp_pp::curve_trees::get_output_ref(output_pair);
+    const std::string blob_hex = epee::string_tools::buff_to_hex_nodelimer(blob);
+    ASSERT_TRUE(blob_hex.find(epee::string_tools::pod_to_hex(output_ref)) != std::string::npos);
+
+    // Instantiate a second blinds cache from the serialized blob string
+    auto blinds_cache2 = new fcmp_pp::curve_trees::BlindsCache<Selene, Helios>(curve_trees);
+    ASSERT_TRUE(serialization::parse_binary(blob, *blinds_cache2));
+
+    // Check equality on output blinds across the two blinds caches
+    FcmpRerandomizedOutputCompressed ro1;
+    FcmpRerandomizedOutputCompressed ro2;
+    const uint8_t *blinds1 = blinds_cache->get_output_blinds(output_pair, ro1);
+    const uint8_t *blinds2 = blinds_cache2->get_output_blinds(output_pair, ro2);
+
+    ASSERT_EQ(memcmp(&ro1, &ro2, sizeof(FcmpRerandomizedOutputCompressed)), 0);
+
+    fcmp_pp::OutputBlinds blinds_buf1 = fcmp_pp::output_blinds_to_buf(blinds1);
+    fcmp_pp::OutputBlinds blinds_buf2 = fcmp_pp::output_blinds_to_buf(blinds2);
+    ASSERT_EQ(blinds_buf1, blinds_buf2);
+
+    // Check equality on branch blinds across the two blinds caches
+    // mainnet has ~150mn outputs at time of writing
+    const uint8_t n_layers = curve_trees->n_layers(150000000);
+    const auto c1_branch_blinds1 = blinds_cache->get_c1_branch_blinds(n_layers, 1/*n_inputs*/);
+    const auto c2_branch_blinds1 = blinds_cache->get_c2_branch_blinds(n_layers, 1/*n_inputs*/);
+
+    const auto c1_branch_blinds2 = blinds_cache2->get_c1_branch_blinds(n_layers, 1/*n_inputs*/);
+    const auto c2_branch_blinds2 = blinds_cache2->get_c2_branch_blinds(n_layers, 1/*n_inputs*/);
+
+    ASSERT_EQ(c1_branch_blinds1.size(), c1_branch_blinds2.size());
+    ASSERT_EQ(c2_branch_blinds1.size(), c2_branch_blinds2.size());
+
+    for (std::size_t i = 0; i < c1_branch_blinds1.size(); ++i)
+    {
+        fcmp_pp::BranchBlind c1_branch_blind_buf1 = fcmp_pp::selene_blind_to_buf(c1_branch_blinds1[i]);
+        fcmp_pp::BranchBlind c1_branch_blind_buf2 = fcmp_pp::selene_blind_to_buf(c1_branch_blinds2[i]);
+        ASSERT_EQ(c1_branch_blind_buf1, c1_branch_blind_buf2);
+    }
+
+    for (std::size_t i = 0; i < c2_branch_blinds1.size(); ++i)
+    {
+        fcmp_pp::BranchBlind c2_branch_blind_buf1 = fcmp_pp::helios_blind_to_buf(c2_branch_blinds1[i]);
+        fcmp_pp::BranchBlind c2_branch_blind_buf2 = fcmp_pp::helios_blind_to_buf(c2_branch_blinds2[i]);
+        ASSERT_EQ(c2_branch_blind_buf1, c2_branch_blind_buf2);
+    }
+
+    delete blinds_cache;
+    delete blinds_cache2;
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------

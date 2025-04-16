@@ -1360,6 +1360,7 @@ private:
       if(ver < 32)
         return;
       a & m_tree_cache;
+      a & m_blinds_cache;
     }
 
     BEGIN_SERIALIZE_OBJECT()
@@ -1406,6 +1407,7 @@ private:
       if (version < 3)
         return true;
       FIELD(m_tree_cache)
+      FIELD(m_blinds_cache)
     END_SERIALIZE()
 
     /*!

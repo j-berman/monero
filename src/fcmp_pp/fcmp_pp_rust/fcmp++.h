@@ -145,6 +145,12 @@ struct ObjectSlice
   uintptr_t len;
 };
 
+struct U8Slice
+{
+  const uint8_t *buf;
+  uintptr_t len;
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -211,13 +217,32 @@ CResult blind_i_blind(const struct SeleneScalar *i_blind);
 CResult blind_i_blind_blind(const struct SeleneScalar *i_blind_blind);
 CResult blind_c_blind(const struct SeleneScalar *c_blind);
 
+CResult o_blind_to_buf(const uint8_t *o_blind);
+CResult i_blind_to_buf(const uint8_t *i_blind);
+CResult i_blind_blind_to_buf(const uint8_t *i_blind_blind);
+CResult c_blind_to_buf(const uint8_t *c_blind);
+
+CResult o_blind_from_buf(struct U8Slice o_blind);
+CResult i_blind_from_buf(struct U8Slice i_blind);
+CResult i_blind_blind_from_buf(struct U8Slice i_blind_blind);
+CResult c_blind_from_buf(struct U8Slice c_blind);
+
 CResult output_blinds_new(const uint8_t *o_blind,
                                              const uint8_t *i_blind,
                                              const uint8_t *i_blind_blind,
                                              const uint8_t *c_blind);
 
+CResult output_blinds_to_buf(const uint8_t *output_blinds);
+CResult output_blinds_from_buf(struct U8Slice output_blinds);
+
 CResult helios_branch_blind(void);
 CResult selene_branch_blind(void);
+
+CResult selene_branch_blind_to_buf(const uint8_t *selene_blind);
+CResult helios_branch_blind_to_buf(const uint8_t *helios_blind);
+
+CResult selene_branch_blind_from_buf(struct U8Slice selene_blind);
+CResult helios_branch_blind_from_buf(struct U8Slice helios_blind);
 
 CResult fcmp_prove_input_new(const struct FcmpRerandomizedOutputCompressed *rerandomized_output,
                                         const uint8_t *path,

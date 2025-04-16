@@ -79,6 +79,25 @@ uint8_t *output_blinds_new(const uint8_t *blinded_o_blind,
     const uint8_t *blinded_i_blind_blind,
     const uint8_t *blinded_c_blind);
 
+OutputBlind o_blind_to_buf(const uint8_t *blinded_o_blind);
+OutputBlind i_blind_to_buf(const uint8_t *blinded_i_blind);
+OutputBlind i_blind_blind_to_buf(const uint8_t *blinded_i_blind_blind);
+OutputBlind c_blind_to_buf(const uint8_t *blinded_c_blind);
+
+uint8_t *o_blind_from_buf(const OutputBlind &o_blind);
+uint8_t *i_blind_from_buf(const OutputBlind &i_blind);
+uint8_t *i_blind_blind_from_buf(const OutputBlind &i_blind_blind);
+uint8_t *c_blind_from_buf(const OutputBlind &c_blind);
+
+OutputBlinds output_blinds_to_buf(const uint8_t *output_blinds);
+uint8_t *output_blinds_from_buf(const OutputBlinds &output_blinds);
+
+BranchBlind selene_blind_to_buf(const uint8_t *selene_blind);
+uint8_t *selene_blind_from_buf(const BranchBlind &selene_blind);
+
+BranchBlind helios_blind_to_buf(const uint8_t *helios_blind);
+uint8_t *helios_blind_from_buf(const BranchBlind &helios_blind);
+
 uint8_t *selene_branch_blind();
 uint8_t *helios_branch_blind();
 

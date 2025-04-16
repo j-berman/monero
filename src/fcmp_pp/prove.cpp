@@ -58,6 +58,25 @@ static uint8_t *handle_res_ptr(const std::string func, const ::CResult &res)
     return (uint8_t *) res.value;
 }
 //----------------------------------------------------------------------------------------------------------------------
+static std::vector<uint8_t> slice_from_res(const std::string func, ::CResult &res)
+{
+    if (res.err != nullptr)
+    {
+        free(res.err);
+        throw std::runtime_error("failed to " + func);
+    }
+
+    U8Slice *slice = (U8Slice *) res.value;
+
+    std::vector<uint8_t> buf;
+    buf.resize(slice->len);
+    memcpy(buf.data(), slice->buf, buf.size());
+
+    free(res.value);
+
+    return buf;
+}
+//----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 FcmpRerandomizedOutputCompressed rerandomize_output(const OutputBytes output)
 {
@@ -281,6 +300,90 @@ uint8_t *output_blinds_new(const uint8_t *blinded_o_blind,
     const uint8_t *blinded_c_blind)
 {
     auto res = ::output_blinds_new(blinded_o_blind, blinded_i_blind, blinded_i_blind_blind, blinded_c_blind);
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+OutputBlind o_blind_to_buf(const uint8_t *blinded_o_blind)
+{
+    auto res = ::o_blind_to_buf(blinded_o_blind);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+OutputBlind i_blind_to_buf(const uint8_t *blinded_i_blind)
+{
+    auto res = ::i_blind_to_buf(blinded_i_blind);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+OutputBlind i_blind_blind_to_buf(const uint8_t *blinded_i_blind_blind)
+{
+    auto res = ::i_blind_blind_to_buf(blinded_i_blind_blind);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+OutputBlind c_blind_to_buf(const uint8_t *blinded_c_blind)
+{
+    auto res = ::c_blind_to_buf(blinded_c_blind);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *o_blind_from_buf(const OutputBlind &o_blind)
+{
+    auto res = ::o_blind_from_buf({o_blind.data(), o_blind.size()});
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *i_blind_from_buf(const OutputBlind &i_blind)
+{
+    auto res = ::i_blind_from_buf({i_blind.data(), i_blind.size()});
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *i_blind_blind_from_buf(const OutputBlind &i_blind_blind)
+{
+    auto res = ::i_blind_blind_from_buf({i_blind_blind.data(), i_blind_blind.size()});
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *c_blind_from_buf(const OutputBlind &c_blind)
+{
+    auto res = ::c_blind_from_buf({c_blind.data(), c_blind.size()});
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+OutputBlinds output_blinds_to_buf(const uint8_t *output_blinds)
+{
+    auto res = ::output_blinds_to_buf(output_blinds);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *output_blinds_from_buf(const OutputBlinds &output_blinds)
+{
+    auto res = ::output_blinds_from_buf({output_blinds.data(), output_blinds.size()});
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+BranchBlind selene_blind_to_buf(const uint8_t *selene_blind)
+{
+    auto res = ::selene_branch_blind_to_buf(selene_blind);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *selene_blind_from_buf(const BranchBlind &selene_blind)
+{
+    auto res = ::selene_branch_blind_from_buf({selene_blind.data(), selene_blind.size()});
+    return handle_res_ptr(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+BranchBlind helios_blind_to_buf(const uint8_t *helios_blind)
+{
+    auto res = ::helios_branch_blind_to_buf(helios_blind);
+    return slice_from_res(__func__, res);
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint8_t *helios_blind_from_buf(const BranchBlind &helios_blind)
+{
+    auto res = ::helios_branch_blind_from_buf({helios_blind.data(), helios_blind.size()});
     return handle_res_ptr(__func__, res);
 }
 //----------------------------------------------------------------------------------------------------------------------

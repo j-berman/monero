@@ -86,13 +86,14 @@ static bool need_more_c2_blinds(const std::size_t prepare_n_min_inputs,
 //----------------------------------------------------------------------------------------------------------------------
 static std::vector<const uint8_t *> get_branch_blinds(std::mutex &mutex,
     const std::size_t n_needed,
-    std::deque<std::shared_ptr<PendingBlind>> &global_pending_blinds,
-    std::function<std::shared_ptr<PendingBlind>(void)> get_branch_blind_async,
+    std::deque<std::shared_ptr<BranchBlind>> &global_pending_blinds,
+    std::function<std::shared_ptr<BranchBlind>(void)> get_branch_blind_async,
+    std::function<const uint8_t*(BranchBlind&)> blind_from_buf,
     tools::threadpool::waiter &waiter)
 {
     std::lock_guard<std::mutex> guard(mutex);
 
-    std::vector<std::shared_ptr<PendingBlind>> pending_blinds;
+    std::vector<std::shared_ptr<BranchBlind>> pending_blinds;
 
     // Collect the pending blinds from the queue
     while (pending_blinds.size() < n_needed && global_pending_blinds.size())
@@ -113,7 +114,10 @@ static std::vector<const uint8_t *> get_branch_blinds(std::mutex &mutex,
     std::vector<const uint8_t *> branch_blinds;
     branch_blinds.reserve(pending_blinds.size());
     for (auto &pending_blind : pending_blinds)
-        branch_blinds.push_back(std::move(pending_blind->result));
+    {
+        CHECK_AND_ASSERT_THROW_MES(pending_blind != nullptr, "Pending blind must be != nullptr after waiting");
+        branch_blinds.push_back(blind_from_buf(*pending_blind));
+    }
 
     return branch_blinds;
 }
@@ -172,7 +176,7 @@ void BlindsCache<C1, C2>::add_output(const OutputPair &output)
     SeleneScalar i_blind_blind = fcmp_pp::i_blind_blind(rerandomized_output);
     SeleneScalar c_blind = fcmp_pp::c_blind(rerandomized_output);
 
-    m_output_blindings[output_ref] = PendingOutputBlinds{
+    m_output_blindings[output_ref] = OutputBlinds{
             .rerandomized_output = std::move(rerandomized_output),
 
             .blinded_o_blind = get_blinded_o_blind_async(o_blind),
@@ -199,27 +203,69 @@ uint8_t *BlindsCache<C1, C2>::get_output_blinds(const OutputPair &output,
     CHECK_AND_ASSERT_THROW_MES(m_waiter.wait(), "Failed waiting for output blinds");
 
     CHECK_AND_ASSERT_THROW_MES(m_output_blindings.find(output_ref) != m_output_blindings.end(), "missing output2");
-    const auto &output_bindings = m_output_blindings[output_ref];
-    rerandomized_output_out = output_bindings.rerandomized_output;
+    const auto &output_blinds = m_output_blindings[output_ref];
+
+    rerandomized_output_out = output_blinds.rerandomized_output;
+
+    CHECK_AND_ASSERT_THROW_MES(
+        output_blinds.blinded_o_blind != nullptr &&
+        output_blinds.blinded_i_blind != nullptr &&
+        output_blinds.blinded_i_blind_blind != nullptr &&
+        output_blinds.blinded_c_blind != nullptr, "expected non-null output blinds");
+
     return fcmp_pp::output_blinds_new(
-            output_bindings.blinded_o_blind->result,
-            output_bindings.blinded_i_blind->result,
-            output_bindings.blinded_i_blind_blind->result,
-            output_bindings.blinded_c_blind->result
+            fcmp_pp::o_blind_from_buf(*output_blinds.blinded_o_blind),
+            fcmp_pp::i_blind_from_buf(*output_blinds.blinded_i_blind),
+            fcmp_pp::i_blind_blind_from_buf(*output_blinds.blinded_i_blind_blind),
+            fcmp_pp::c_blind_from_buf(*output_blinds.blinded_c_blind)
         );
 }
 
 template uint8_t *BlindsCache<Selene, Helios>::get_output_blinds(const OutputPair &output,
     FcmpRerandomizedOutputCompressed &rerandomized_output_out);
 //----------------------------------------------------------------------------------------------------------------------
-template<typename C1, typename C2>
-std::vector<const uint8_t *> BlindsCache<C1, C2>::get_c1_branch_blinds(uint8_t n_layers, uint8_t n_inputs)
+template<>
+std::shared_ptr<BranchBlind> BlindsCache<Selene, Helios>::get_c1_branch_blind_async()
+{
+    std::shared_ptr<BranchBlind> pending_branch_blind = std::make_shared<BranchBlind>();
+
+    m_tpool->submit(&m_waiter,
+        [pending_branch_blind]()
+        {
+            // Do the expensive calculation
+            const uint8_t *branch_blind_ptr = fcmp_pp::selene_branch_blind();
+            *pending_branch_blind = fcmp_pp::selene_blind_to_buf(branch_blind_ptr);
+        },
+        true);
+
+    return pending_branch_blind;
+}
+//----------------------------------------------------------------------------------------------------------------------
+template<>
+std::shared_ptr<BranchBlind> BlindsCache<Selene, Helios>::get_c2_branch_blind_async()
+{
+    std::shared_ptr<BranchBlind> pending_branch_blind = std::make_shared<BranchBlind>();
+
+    m_tpool->submit(&m_waiter,
+        [pending_branch_blind]()
+        {
+            // Do the expensive calculation
+            const uint8_t *branch_blind_ptr = fcmp_pp::helios_branch_blind();
+            *pending_branch_blind = fcmp_pp::helios_blind_to_buf(branch_blind_ptr);
+        },
+        true);
+
+    return pending_branch_blind;
+}
+//----------------------------------------------------------------------------------------------------------------------
+template<>
+std::vector<const uint8_t *> BlindsCache<Selene, Helios>::get_c1_branch_blinds(uint8_t n_layers, uint8_t n_inputs)
 {
     // See how many branch blinds we will need to respond with
     const std::size_t n_needed = n_inputs * n_c1_branch_blinds_needed_per_input(n_layers);
 
     // Custom function to submit a task to get another c1 branch blind
-    const auto get_branch_blind_async = [this]() -> std::shared_ptr<PendingBlind>
+    const auto get_branch_blind_async = [this]() -> std::shared_ptr<BranchBlind>
     {
         return this->get_c1_branch_blind_async();
     };
@@ -228,22 +274,20 @@ std::vector<const uint8_t *> BlindsCache<C1, C2>::get_c1_branch_blinds(uint8_t n
         n_needed,
         m_pending_c1_branch_blinds,
         get_branch_blind_async,
+        fcmp_pp::selene_blind_from_buf,
         m_waiter);
 
     return c1_branch_blinds;
 }
-
-template std::vector<const uint8_t *> BlindsCache<Selene, Helios>::get_c1_branch_blinds(uint8_t n_layers,
-    uint8_t n_inputs);
 //----------------------------------------------------------------------------------------------------------------------
-template<typename C1, typename C2>
-std::vector<const uint8_t *> BlindsCache<C1, C2>::get_c2_branch_blinds(uint8_t n_layers, uint8_t n_inputs)
+template<>
+std::vector<const uint8_t *> BlindsCache<Selene, Helios>::get_c2_branch_blinds(uint8_t n_layers, uint8_t n_inputs)
 {
     // See how many branch blinds we will need to respond with
     const std::size_t n_needed = n_inputs * n_c2_branch_blinds_needed_per_input(n_layers);
 
     // Custom function to submit a task to get another c2 branch blind
-    const auto get_branch_blind_async = [this]() -> std::shared_ptr<PendingBlind>
+    const auto get_branch_blind_async = [this]() -> std::shared_ptr<BranchBlind>
     {
        return this->get_c2_branch_blind_async();
     };
@@ -252,19 +296,16 @@ std::vector<const uint8_t *> BlindsCache<C1, C2>::get_c2_branch_blinds(uint8_t n
         n_needed,
         m_pending_c2_branch_blinds,
         get_branch_blind_async,
+        fcmp_pp::helios_blind_from_buf,
         m_waiter);
 
     return c2_branch_blinds;
 }
-
-template std::vector<const uint8_t *> BlindsCache<Selene, Helios>::get_c2_branch_blinds(uint8_t n_layers,
-    uint8_t n_inputs);
 //----------------------------------------------------------------------------------------------------------------------
 template<typename C1, typename C2>
 void BlindsCache<C1, C2>::clear()
 {
     std::lock_guard<std::mutex> guard(m_mutex);
-
     CHECK_AND_ASSERT_THROW_MES(m_waiter.wait(), "Failed waiting on tasks to clear");
 
     // Clear the output bindings
@@ -285,8 +326,8 @@ void BlindsCache<C1, C2>::clear()
 
 template void BlindsCache<Selene, Helios>::clear();
 //----------------------------------------------------------------------------------------------------------------------
-template<typename C1, typename C2>
-void BlindsCache<C1, C2>::calc_needed_branch_blinds_async()
+template<>
+void BlindsCache<Selene, Helios>::calc_needed_branch_blinds_async()
 {
     std::lock_guard<std::mutex> guard(m_mutex);
 
@@ -313,107 +354,165 @@ void BlindsCache<C1, C2>::calc_needed_branch_blinds_async()
         break;
     }
 }
-
-template void BlindsCache<Selene, Helios>::calc_needed_branch_blinds_async();
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 // TODO: macro the below
-template<typename Selene, typename Helios>
-std::shared_ptr<PendingBlind> BlindsCache<Selene, Helios>::get_c1_branch_blind_async()
+template<>
+std::shared_ptr<OutputBlind> BlindsCache<Selene, Helios>::get_blinded_o_blind_async(const SeleneScalar o_blind)
 {
-    std::shared_ptr<PendingBlind> pending_branch_blind = std::make_shared<PendingBlind>();
-
-    m_tpool->submit(&m_waiter,
-        [pending_branch_blind]()
-        {
-            // Do the expensive calculation
-            pending_branch_blind->result = fcmp_pp::selene_branch_blind();
-        },
-        true);
-
-    return pending_branch_blind;
-}
-//----------------------------------------------------------------------------------------------------------------------
-template<typename Selene, typename Helios>
-std::shared_ptr<PendingBlind> BlindsCache<Selene, Helios>::get_c2_branch_blind_async()
-{
-    std::shared_ptr<PendingBlind> pending_branch_blind = std::make_shared<PendingBlind>();
-
-    m_tpool->submit(&m_waiter,
-        [pending_branch_blind]()
-        {
-            // Do the expensive calculation
-            pending_branch_blind->result = fcmp_pp::helios_branch_blind();
-        },
-        true);
-
-    return pending_branch_blind;
-}
-//----------------------------------------------------------------------------------------------------------------------
-template<typename Selene, typename Helios>
-std::shared_ptr<PendingBlind> BlindsCache<Selene, Helios>::get_blinded_o_blind_async(const SeleneScalar o_blind)
-{
-    std::shared_ptr<PendingBlind> pending_o_blind = std::make_shared<PendingBlind>();
+    std::shared_ptr<OutputBlind> pending_o_blind = std::make_shared<OutputBlind>();
 
     m_tpool->submit(&m_waiter,
         [pending_o_blind, o_blind]()
         {
             // Do the expensive calculation
-            pending_o_blind->result = fcmp_pp::blind_o_blind(o_blind);
+            const uint8_t *blind_ptr = fcmp_pp::blind_o_blind(o_blind);
+            *pending_o_blind = fcmp_pp::o_blind_to_buf(blind_ptr);
         },
         true);
 
     return pending_o_blind;
 }
 //----------------------------------------------------------------------------------------------------------------------
-template<typename Selene, typename Helios>
-std::shared_ptr<PendingBlind> BlindsCache<Selene, Helios>::get_blinded_i_blind_async(const SeleneScalar i_blind)
+template<>
+std::shared_ptr<OutputBlind> BlindsCache<Selene, Helios>::get_blinded_i_blind_async(const SeleneScalar i_blind)
 {
-    std::shared_ptr<PendingBlind> pending_i_blind = std::make_shared<PendingBlind>();
+    std::shared_ptr<OutputBlind> pending_i_blind = std::make_shared<OutputBlind>();
 
     m_tpool->submit(&m_waiter,
         [pending_i_blind, i_blind]()
         {
             // Do the expensive calculation
-            pending_i_blind->result = fcmp_pp::blind_i_blind(i_blind);
+            const uint8_t *blind_ptr = fcmp_pp::blind_i_blind(i_blind);
+            *pending_i_blind = fcmp_pp::i_blind_to_buf(blind_ptr);
         },
         true);
 
     return pending_i_blind;
 }
 //----------------------------------------------------------------------------------------------------------------------
-template<typename Selene, typename Helios>
-std::shared_ptr<PendingBlind> BlindsCache<Selene, Helios>::get_blinded_i_blind_blind_async(
+template<>
+std::shared_ptr<OutputBlind> BlindsCache<Selene, Helios>::get_blinded_i_blind_blind_async(
     const SeleneScalar i_blind_blind)
 {
-    std::shared_ptr<PendingBlind> pending_i_blind_blind = std::make_shared<PendingBlind>();
+    std::shared_ptr<OutputBlind> pending_i_blind_blind = std::make_shared<OutputBlind>();
 
     m_tpool->submit(&m_waiter,
         [pending_i_blind_blind, i_blind_blind]()
         {
             // Do the expensive calculation
-            pending_i_blind_blind->result = fcmp_pp::blind_i_blind_blind(i_blind_blind);
+            const uint8_t *blind_ptr = fcmp_pp::blind_i_blind_blind(i_blind_blind);
+            *pending_i_blind_blind = fcmp_pp::i_blind_blind_to_buf(blind_ptr);
         },
         true);
 
     return pending_i_blind_blind;
 }
 //----------------------------------------------------------------------------------------------------------------------
-template<typename Selene, typename Helios>
-std::shared_ptr<PendingBlind> BlindsCache<Selene, Helios>::get_blinded_c_blind_async(const SeleneScalar c_blind)
+template<>
+std::shared_ptr<OutputBlind> BlindsCache<Selene, Helios>::get_blinded_c_blind_async(const SeleneScalar c_blind)
 {
-    std::shared_ptr<PendingBlind> pending_c_blind = std::make_shared<PendingBlind>();
+    std::shared_ptr<OutputBlind> pending_c_blind = std::make_shared<OutputBlind>();
 
     m_tpool->submit(&m_waiter,
         [pending_c_blind, c_blind]()
         {
             // Do the expensive calculation
-            pending_c_blind->result = fcmp_pp::blind_c_blind(c_blind);
+            const uint8_t *blind_ptr = fcmp_pp::blind_c_blind(c_blind);
+            *pending_c_blind = fcmp_pp::c_blind_to_buf(blind_ptr);
         },
         true);
 
     return pending_c_blind;
 }
+//----------------------------------------------------------------------------------------------------------------------
+template<typename C1, typename C2>
+void BlindsCache<C1, C2>::export_serializable_members(
+    std::unordered_map<OutputPairRef, SerializableOutputBlinds> &output_blinds_out,
+    std::vector<BranchBlind> &c1_branch_blinds_out,
+    std::vector<BranchBlind> &c2_branch_blinds_out)
+{
+    std::lock_guard<std::mutex> guard(m_mutex);
+    CHECK_AND_ASSERT_THROW_MES(m_waiter.wait(), "Failed waiting on tasks to clear");
+
+    output_blinds_out.clear();
+    c1_branch_blinds_out.clear();
+    c2_branch_blinds_out.clear();
+
+    // Output blinds
+    for (const auto &output_blinds : m_output_blindings)
+    {
+        auto serializable_output_blinds = SerializableOutputBlinds{
+                .rerandomized_output   = cro2sro(output_blinds.second.rerandomized_output),
+
+                .blinded_o_blind       = *output_blinds.second.blinded_o_blind,
+                .blinded_i_blind       = *output_blinds.second.blinded_i_blind,
+                .blinded_i_blind_blind = *output_blinds.second.blinded_i_blind_blind,
+                .blinded_c_blind       = *output_blinds.second.blinded_c_blind,
+            };
+
+        output_blinds_out[output_blinds.first] = std::move(serializable_output_blinds);
+    }
+
+    // Branch blinds
+    c1_branch_blinds_out.reserve(m_pending_c1_branch_blinds.size());
+    for (const auto &c1_branch_blind : m_pending_c1_branch_blinds)
+        c1_branch_blinds_out.push_back(*c1_branch_blind);
+
+    c2_branch_blinds_out.reserve(m_pending_c2_branch_blinds.size());
+    for (const auto &c2_branch_blind : m_pending_c2_branch_blinds)
+        c2_branch_blinds_out.push_back(*c2_branch_blind);
+}
+
+// Explicit instantiation
+template void BlindsCache<Selene, Helios>::export_serializable_members(
+    std::unordered_map<OutputPairRef, SerializableOutputBlinds> &output_blinds_out,
+    std::vector<BranchBlind> &c1_branch_blinds_out,
+    std::vector<BranchBlind> &c2_branch_blinds_out);
+//----------------------------------------------------------------------------------------------------------------------
+template<typename C1, typename C2>
+void BlindsCache<C1, C2>::import_serializable_members(
+    std::unordered_map<OutputPairRef, SerializableOutputBlinds> &&output_blinds,
+    std::vector<BranchBlind> &&c1_branch_blinds,
+    std::vector<BranchBlind> &&c2_branch_blinds)
+{
+    std::lock_guard<std::mutex> guard(m_mutex);
+    CHECK_AND_ASSERT_THROW_MES(m_waiter.wait(), "Failed waiting on tasks to clear");
+
+    m_output_blindings.clear();
+    m_pending_c1_branch_blinds.clear();
+    m_pending_c2_branch_blinds.clear();
+
+    // Output blinds
+    for (auto &s_output_blinds_pair : output_blinds)
+    {
+        auto &s_blinds = s_output_blinds_pair.second;
+
+        auto output_blind = OutputBlinds{
+                .rerandomized_output   = std::move(sro2cro(s_blinds.rerandomized_output)),
+
+                .blinded_o_blind       = std::make_shared<OutputBlind>(std::move(s_blinds.blinded_o_blind)),
+                .blinded_i_blind       = std::make_shared<OutputBlind>(std::move(s_blinds.blinded_i_blind)),
+                .blinded_i_blind_blind = std::make_shared<OutputBlind>(std::move(s_blinds.blinded_i_blind_blind)),
+                .blinded_c_blind       = std::make_shared<OutputBlind>(std::move(s_blinds.blinded_c_blind)),
+            };
+
+        m_output_blindings[s_output_blinds_pair.first] = std::move(output_blind);
+    }
+
+    // Branch blinds
+    for (auto &c1_branch_blind : c1_branch_blinds)
+        m_pending_c1_branch_blinds.emplace_back(std::make_shared<BranchBlind>(std::move(c1_branch_blind)));
+
+    for (auto &c2_branch_blind : c2_branch_blinds)
+        m_pending_c2_branch_blinds.emplace_back(std::make_shared<BranchBlind>(std::move(c2_branch_blind)));
+}
+
+// Explicit instantiation
+template void BlindsCache<Selene, Helios>::import_serializable_members(
+    std::unordered_map<OutputPairRef, SerializableOutputBlinds> &&output_blinds,
+    std::vector<BranchBlind> &&c1_branch_blinds,
+    std::vector<BranchBlind> &&c2_branch_blinds);
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 }//namespace curve_trees

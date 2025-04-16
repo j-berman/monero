@@ -29,8 +29,17 @@
 #pragma once
 
 #include "common/threadpool.h"
+#include "common/unordered_containers_boost_serialization.h"
 #include "curve_trees.h"
 #include "fcmp_pp_types.h"
+#include "serialization/containers.h"
+#include "serialization/crypto.h"
+#include "serialization/pair.h"
+#include "serialization/serialization.h"
+
+#include <boost/serialization/deque.hpp>
+#include <boost/serialization/vector.hpp>
+#include <boost/serialization/version.hpp>
 
 #include <deque>
 #include <memory>
@@ -43,20 +52,44 @@ namespace fcmp_pp
 namespace curve_trees
 {
 //----------------------------------------------------------------------------------------------------------------------
-struct PendingBlind final
-{
-    uint8_t *result{nullptr};
-    PendingBlind() : result{nullptr} {};
-};
-
-struct PendingOutputBlinds final
+static constexpr int BLINDS_CACHE_VERSION = 0;
+//----------------------------------------------------------------------------------------------------------------------
+struct OutputBlinds final
 {
     FcmpRerandomizedOutputCompressed rerandomized_output;
 
-    std::shared_ptr<PendingBlind> blinded_o_blind;
-    std::shared_ptr<PendingBlind> blinded_i_blind;
-    std::shared_ptr<PendingBlind> blinded_i_blind_blind;
-    std::shared_ptr<PendingBlind> blinded_c_blind;
+    std::shared_ptr<OutputBlind> blinded_o_blind;
+    std::shared_ptr<OutputBlind> blinded_i_blind;
+    std::shared_ptr<OutputBlind> blinded_i_blind_blind;
+    std::shared_ptr<OutputBlind> blinded_c_blind;
+};
+
+struct SerializableOutputBlinds final
+{
+    SerializableRerandomizedOutput rerandomized_output;
+
+    OutputBlind blinded_o_blind;
+    OutputBlind blinded_i_blind;
+    OutputBlind blinded_i_blind_blind;
+    OutputBlind blinded_c_blind;
+
+    template <class Archive>
+    inline void serialize(Archive &a, const unsigned int ver)
+    {
+        a & rerandomized_output;
+        a & blinded_o_blind;
+        a & blinded_i_blind;
+        a & blinded_i_blind_blind;
+        a & blinded_c_blind;
+    }
+
+    BEGIN_SERIALIZE_OBJECT()
+        FIELD(rerandomized_output)
+        FIELD(blinded_o_blind)
+        FIELD(blinded_i_blind)
+        FIELD(blinded_i_blind_blind)
+        FIELD(blinded_c_blind)
+    END_SERIALIZE()
 };
 //----------------------------------------------------------------------------------------------------------------------
 template<typename C1, typename C2>
@@ -94,13 +127,21 @@ public:
 
 // Internal helper functions
 private:
-    std::shared_ptr<PendingBlind> get_blinded_o_blind_async(const SeleneScalar o_blind);
-    std::shared_ptr<PendingBlind> get_blinded_i_blind_async(const SeleneScalar i_blind);
-    std::shared_ptr<PendingBlind> get_blinded_i_blind_blind_async(const SeleneScalar i_blind_blind);
-    std::shared_ptr<PendingBlind> get_blinded_c_blind_async(const SeleneScalar c_blind);
+    std::shared_ptr<OutputBlind> get_blinded_o_blind_async(const SeleneScalar o_blind);
+    std::shared_ptr<OutputBlind> get_blinded_i_blind_async(const SeleneScalar i_blind);
+    std::shared_ptr<OutputBlind> get_blinded_i_blind_blind_async(const SeleneScalar i_blind_blind);
+    std::shared_ptr<OutputBlind> get_blinded_c_blind_async(const SeleneScalar c_blind);
 
-    std::shared_ptr<PendingBlind> get_c1_branch_blind_async();
-    std::shared_ptr<PendingBlind> get_c2_branch_blind_async();
+    std::shared_ptr<BranchBlind> get_c1_branch_blind_async();
+    std::shared_ptr<BranchBlind> get_c2_branch_blind_async();
+
+    void export_serializable_members(std::unordered_map<OutputPairRef, SerializableOutputBlinds> &output_blinds_out,
+        std::vector<BranchBlind> &c1_branch_blinds_out,
+        std::vector<BranchBlind> &c2_branch_blinds_out);
+
+    void import_serializable_members(std::unordered_map<OutputPairRef, SerializableOutputBlinds> &&output_blinds,
+        std::vector<BranchBlind> &&c1_branch_blinds,
+        std::vector<BranchBlind> &&c2_branch_blinds);
 
 // State held in memory
 private:
@@ -108,10 +149,10 @@ private:
 
     uint8_t m_n_tree_layers;
 
-    std::unordered_map<OutputPairRef, PendingOutputBlinds> m_output_blindings;
+    std::unordered_map<OutputPairRef, OutputBlinds> m_output_blindings;
 
-    std::deque<std::shared_ptr<PendingBlind>> m_pending_c1_branch_blinds;
-    std::deque<std::shared_ptr<PendingBlind>> m_pending_c2_branch_blinds;
+    std::deque<std::shared_ptr<BranchBlind>> m_pending_c1_branch_blinds;
+    std::deque<std::shared_ptr<BranchBlind>> m_pending_c2_branch_blinds;
 
 // Config
 private:
@@ -122,18 +163,47 @@ private:
     tools::threadpool::waiter m_waiter;
 
 // Serialization
-// TODO: serialization: grab the lock and wait for all tasks to finish, read all results from pending objects into serializable data types
-// TODO: de-serialization: grab the lock and wait for all tasks to finish, clear all pending objects, initialze pending objects by reading the serializable data types
-// public:
-//     template <class Archive>
-//     inline void serialize(Archive &a, const unsigned int ver)
-//     {
+public:
+    template <class Archive>
+    inline void serialize(Archive &a, const unsigned int ver)
+    {
+        std::unordered_map<OutputPairRef, SerializableOutputBlinds> output_blinds;
+        std::vector<BranchBlind> c1_branch_blinds;
+        std::vector<BranchBlind> c2_branch_blinds;
 
-//     }
+        if (typename Archive::is_saving())
+           this->export_serializable_members(output_blinds, c1_branch_blinds, c2_branch_blinds);
 
-//     BEGIN_SERIALIZE_OBJECT()
+        a & output_blinds;
+        a & c1_branch_blinds;
+        a & c2_branch_blinds;
 
-//     END_SERIALIZE()
+        if (!typename Archive::is_saving())
+            this->import_serializable_members(std::move(output_blinds),
+                std::move(c1_branch_blinds),
+                std::move(c2_branch_blinds));
+    }
+
+    BEGIN_SERIALIZE_OBJECT()
+        VERSION_FIELD(BLINDS_CACHE_VERSION)
+
+        std::unordered_map<OutputPairRef, SerializableOutputBlinds> output_blinds;
+        std::vector<BranchBlind> c1_branch_blinds;
+        std::vector<BranchBlind> c2_branch_blinds;
+
+        if (typename Archive<W>::is_saving())
+            this->export_serializable_members(output_blinds, c1_branch_blinds, c2_branch_blinds);
+
+        FIELD(output_blinds)
+        FIELD(c1_branch_blinds)
+        FIELD(c2_branch_blinds)
+
+        if (!typename Archive<W>::is_saving())
+            this->import_serializable_members(std::move(output_blinds),
+                std::move(c1_branch_blinds),
+                std::move(c2_branch_blinds));
+
+    END_SERIALIZE()
 };
 
 using BlindsCacheV1 = BlindsCache<Selene, Helios>;
@@ -143,3 +213,23 @@ using BlindsCacheV1 = BlindsCache<Selene, Helios>;
 }//namespace curve_trees
 }//namespace fcmp_pp
 
+// Since BOOST_CLASS_VERSION does not work for templated class, implement it
+namespace boost
+{
+namespace serialization
+{
+template<typename C1, typename C2>
+struct version<fcmp_pp::curve_trees::BlindsCache<C1, C2>>
+{
+    typedef mpl::int_<fcmp_pp::curve_trees::BLINDS_CACHE_VERSION> type;
+    typedef mpl::integral_c_tag tag;
+    static constexpr int value = version::type::value;
+    BOOST_MPL_ASSERT((
+        boost::mpl::less<
+            boost::mpl::int_<fcmp_pp::curve_trees::BLINDS_CACHE_VERSION>,
+            boost::mpl::int_<256>
+        >
+    ));
+};
+}
+}
