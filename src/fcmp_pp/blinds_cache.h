@@ -111,12 +111,12 @@ public:
 
     ~BlindsCache();
 
+    // Determines how many branch blinds we need and submits the branch calculation tasks to the threadpool
+    void calc_needed_branch_blinds_async();
+
     void set_n_tree_layers(uint8_t n_tree_layers);
 
     void add_output(const OutputPair &output);
-
-    // Determines how many branch blinds we need and submits the branch calculation tasks to the threadpool
-    void calc_needed_branch_blinds_async();
 
     uint8_t *get_output_blinds(const OutputPair &output, FcmpRerandomizedOutputCompressed &rerandomized_output_out);
 
