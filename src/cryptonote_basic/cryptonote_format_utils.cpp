@@ -447,7 +447,7 @@ namespace cryptonote
       + 1 /*unlock_time=0*/
       + 1 /*vin.size()<=FCMP_PLUS_PLUS_MAX_INPUTS*/
       + n_inputs * (txin_to_key_weight /*txin_to_key*/ + 1 /*txin_v tag*/)
-      + 1 /*vout.size()*/
+      + 1 /*vout.size()<=FCMP_PLUS_PLUS_MAX_OUTPUTS*/
       + (n_outputs * tx_out_weight /*tx_out*/)
       + (extra_len >= 128 ? 2 : 1) /*extra.size()*/
       + extra_len;
