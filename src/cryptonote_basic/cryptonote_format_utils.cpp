@@ -438,14 +438,14 @@ namespace cryptonote
       std::numeric_limits<uint64_t>::max(),
       "get_fcmp_pp_transaction_weight_v1: invalid extra_len");
 
-    static constexpr uint64_t txin_to_key_weight = 1 /*amount*/ + 1 /*key_offsets.size()*/ + 32 /*k_image*/;
+    static constexpr uint64_t txin_to_key_weight = 1 /*amount=0*/ + 1 /*key_offsets.size()=0*/ + 32 /*k_image*/;
     static constexpr uint64_t txout_to_carrot_weight = 32 /*key*/ + 3 /*view_tag*/ + 16 /*encrypted_janus_anchor*/;
-    static constexpr uint64_t tx_out_weight = 1 /*amount*/ + txout_to_carrot_weight + 1 /*txout_target_v tag*/;
+    static constexpr uint64_t tx_out_weight = 1 /*amount=0*/ + txout_to_carrot_weight + 1 /*txout_target_v tag*/;
 
     return
-      1 /*version*/
-      + 1 /*unlock_time*/
-      + 1 /*vin.size()*/
+      1 /*version=2*/
+      + 1 /*unlock_time=0*/
+      + 1 /*vin.size()<=FCMP_PLUS_PLUS_MAX_INPUTS*/
       + n_inputs * (txin_to_key_weight /*txin_to_key*/ + 1 /*txin_v tag*/)
       + 1 /*vout.size()*/
       + (n_outputs * tx_out_weight /*tx_out*/)
@@ -496,6 +496,9 @@ namespace cryptonote
     // BP+ clawback to price in linear verification times
     const uint64_t bp_clawback = get_transaction_weight_clawback(/*plus=*/true, n_outputs, n_padded_outputs);
     MDEBUG("bulletproof+ clawback: " << bp_clawback);
+    CHECK_AND_ASSERT_MES(std::numeric_limits<uint64_t>::max() - bp_clawback > bp_weight,
+      std::numeric_limits<uint64_t>::max(),
+      "get_fcmp_pp_transaction_weight_v1: overflow with bulletproof clawback");
     bp_weight += bp_clawback;
 
     // Much like bulletproofs, the verification time of a FCMP is linear in the number of inputs,
@@ -510,7 +513,7 @@ namespace cryptonote
     //        implications:
     //            i.  To determine the "correct" fee in multi-signer/cold-signer contexts, signers
     //                would have to transmit and agree upon what the current n_tree_layers value is,
-    //                which complicates these protocols, and is inherently difficulty to validate
+    //                which complicates these protocols, and is inherently difficult to validate
     //                for offline signers. It also just complicates the process for normal wallets.
     //            ii. If signers need guarantees that a signature for a transaction proposal with a
     //                certain fee isn't reused for similar transaction but with a different
@@ -521,10 +524,6 @@ namespace cryptonote
     //     b. Dropping the weight for low values of n_tree_layers directly incentivizes spenders of
     //        old enotes to use as small a value of n_tree_layers as possible, which hurts their
     //        anonymity.
-    //     c. For all spends of non-super-old enotes (the vast majority), the transaction creator
-    //        doesn't get to determine which value of n_tree_layers to use, it will always be what
-    //        the current real layer size is. From this perspective, it seems relatively useless
-    //        to price in a variable that participants can't control.
     //
     // We chose 7 specifically because at the time of writing (9 April 2025), the current layer size
     // of the Monero mainnet would be 6. 7 is approaching relatively quickly, and would be the value
