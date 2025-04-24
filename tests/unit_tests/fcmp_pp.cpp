@@ -45,9 +45,17 @@
 //----------------------------------------------------------------------------------------------------------------------
 struct OutputContextsAndKeys
 {
-    std::vector<crypto::secret_key> x_vec;
-    std::vector<crypto::secret_key> y_vec;
+    std::vector<unsigned char*> x_vec;
+    std::vector<unsigned char*> y_vec;
     std::vector<fcmp_pp::curve_trees::OutputContext> outputs;
+
+    ~OutputContextsAndKeys()
+    {
+        for (auto &x : x_vec)
+            free(x);
+        for (auto &y : y_vec)
+            free(y);
+    };
 };
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
@@ -136,29 +144,76 @@ static const OutputContextsAndKeys generate_random_outputs(const CurveTreesV1 &c
     const std::size_t new_n_leaf_tuples)
 {
     OutputContextsAndKeys outs;
-    outs.x_vec.resize(new_n_leaf_tuples);
-    outs.y_vec.resize(new_n_leaf_tuples);
-    outs.outputs.resize(new_n_leaf_tuples);
+    outs.x_vec.reserve(new_n_leaf_tuples);
+    outs.y_vec.reserve(new_n_leaf_tuples);
 
     tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
     tools::threadpool::waiter waiter(tpool);
 
+    // Generate random scalar seed
+    unsigned char* rng_seed = (unsigned char *) malloc(32);
+    CHECK_AND_ASSERT_THROW_MES(rng_seed, "Failed malloc rng_seed");
+    crypto::random32_unbiased(rng_seed);
+
+    // Constant 1
+    unsigned char* one = (unsigned char *) malloc(32);
+    CHECK_AND_ASSERT_THROW_MES(one, "Failed malloc one");
+    sc_1(one);
+
+    // Add 1 to random scalar seed for each subsequent scalar
+    LOG_PRINT_L1("Generating scalars from random seed");
+    std::vector<unsigned char*> o_vec;
+    std::vector<unsigned char*> c_vec;
+    for (std::size_t i = 0; i < new_n_leaf_tuples; ++i)
+    {
+        sc_add(rng_seed, one, rng_seed);
+        unsigned char *o = (unsigned char *) malloc(32);
+        CHECK_AND_ASSERT_THROW_MES(o, "Failed malloc o");
+        memcpy(o, rng_seed, 32);
+        o_vec.push_back(o);
+
+        sc_add(rng_seed, one, rng_seed);
+        unsigned char *c = (unsigned char *) malloc(32);
+        CHECK_AND_ASSERT_THROW_MES(c, "Failed malloc c");
+        memcpy(c, rng_seed, 32);
+        c_vec.push_back(c);
+
+        // Output pubkey O = xG + yT
+        // In this test, x is o, y is zero
+        outs.x_vec.push_back(o);
+
+        unsigned char *y = (unsigned char *) malloc(32);
+        CHECK_AND_ASSERT_THROW_MES(y, "Failed malloc y");
+        sc_0(y);
+        outs.y_vec.push_back(y);
+    }
+
+    LOG_PRINT_L1("Deriving pubkeys from scalars");
     const std::size_t batch_size = 1 + (new_n_leaf_tuples / (std::size_t)tpool.get_max_concurrency());
-    for (std::size_t i = 0; i < new_n_leaf_tuples; i+= batch_size)
+    outs.outputs.resize(new_n_leaf_tuples);
+    for (std::size_t i = 0; i < new_n_leaf_tuples; i += batch_size)
     {
         const std::size_t end = std::min(i + batch_size, new_n_leaf_tuples);
-        tpool.submit(&waiter, [&outs, i, end, old_n_leaf_tuples]()
+        tpool.submit(&waiter, [&o_vec, &c_vec, &outs, i, end, old_n_leaf_tuples]()
         {
             for (std::size_t j = i; j < end; ++j)
             {
                 const std::uint64_t output_id = old_n_leaf_tuples + j;
 
-                // Generate random output tuple
-                // Note: lock contention slows this down quite a bit
-                crypto::secret_key o,c;
+                // Get pubkey from scalars
+                // Not using secret_key because it's doing I/O that gums up threads
+                const auto scalar_to_pk = [](unsigned char *scalar, crypto::public_key &pk_out)
+                {
+                    sc_reduce32(scalar);
+                    ge_p3 point;
+                    ge_scalarmult_base(&point, scalar);
+                    ge_p3_tobytes((unsigned char*)pk_out.data, &point);
+                };
+
+                // Note: technically C can be any point on the curve, since we're not using c
                 crypto::public_key O,C;
-                crypto::generate_keys(O, o, o, false);
-                crypto::generate_keys(C, c, c, false);
+                scalar_to_pk(o_vec[j], O);
+                scalar_to_pk(c_vec[j], C);
 
                 rct::key C_key = rct::pk2rct(C);
                 auto output_pair = fcmp_pp::curve_trees::OutputPair{
@@ -171,20 +226,15 @@ static const OutputContextsAndKeys generate_random_outputs(const CurveTreesV1 &c
                         .output_pair = std::move(output_pair)
                     };
 
-                // Output pubkey O = xG + yT
-                // In this test, x is o, y is zero
-                crypto::secret_key x = std::move(o);
-                crypto::secret_key y;
-                sc_0((unsigned char *)y.data);
-
-                outs.x_vec[j] = std::move(x);
-                outs.y_vec[j] = std::move(y);
                 outs.outputs[j] = std::move(output_context);
             }
         });
     }
 
     CHECK_AND_ASSERT_THROW_MES(waiter.wait(), "Failed generating random outputs");
+
+    for (auto &c : c_vec)
+        free(c);
 
     return outs;
 }
@@ -213,7 +263,11 @@ TEST(fcmp_pp, prove)
     LOG_PRINT_L1("Finished generating random outputs");
     ASSERT_TRUE(global_tree.grow_tree(0, min_leaves_needed_for_tree_depth, new_outputs.outputs, false/*audit_tree*/));
 
-    LOG_PRINT_L1("Finished initializing tree with " << min_leaves_needed_for_tree_depth << " leaves");
+    const uint64_t n_leaf_tuples = global_tree.get_n_leaf_tuples();
+    const std::size_t n_layers = curve_trees->n_layers(n_leaf_tuples);
+    CHECK_AND_ASSERT_THROW_MES((tree_depth + 1) == n_layers, "unexpected n layers in tree");
+
+    LOG_PRINT_L1("Finished initializing tree with " << n_leaf_tuples << " leaves");
 
     const auto tree_root = global_tree.get_tree_root();
 
@@ -221,7 +275,7 @@ TEST(fcmp_pp, prove)
     std::vector<const uint8_t *> selene_branch_blinds;
     std::vector<const uint8_t *> helios_branch_blinds;
 
-    CHECK_AND_ASSERT_THROW_MES(global_tree.get_n_leaf_tuples() >= FCMP_PLUS_PLUS_MAX_INPUTS, "too few leaves");
+    CHECK_AND_ASSERT_THROW_MES(n_leaf_tuples >= FCMP_PLUS_PLUS_MAX_INPUTS, "too few leaves");
 
     // Create proofs with random leaf idxs for txs with [1..FCMP_PLUS_PLUS_MAX_INPUTS] inputs
     for (std::size_t n_inputs = 1; n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS; ++n_inputs)
@@ -235,7 +289,7 @@ TEST(fcmp_pp, prove)
         while (fcmp_prove_inputs.size() < n_inputs)
         {
             // Generate a random unique leaf tuple index within the tree
-            const size_t leaf_idx = crypto::rand_idx(global_tree.get_n_leaf_tuples());
+            const size_t leaf_idx = crypto::rand_idx(n_leaf_tuples);
             if (selected_indices.count(leaf_idx))
                 continue;
             else
@@ -252,8 +306,8 @@ TEST(fcmp_pp, prove)
             // ASSERT_TRUE(curve_trees->audit_path(path, output_pair, global_tree.get_n_leaf_tuples()));
             // LOG_PRINT_L1("Passed the audit...\n");
 
-            const auto x = (uint8_t *) new_outputs.x_vec[leaf_idx].data;
-            const auto y = (uint8_t *) new_outputs.y_vec[leaf_idx].data;
+            const uint8_t *x = (uint8_t *) new_outputs.x_vec[leaf_idx];
+            const uint8_t *y = (uint8_t *) new_outputs.y_vec[leaf_idx];
 
             // Leaves
             const auto path_for_proof = curve_trees->path_for_proof(path, output_tuple);
@@ -266,10 +320,10 @@ TEST(fcmp_pp, prove)
 
             pseudo_outs.emplace_back(rct::rct2pt(load_key(rerandomized_output.input.C_tilde)));
 
+            crypto::secret_key x_sec;
+            memcpy(&x_sec, x, 32);
             key_images.emplace_back();
-            crypto::generate_key_image(rct::rct2pk(path.leaves[output_idx].O),
-                new_outputs.x_vec[leaf_idx],
-                key_images.back());
+            crypto::generate_key_image(rct::rct2pk(path.leaves[output_idx].O), x_sec, key_images.back());
 
             // Set path
             const auto helios_scalar_chunks = fcmp_pp::tower_cycle::scalar_chunks_to_chunk_vector<fcmp_pp::HeliosT>(
@@ -323,7 +377,6 @@ TEST(fcmp_pp, prove)
 
         LOG_PRINT_L1("Constructing proof and verifying (n_inputs=" << n_inputs << ")");
         const crypto::hash tx_hash{};
-        const std::size_t n_layers = curve_trees->n_layers(global_tree.get_n_leaf_tuples());
         const auto proof = fcmp_pp::prove(
                 tx_hash,
                 fcmp_prove_inputs,
