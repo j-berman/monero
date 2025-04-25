@@ -140,6 +140,7 @@ namespace cryptonote
   bool parse_amount(uint64_t& amount, const std::string& str_amount);
   uint64_t get_fcmp_pp_prefix_weight_v1(const size_t n_inputs, const size_t n_outputs, const size_t extra_len);
   uint64_t get_fcmp_pp_unprunable_weight_v1(const size_t n_inputs, const size_t n_outputs, const size_t extra_len);
+  uint64_t get_fcmp_pp_membership_proof_weight(const size_t n_inputs);
   uint64_t get_fcmp_pp_transaction_weight_v1(const size_t n_inputs, const size_t n_outputs, const size_t extra_len);
   uint64_t get_fcmp_pp_transaction_weight_v1(const transaction_prefix &tx_prefix);
   uint64_t get_transaction_weight(const transaction &tx);

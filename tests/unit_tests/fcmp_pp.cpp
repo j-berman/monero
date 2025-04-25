@@ -90,6 +90,22 @@ static constexpr bool is_power_of_2(T v)
     return (v > 0) && ((v & (v - 1)) == 0);
 }
 //----------------------------------------------------------------------------------------------------------------------
+static void find_sums_to_n(size_t n, size_t max, std::vector<size_t> &cur, std::vector<std::vector<size_t>> &res)
+{
+    if (n == 0)
+    {
+        res.push_back(cur);
+        return;
+    }
+
+    for (size_t i = std::min(n, max); i > 0; --i)
+    {
+        cur.push_back(i);
+        find_sums_to_n(n - i, i, cur, res);
+        cur.pop_back();
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 static FcmpRerandomizedOutputCompressed rerandomize_output_manual(const rct::key &O, const rct::key &C)
 {
@@ -916,6 +932,39 @@ TEST(fcmp_pp, tx_weight_prefix_and_unprunable_byte_accuracy)
                 ASSERT_GE(unprunable_weight, example_tx.unprunable_size);
                 ASSERT_LE(unprunable_weight - example_tx.unprunable_size, allowed_weight_margin);
             }
+        }
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(fcmp_pp, fcmp_pp_membership_proof_weights)
+{
+    std::vector<uint64_t> weights;
+    for (size_t m = 1; m <= FCMP_PLUS_PLUS_MAX_INPUTS; ++m)
+    {
+        weights.push_back(cryptonote::get_fcmp_pp_membership_proof_weight(m));
+    }
+
+    // Test that all combinations of lower input weights >= actual weight for given m inputs
+    for (size_t m = 2; m <= weights.size(); ++m)
+    {
+        const uint64_t actual_weight = weights[m - 1];
+
+        std::vector<size_t> cur;
+        std::vector<std::vector<size_t>> sums_to_n_inputs;
+        find_sums_to_n(m, m - 1, cur, sums_to_n_inputs);
+
+        for (auto &sum_sets : sums_to_n_inputs)
+        {
+            size_t n_inputs = 0;
+            uint64_t other_weight = 0;
+            for (size_t j : sum_sets)
+            {
+                ASSERT_GT(j, 0);
+                n_inputs += j;
+                other_weight += weights[j - 1];
+            }
+            ASSERT_EQ(n_inputs, m);
+            ASSERT_GE(other_weight, actual_weight);
         }
     }
 }

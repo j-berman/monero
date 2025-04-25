@@ -105,6 +105,49 @@ namespace cryptonote
     return get_transaction_weight_clawback(plus, n_outputs, n_padded_outputs);
   }
   //---------------------------------------------------------------
+  static inline int is_power_of_2(size_t n) { return n && (n & (n-1)) == 0; }
+  //---------------------------------------------------------------
+  static uint64_t get_fcmp_pp_membership_proof_power_of_2_weight(const size_t n_padded_inputs)
+  {
+    CHECK_AND_ASSERT_THROW_MES_L1(is_power_of_2(n_padded_inputs), "expected power of 2");
+
+    // There's a few reasons why we treat n_tree_layers as a fixed value for weight calculation:
+    //     a. If we took n_tree_layers into account when calculating weight, then fee calculation
+    //        would be a function of the number of layers in the FCMP tree. This has a couple
+    //        implications:
+    //            i.  To determine the "correct" fee in multi-signer/cold-signer contexts, signers
+    //                would have to transmit and agree upon what the current n_tree_layers value is,
+    //                which complicates these protocols, and is inherently difficult to validate
+    //                for offline signers. It also just complicates the process for normal wallets.
+    //            ii. If signers need guarantees that a signature for a transaction proposal with a
+    //                certain fee isn't reused for similar transaction but with a different
+    //                n_tree_layers, and thus weight, then n_tree_layers would have to be included
+    //                in rctSigBase and hashed into the signable_tx_hash, which means an extra byte
+    //                per pruned transaction when wallets are refreshing. Also, more subjectively,
+    //                putting n_tree_layers into rctSigBase feels misplaced.
+    //     b. Dropping the weight for low values of n_tree_layers directly incentivizes spenders of
+    //        old enotes to use as small a value of n_tree_layers as possible, which hurts their
+    //        anonymity.
+    //
+    // We chose 7 specifically because at the time of writing (9 April 2025), the current layer size
+    // of the Monero mainnet would be 6. 7 is approaching relatively quickly, and would be the value
+    // for many decades at the current tx volume.
+    static constexpr size_t fake_n_tree_layers = 7;
+
+    const uint64_t fcmp_len = fcmp_pp::membership_proof_len(n_padded_inputs, fake_n_tree_layers);
+
+    const uint64_t fcmp_weight_base = fcmp_pp::membership_proof_len(/*n_inputs=*/1, fake_n_tree_layers);
+    const uint64_t fcmp_padded_weight = fcmp_weight_base * n_padded_inputs;
+
+    // A 80% clawback was chosen since it brings membership proof weight closest in line with
+    // tested verification times.
+    // TODO: re-test with production libs to be sure
+    const uint64_t fcmp_clawback = fcmp_padded_weight > fcmp_len
+      ? ((fcmp_padded_weight - fcmp_len) * 8 / 10)
+      : 0;
+    return fcmp_len + fcmp_clawback;
+  }
+  //---------------------------------------------------------------
 }
 
 namespace cryptonote
@@ -470,6 +513,30 @@ namespace cryptonote
       + (n_outputs * rct_sig_base_per_out_weight);
   }
   //---------------------------------------------------------------
+  uint64_t get_fcmp_pp_membership_proof_weight(const size_t n_inputs)
+  {
+    uint64_t fcmp_weight = 0;
+
+    // FCMP++ proof verification scales logarithmically. We calculate weight by
+    // matching the logarithmic verification time. This should maintain the
+    // property that given n inputs, the optimal membership proof is an n-input
+    // proof, rather than multiple proofs that add up to n inputs.
+    size_t cur_power_of_2 = 1;
+    size_t n_input_bits = n_inputs;
+    while (n_input_bits > 0)
+    {
+      if (n_input_bits & 0x01)
+      {
+        fcmp_weight += get_fcmp_pp_membership_proof_power_of_2_weight(cur_power_of_2);
+      }
+
+      cur_power_of_2 <<= 1;
+      n_input_bits >>= 1;
+    }
+
+    return fcmp_weight;
+  }
+  //---------------------------------------------------------------
   uint64_t get_fcmp_pp_transaction_weight_v1(const size_t n_inputs, const size_t n_outputs, const size_t extra_len)
   {
     MTRACE(__func__ << "(n_inputs=" << n_inputs << ", n_outputs=" << n_outputs << ", extra_len=" << extra_len);
@@ -501,39 +568,12 @@ namespace cryptonote
       "get_fcmp_pp_transaction_weight_v1: overflow with bulletproof clawback");
     bp_weight += bp_clawback;
 
-    // Much like bulletproofs, the verification time of a FCMP is linear in the number of inputs,
-    // rounded up to the nearest power of 2, so round n_inputs up to power of 2 to price this in
-    size_t n_padded_inputs = 1;
-    while (n_padded_inputs < n_inputs)
-      n_padded_inputs *= 2;
+    const uint64_t membership_proof_weight = get_fcmp_pp_membership_proof_weight(n_inputs);
 
-    // There's a few reasons why we treat n_tree_layers as a fixed value for weight calculation:
-    //     a. If we took n_tree_layers into account when calculating weight, then fee calculation
-    //        would be a function of the number of layers in the FCMP tree. This has a couple
-    //        implications:
-    //            i.  To determine the "correct" fee in multi-signer/cold-signer contexts, signers
-    //                would have to transmit and agree upon what the current n_tree_layers value is,
-    //                which complicates these protocols, and is inherently difficult to validate
-    //                for offline signers. It also just complicates the process for normal wallets.
-    //            ii. If signers need guarantees that a signature for a transaction proposal with a
-    //                certain fee isn't reused for similar transaction but with a different
-    //                n_tree_layers, and thus weight, then n_tree_layers would have to be included
-    //                in rctSigBase and hashed into the signable_tx_hash, which means an extra byte
-    //                per pruned transaction when wallets are refreshing. Also, more subjectively,
-    //                putting n_tree_layers into rctSigBase feels misplaced.
-    //     b. Dropping the weight for low values of n_tree_layers directly incentivizes spenders of
-    //        old enotes to use as small a value of n_tree_layers as possible, which hurts their
-    //        anonymity.
-    //
-    // We chose 7 specifically because at the time of writing (9 April 2025), the current layer size
-    // of the Monero mainnet would be 6. 7 is approaching relatively quickly, and would be the value
-    // for many decades at the current tx volume.
-    static constexpr size_t fake_n_tree_layers = 7;
-
-    const uint64_t fcmp_weight_base = fcmp_pp::membership_proof_len(/*n_inputs=*/1, fake_n_tree_layers);
-    const uint64_t fcmp_weight = fcmp_weight_base * n_padded_inputs;
-
-    const uint64_t rct_sig_prunable_weight = bp_weight + total_sal_weight + misc_fcmp_pp_weight + fcmp_weight;
+    const uint64_t rct_sig_prunable_weight = bp_weight
+      + total_sal_weight
+      + misc_fcmp_pp_weight
+      + membership_proof_weight;
 
     return unprunable_weight + rct_sig_prunable_weight;
   }
