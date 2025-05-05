@@ -902,7 +902,7 @@ unsafe fn fcmp_pp_verify_input_new_inner(
         .collect();
 
     // Read the FCMP++ proof
-    let fcmp_plus_plus = FcmpPlusPlus::read(&pseudo_outs, n_tree_layers, &mut proof).unwrap();
+    let fcmp_plus_plus = FcmpPlusPlus::read(&pseudo_outs, proof_len, &mut proof).unwrap();
 
     let tree_root: TreeRoot<Selene, Helios> = unsafe { tree_root.read() };
 
@@ -1047,11 +1047,12 @@ pub unsafe extern "C" fn fcmp_pp_verify_membership(inputs: Slice<[u8; 4 * 32]>,
         .map(|i| { let i = input_from_bytes(&mut i.as_slice())?; fcmps::Input::new(i.O_tilde(), i.I_tilde(), i.R(), i.C_tilde())})
         .collect::<Result<Vec<_>, _>>()
         else { return false };
+    debug_assert_eq!(fcmp_proof_len, _slow_membership_proof_size(inputs.len(), n_tree_layers));
 
     let tree_root = tree_root.read();
 
     let mut fcmp_proof_buf = core::slice::from_raw_parts(fcmp_proof, fcmp_proof_len);
-    let fcmp = match Fcmp::read(&mut fcmp_proof_buf, inputs.len(), n_tree_layers) {
+    let fcmp = match Fcmp::read(&mut fcmp_proof_buf, fcmp_proof_len) {
         Ok(p) => p,
         Err(_) => return false
     };
