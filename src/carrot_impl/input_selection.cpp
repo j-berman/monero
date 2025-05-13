@@ -316,7 +316,6 @@ std::vector<std::set<std::size_t>> form_preferred_input_candidate_subsets(
 std::vector<std::size_t> get_input_counts_in_preferred_order()
 {
     // 1 or 2 randomly, then
-    // other ascending powers of 2, then
     // other ascending positive numbers
 
     //! @TODO: MRL discussion about 2 vs 1 default input count when 1 input can pay. If we default
@@ -331,10 +330,16 @@ std::vector<std::size_t> get_input_counts_in_preferred_order()
         "refactor this function for different input count limits");
 
     const bool random_bit = 0 == (crypto::rand<uint8_t>() & 0x01);
-    if (random_bit)
-        return {2, 1, 4, 8, 3, 5, 6, 7};
-    else
-        return {1, 2, 4, 8, 3, 5, 6, 7};
+    std::vector<std::size_t> res = random_bit ? std::vector<std::size_t>{2, 1} : std::vector<std::size_t>{1, 2};
+
+    res.reserve(CARROT_MAX_TX_INPUTS);
+    for (std::size_t input_count = 3; input_count <= CARROT_MAX_TX_INPUTS; ++input_count)
+        res.emplace_back(input_count);
+
+    CHECK_AND_ASSERT_THROW_MES(res.size() == CARROT_MAX_TX_INPUTS,
+        "get_input_counts_in_preferred_order: incorrect res size");
+
+    return res;
 }
 //-------------------------------------------------------------------------------------------------------------------
 select_inputs_func_t make_single_transfer_input_selector(
