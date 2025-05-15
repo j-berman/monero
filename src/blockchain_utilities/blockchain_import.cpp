@@ -491,7 +491,7 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
           {
             std::vector<std::reference_wrapper<const transaction>> tx_refs;
             tx_refs.reserve(1 + txs.size());
-            tx_refs.push_back(std::ref(b.miner_tx));
+            tx_refs.push_back(std::cref(b.miner_tx));
             for (const auto &tx : txs)
               tx_refs.push_back(std::ref(tx.first));
             cryptonote::collect_transparent_amount_commitments(tx_refs, transparent_amount_commitments);

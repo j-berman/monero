@@ -778,7 +778,7 @@ bool ver_non_input_consensus(const transaction& tx, tx_verification_context& tvc
 {
     // Get tx's transparent amount commitments
     std::vector<std::reference_wrapper<const transaction>> tx_refs;
-    tx_refs.push_back(std::ref(tx));
+    tx_refs.push_back(std::cref(tx));
     std::unordered_map<uint64_t, rct::key> transparent_amount_commitments;
     collect_transparent_amount_commitments(tx_refs, transparent_amount_commitments);
 

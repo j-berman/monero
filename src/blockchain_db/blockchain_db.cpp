@@ -286,7 +286,7 @@ uint64_t BlockchainDB::add_block( const std::pair<block, blobdata>& blck
   crypto::hash tx_hash = crypto::null_hash;
   std::vector<std::reference_wrapper<const transaction>> tx_refs;
   tx_refs.reserve(1 + txs.size());
-  tx_refs.push_back(std::ref(blk.miner_tx));
+  tx_refs.push_back(std::cref(blk.miner_tx));
   for (const std::pair<transaction, blobdata>& tx : txs)
   {
     tx_hash = blk.tx_hashes[tx_i];

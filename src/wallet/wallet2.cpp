@@ -3048,7 +3048,7 @@ static void tree_sync_blocks_async(const TreeSyncStartParams &tree_sync_start_pa
     const auto &miner_tx = std::ref(parsed_blocks[i].block.miner_tx);
     std::vector<std::reference_wrapper<const transaction>> tx_refs;
     tx_refs.reserve(1 + parsed_blocks[i].txes.size());
-    tx_refs.push_back(std::ref(miner_tx));
+    tx_refs.push_back(std::cref(miner_tx));
     for (size_t j = 0; j < parsed_blocks[i].txes.size(); ++j)
       tx_refs.push_back(std::ref(parsed_blocks[i].txes[j]));
 
