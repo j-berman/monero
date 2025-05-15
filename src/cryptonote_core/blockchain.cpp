@@ -4599,8 +4599,9 @@ leave:
   TIME_MEASURE_START(tac);
 
   // Collect tx refs to avoid extra copies
-  std::vector<std::reference_wrapper<const transaction>> tx_refs = {std::ref(bl.miner_tx)};
+  std::vector<std::reference_wrapper<const transaction>> tx_refs;
   tx_refs.reserve(1 + txs.size());
+  tx_refs.push_back(std::ref(bl.miner_tx));
   for (const auto &tx : txs)
     tx_refs.push_back(std::ref(tx.first));
 
