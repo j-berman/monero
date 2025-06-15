@@ -178,8 +178,8 @@ void make_carrot_transaction_proposal_v1(const std::vector<CarrotPaymentProposal
     const std::size_t n_inputs = selected_inputs.size();
     CARROT_CHECK_AND_THROW(n_inputs >= CARROT_MIN_TX_INPUTS,
         too_few_inputs, "input selection returned too few inputs: " << n_inputs);
-    CARROT_CHECK_AND_THROW(n_inputs <= CARROT_MAX_TX_OUTPUTS,
-        too_few_inputs, "input selection returned too many inputs: " << n_inputs);
+    CARROT_CHECK_AND_THROW(n_inputs <= CARROT_MAX_TX_INPUTS,
+        too_many_inputs, "input selection returned too many inputs: " << n_inputs);
     CARROT_CHECK_AND_THROW(fee_per_input_count.count(n_inputs),
         carrot_logic_error, "BUG: fee_per_input_count populated with holes, missing: " << n_inputs);
     tx_proposal_out.fee = fee_per_input_count.at(n_inputs);
