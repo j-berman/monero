@@ -31,19 +31,18 @@
 #include "fcmp_pp_rust/fcmp++.h"
 #include "misc_log_ex.h"
 
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
+namespace fcmp_pp
+{
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 template <typename T>
-static constexpr T div_ceil(T dividend, T divisor)
+static T div_ceil(T dividend, T divisor)
 {
     static_assert(std::is_unsigned_v<T>, "T not unsigned int");
     CHECK_AND_ASSERT_THROW_MES(divisor > 0, "div_ceil: divisor must be > 0");
     return (dividend + divisor - 1) / divisor;
 }
-//-------------------------------------------------------------------------------------------------------------------
-//-------------------------------------------------------------------------------------------------------------------
-namespace fcmp_pp
-{
+//----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 std::size_t membership_proof_len(const std::size_t n_fcmp_inputs, const uint8_t n_layers)
 {
@@ -81,8 +80,7 @@ std::size_t fcmp_pp_proof_len(const std::size_t n_fcmp_inputs, const uint8_t n_l
 std::size_t get_n_fcmp_pps(const std::size_t n_tx_inputs)
 {
     CHECK_AND_ASSERT_THROW_MES(n_tx_inputs > 0, "get_n_fcmp_pps: n_tx_inputs is 0");
-    const std::size_t n_fcmp_pps = div_ceil(n_tx_inputs,
-        static_cast<std::size_t>(FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP));
+    const std::size_t n_fcmp_pps = div_ceil<std::size_t>(n_tx_inputs, FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP);
     CHECK_AND_ASSERT_THROW_MES(n_fcmp_pps > 0, "get_n_fcmp_pps: n_fcmp_pps is 0");
     return n_fcmp_pps;
 }
