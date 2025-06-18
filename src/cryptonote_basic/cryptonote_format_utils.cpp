@@ -440,7 +440,7 @@ namespace cryptonote
   {
     MTRACE(__func__ << "(n_inputs=" << n_inputs << ", n_outputs=" << n_outputs << ", extra_len=" << extra_len);
 
-    CHECK_AND_ASSERT_MES(n_inputs && n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS,
+    CHECK_AND_ASSERT_MES(n_inputs && n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX,
       std::numeric_limits<uint64_t>::max(),
       "get_fcmp_pp_transaction_weight_v1: invalid n_inputs");
     CHECK_AND_ASSERT_MES(n_outputs >= 2 && n_outputs <= FCMP_PLUS_PLUS_MAX_OUTPUTS,
@@ -455,8 +455,8 @@ namespace cryptonote
     static constexpr uint64_t tx_out_weight = 1 /*amount=0*/ + txout_to_carrot_weight + 1 /*txout_target_v tag*/;
 
     // varint len bumps from 2 to 3 at 16384
-    static_assert(16384 > FCMP_PLUS_PLUS_MAX_INPUTS, "16384 expected > FCMP_PLUS_PLUS_MAX_INPUTS");
-    static_assert(16384 > MAX_TX_EXTRA_SIZE,         "16384 expected > MAX_TX_EXTRA_SIZE");
+    static_assert(16384 > FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX, "16384 expected > FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX");
+    static_assert(16384 > MAX_TX_EXTRA_SIZE,                "16384 expected > MAX_TX_EXTRA_SIZE");
 
     // varint len bumps from 1 to 2 at 128
     static_assert(128 > FCMP_PLUS_PLUS_MAX_OUTPUTS, "128 expected > FCMP_PLUS_PLUS_MAX_OUTPUTS");
@@ -464,7 +464,7 @@ namespace cryptonote
     return
       1 /*version=2*/
       + 1 /*unlock_time=0*/
-      + (n_inputs >= 128 ? 2 : 1) /*vin.size()<=FCMP_PLUS_PLUS_MAX_INPUTS*/
+      + (n_inputs >= 128 ? 2 : 1) /*vin.size()<=FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX*/
       + n_inputs * (txin_to_key_weight /*txin_to_key*/ + 1 /*txin_v tag*/)
       + 1 /*vout.size()<=FCMP_PLUS_PLUS_MAX_OUTPUTS*/
       + (n_outputs * tx_out_weight /*tx_out*/)
@@ -520,12 +520,6 @@ namespace cryptonote
       "get_fcmp_pp_transaction_weight_v1: overflow with bulletproof clawback");
     bp_weight += bp_clawback;
 
-    // Much like bulletproofs, the verification time of a FCMP is linear in the number of inputs,
-    // rounded up to the nearest power of 2, so round n_inputs up to power of 2 to price this in
-    size_t n_padded_inputs = 1;
-    while (n_padded_inputs < n_inputs)
-      n_padded_inputs *= 2;
-
     // There's a few reasons why we treat n_tree_layers as a fixed value for weight calculation:
     //     a. If we took n_tree_layers into account when calculating weight, then fee calculation
     //        would be a function of the number of layers in the FCMP tree. This has a couple
@@ -550,9 +544,29 @@ namespace cryptonote
     static constexpr size_t fake_n_tree_layers = 7;
 
     const uint64_t fcmp_weight_base = fcmp_pp::membership_proof_len(/*n_inputs=*/1, fake_n_tree_layers);
-    const uint64_t fcmp_weight = fcmp_weight_base * n_padded_inputs;
 
-    const uint64_t rct_sig_prunable_weight = bp_weight + total_sal_weight + misc_fcmp_pp_weight + fcmp_weight;
+    const size_t n_fcmp_pps = fcmp_pp::get_n_fcmp_pps(n_inputs);
+    CHECK_AND_ASSERT_MES(n_fcmp_pps > 0, std::numeric_limits<uint64_t>::max(),
+      "get_fcmp_pp_transaction_weight_v1: n_fcmp_pps is 0");
+
+    // All membership proofs except maybe the last have FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP inputs
+    const uint64_t fully_packed_membership_proof_weights = (n_fcmp_pps - 1) * fcmp_weight_base
+      * FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP;
+
+    // The last has the remainder
+    const size_t last_fcmp_pp_n_inputs = fcmp_pp::get_last_fcmp_pp_n_inputs(n_inputs);
+    CHECK_AND_ASSERT_MES(last_fcmp_pp_n_inputs > 0, std::numeric_limits<uint64_t>::max(),
+      "get_fcmp_pp_transaction_weight_v1: last_fcmp_pp_n_inputs is 0");
+
+    // Much like bulletproofs, the verification time of a FCMP is linear in the number of inputs,
+    // rounded up to the nearest power of 2, so round n_inputs up to power of 2 to price this in
+    size_t last_n_padded_inputs = 1;
+    while (last_n_padded_inputs < last_fcmp_pp_n_inputs)
+      last_n_padded_inputs *= 2;
+    const uint64_t last_fcmp_weight = fcmp_weight_base * last_n_padded_inputs;
+
+    const uint64_t rct_sig_prunable_weight = bp_weight + total_sal_weight + misc_fcmp_pp_weight
+      + fully_packed_membership_proof_weights + last_fcmp_weight;
 
     return unprunable_weight + rct_sig_prunable_weight;
   }

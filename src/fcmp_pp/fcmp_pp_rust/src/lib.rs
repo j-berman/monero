@@ -845,11 +845,11 @@ pub extern "C" fn _slow_fcmp_pp_proof_size(n_inputs: usize, n_tree_layers: usize
 
 pub struct FcmpPpVerifyInput
 {
-    fcmp_pp: FcmpPlusPlus,
     tree_root: TreeRoot<Selene, Helios>,
     n_tree_layers: usize,
     signable_tx_hash: [u8; 32],
-    key_images: Vec<EdwardsPoint>,
+    fcmp_pps: Vec<FcmpPlusPlus>,
+    key_images: Vec<Vec<EdwardsPoint>>,
 }
 
 /// # Safety
@@ -859,12 +859,12 @@ pub struct FcmpPpVerifyInput
 #[no_mangle]
 pub unsafe extern "C" fn fcmp_pp_verify_input_new(
     signable_tx_hash: *const u8,
-    proof: *const u8,
-    proof_len: usize,
     n_tree_layers: usize,
     tree_root: *const TreeRoot<Selene, Helios>,
-    pseudo_outs: Slice<*const u8>,
-    key_images: Slice<*const u8>,
+    proofs: Slice<*const u8>,
+    proof_lens: Slice<usize>,
+    pseudo_outs: Slice<Slice<*const u8>>,
+    key_images: Slice<Slice<*const u8>>,
     fcmp_pp_verify_input_out: *mut *mut FcmpPpVerifyInput,
 ) -> c_int {
     if fcmp_pp_verify_input_out.is_null() {
@@ -872,52 +872,81 @@ pub unsafe extern "C" fn fcmp_pp_verify_input_new(
     }
 
     // Early checks
-    let n_inputs = pseudo_outs.len;
-    if n_inputs == 0 {
+    let n_proofs = proofs.len;
+    if n_proofs == 0 {
         return -2;
     }
-    if n_inputs != key_images.len {
+    if n_proofs != proof_lens.len || n_proofs != pseudo_outs.len || n_proofs != key_images.len {
         return -3;
     }
-    debug_assert_eq!(proof_len, _slow_fcmp_pp_proof_size(n_inputs, n_tree_layers));
 
-    let signable_tx_hash = unsafe { core::slice::from_raw_parts(signable_tx_hash, 32) };
+    let proofs: &[*const u8] = proofs.into();
+    let proof_lens: &[usize] = proof_lens.into();
+    let pseudo_outs: &[Slice<*const u8>] = pseudo_outs.into();
+    let key_images_slice: &[Slice<*const u8>] = key_images.into();
+    for i in 0..n_proofs {
+        let n_inputs = pseudo_outs[i].len;
+        if n_inputs == 0 {
+            return -4;
+        }
+        if n_inputs != key_images_slice[i].len {
+            return -5;
+        }
+        debug_assert_eq!(
+            proof_lens[i],
+            _slow_fcmp_pp_proof_size(n_inputs, n_tree_layers)
+        );
+    }
+
+    let signable_tx_hash = core::slice::from_raw_parts(signable_tx_hash, 32);
     let signable_tx_hash: [u8; 32] = signable_tx_hash.try_into().unwrap();
 
-    let mut proof: &[u8] = unsafe { core::slice::from_raw_parts(proof, proof_len) };
+    // Collect FCMP++ proofs
+    let mut fcmp_pps = Vec::<FcmpPlusPlus>::with_capacity(n_proofs);
+    for i in 0..n_proofs {
+        //  32 byte pseudo outs
+        let pseudo_outs_slice: &[*const u8] = (&pseudo_outs[i]).into();
+        let pseudo_outs_vec: Vec<[u8; 32]> = pseudo_outs_slice
+            .iter()
+            .map(|&x| {
+                let x = core::slice::from_raw_parts(x, 32);
+                let mut pseudo_out = [0u8; 32];
+                pseudo_out.copy_from_slice(x);
+                pseudo_out
+            })
+            .collect();
 
-    // 32 byte pseudo outs
-    let pseudo_outs: &[*const u8] = pseudo_outs.into();
-    let pseudo_outs: Vec<[u8; 32]> = pseudo_outs
-        .iter()
-        .map(|&x| {
-            let x = unsafe { core::slice::from_raw_parts(x, 32) };
-            let mut pseudo_out = [0u8; 32];
-            pseudo_out.copy_from_slice(x);
-            pseudo_out
-        })
-        .collect();
+        let mut proof: &[u8] = core::slice::from_raw_parts(proofs[i], proof_lens[i]);
 
-    // Read the FCMP++ proof
-    let Ok(fcmp_plus_plus) = FcmpPlusPlus::read(&pseudo_outs, n_tree_layers, &mut proof) else {
-        return -4;
-    };
+        // Read the FCMP++ proof
+        let Ok(fcmp_plus_plus) = FcmpPlusPlus::read(&pseudo_outs_vec, n_tree_layers, &mut proof)
+        else {
+            return -6;
+        };
+        fcmp_pps.push(fcmp_plus_plus);
+    }
 
-    let tree_root: TreeRoot<Selene, Helios> = unsafe { (*tree_root).clone() };
+    let tree_root: TreeRoot<Selene, Helios> = (*tree_root).clone();
 
-    // Collect de-compressed key images into a Vec
-    let key_images_slice: &[*const u8] = key_images.into();
-    let mut key_images = Vec::with_capacity(key_images_slice.len());
-    for compressed_ki in key_images_slice {
-        let Ok(key_image) = ed25519_point_from_bytes(compressed_ki.clone()) else { return -5 };
-        key_images.push(key_image);
+    // Collect de-compressed key images
+    let mut key_images = Vec::with_capacity(n_proofs);
+    for i in 0..n_proofs {
+        let inner_key_images_slice: &[*const u8] = (&key_images_slice[i]).into();
+        let mut inner_key_images = Vec::with_capacity(inner_key_images_slice.len());
+        for compressed_ki in inner_key_images_slice {
+            let Ok(key_image) = ed25519_point_from_bytes(compressed_ki.clone()) else {
+                return -7;
+            };
+            inner_key_images.push(key_image);
+        }
+        key_images.push(inner_key_images);
     }
 
     let fcmp_pp_verify_input = FcmpPpVerifyInput {
-        fcmp_pp: fcmp_plus_plus,
         tree_root,
         n_tree_layers,
         signable_tx_hash,
+        fcmp_pps,
         key_images,
     };
 
@@ -1016,18 +1045,24 @@ pub unsafe extern "C" fn fcmp_pp_verify(inputs: Slice<*const FcmpPpVerifyInput>)
         // Use ref so the input doesn't get consumed (the caller handles de-allocating)
         let fcmp_pp_verify_input = &*input;
 
-        let Ok(_) = fcmp_pp_verify_input.fcmp_pp.verify(
-            &mut OsRng,
-            &mut ed_verifier,
-            &mut c1_verifier,
-            &mut c2_verifier,
-            fcmp_pp_verify_input.tree_root.clone(),
-            fcmp_pp_verify_input.n_tree_layers,
-            fcmp_pp_verify_input.signable_tx_hash.clone(),
-            fcmp_pp_verify_input.key_images.clone(),
-        ) else {
+        if fcmp_pp_verify_input.fcmp_pps.len() != fcmp_pp_verify_input.key_images.len() {
             return false;
-        };
+        }
+
+        for i in 0..fcmp_pp_verify_input.fcmp_pps.len() {
+            let Ok(_) = fcmp_pp_verify_input.fcmp_pps[i].verify(
+                &mut OsRng,
+                &mut ed_verifier,
+                &mut c1_verifier,
+                &mut c2_verifier,
+                fcmp_pp_verify_input.tree_root.clone(),
+                fcmp_pp_verify_input.n_tree_layers,
+                fcmp_pp_verify_input.signable_tx_hash.clone(),
+                fcmp_pp_verify_input.key_images[i].clone(),
+            ) else {
+                return false;
+            };
+        }
     }
 
     // TODO: consider multithreading

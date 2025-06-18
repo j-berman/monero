@@ -190,7 +190,7 @@ rct::rctSigPrunable store_fcmp_proofs_to_rct_prunable_v1(
     rct::BulletproofPlus &&bulletproof_plus,
     const std::vector<FcmpRerandomizedOutputCompressed> &rerandomized_outputs,
     const std::vector<fcmp_pp::FcmpPpSalProof> &sal_proofs,
-    const fcmp_pp::FcmpMembershipProof &membership_proof,
+    const std::vector<fcmp_pp::FcmpMembershipProof> &membership_proofs,
     const std::uint64_t fcmp_reference_block,
     const std::uint8_t n_tree_layers);
 

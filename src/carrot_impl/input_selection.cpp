@@ -335,7 +335,7 @@ std::vector<std::size_t> get_input_counts_in_preferred_order()
     // preferring 1 vs 2. See: https://lavalle.pl/planning/node437.html. Con to this approach: if we
     // default to 1 over 2 always then there's scenarios where we net save tx fees and proving time.
 
-    static_assert(CARROT_MAX_TX_INPUTS == FCMP_PLUS_PLUS_MAX_INPUTS, "inconsistent input count max limit");
+    static_assert(CARROT_MAX_TX_INPUTS == FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX, "inconsistent input count max limit");
     static_assert(CARROT_MIN_TX_INPUTS == 1 && CARROT_MAX_TX_INPUTS >= 2,
         "Expect at least 1 min input and 2 max inputs");
 
@@ -416,7 +416,8 @@ select_inputs_func_t make_single_transfer_input_selector(
 
         std::set<std::size_t> all_idxs; for (std::size_t i = 0; i < input_candidates.size(); ++i) all_idxs.insert(i);
         const std::pair<std::size_t, boost::multiprecision::uint128_t> max_usable_money =
-            input_count_for_max_usable_money(input_candidates, all_idxs, FCMP_PLUS_PLUS_MAX_INPUTS, fee_by_input_count);
+            input_count_for_max_usable_money(
+                input_candidates, all_idxs, FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX, fee_by_input_count);
         CARROT_CHECK_AND_THROW(max_usable_money.second >= absolute_minimum_required_money,
             not_enough_usable_money,
             "Not enough usable money in top " << max_usable_money.first << " inputs ("
@@ -441,7 +442,7 @@ select_inputs_func_t make_single_transfer_input_selector(
 
             // Skip if not enough money in this selectable set for max number of tx inputs...
             const auto max_usable_money = input_count_for_max_usable_money(input_candidates,
-                input_candidate_subset, FCMP_PLUS_PLUS_MAX_INPUTS, fee_by_input_count);
+                input_candidate_subset, FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX, fee_by_input_count);
             if (!max_usable_money.first)
                 continue;
             else if (max_usable_money.second < required_money_by_input_count.at(max_usable_money.first))

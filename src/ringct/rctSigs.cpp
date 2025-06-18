@@ -1382,10 +1382,10 @@ done:
               CHECK_AND_ASSERT_MES(rv.p.MGs.empty(), false, "MGs are not empty for FCMP++");
               CHECK_AND_ASSERT_MES(rv.p.CLSAGs.empty(), false, "CLSAGs are not empty for FCMP++");
               CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size(), false, "Empty pseudo outs");
-              CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() <= FCMP_PLUS_PLUS_MAX_INPUTS, false, "Too many pseudo outs");
+              CHECK_AND_ASSERT_MES(rv.p.pseudoOuts.size() <= FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX, false, "Too many pseudo outs");
               CHECK_AND_ASSERT_MES(rv.p.n_tree_layers > 0, false, "0 tree layers");
               CHECK_AND_ASSERT_MES(rv.p.n_tree_layers <= FCMP_PLUS_PLUS_MAX_LAYERS, false, "Too many layers");
-              CHECK_AND_ASSERT_MES(rv.p.fcmp_pp.size() == fcmp_pp::fcmp_pp_proof_len(rv.p.pseudoOuts.size(), rv.p.n_tree_layers), false, "Unexpected FCMP++ proof size");
+              CHECK_AND_ASSERT_MES(fcmp_pp::fcmp_pps_are_expected_size(rv.p.fcmp_pps, rv.p.pseudoOuts.size(), rv.p.n_tree_layers), false, "Unexpected FCMP++ proof size");
             }
             else if (is_rct_clsag(rv.type))
             {
@@ -1524,9 +1524,9 @@ done:
             pseudo_outs.emplace_back(rct::rct2pt(po));
 
           bool r = fcmp_pp::verify(rct::rct2hash(message),
-              rv.p.fcmp_pp,
               rv.p.n_tree_layers,
               rv.p.fcmp_ver_helper_data.tree_root,
+              rv.p.fcmp_pps,
               pseudo_outs,
               rv.p.fcmp_ver_helper_data.key_images);
 

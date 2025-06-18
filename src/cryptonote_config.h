@@ -214,7 +214,11 @@
 // Discussions on PoW-enabled relay for high input txs:
 // https://libera.monerologs.net/monero-research-lab/20250430#c522449-c522790
 // https://libera.monerologs.net/no-wallet-left-behind/20250505#c523568-c523686
-#define FCMP_PLUS_PLUS_MAX_INPUTS               128
+// FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP < FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX so that
+// tx construction for many-input txs doesn't take minutes
+#define FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX        128
+#define FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP      8
+
 #define FCMP_PLUS_PLUS_MAX_OUTPUTS              16
 
 // Restricting n layers keeps the proof_len table size very small and portable

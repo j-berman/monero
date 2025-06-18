@@ -140,6 +140,18 @@ struct ObjectSlice
   uintptr_t len;
 };
 
+struct ObjectSliceSlice
+{
+  const struct ObjectSlice *buf;
+  uintptr_t len;
+};
+
+struct UsizeSlice
+{
+  const uintptr_t *buf;
+  uintptr_t len;
+};
+
 struct TreeRootUnsafe;
 
 struct PathUnsafe;
@@ -323,12 +335,12 @@ uintptr_t _slow_membership_proof_size(uintptr_t n_inputs, uintptr_t n_tree_layer
 uintptr_t _slow_fcmp_pp_proof_size(uintptr_t n_inputs, uintptr_t n_tree_layers);
 
 int fcmp_pp_verify_input_new(const uint8_t *signable_tx_hash,
-                                             const uint8_t *fcmp_pp_proof,
-                                             uintptr_t fcmp_pp_proof_len,
                                              uintptr_t n_tree_layers,
                                              const struct TreeRootUnsafe *tree_root,
-                                             struct ObjectSlice pseudo_outs,
-                                             struct ObjectSlice key_images,
+                                             const struct ObjectSlice fcmp_pp_proofs,
+                                             const struct UsizeSlice fcmp_pp_proof_lens,
+                                             const struct ObjectSliceSlice pseudo_outs,
+                                             const struct ObjectSliceSlice key_images,
                                              struct FcmpPpVerifyInputUnsafe **fcmp_pp_verify_input_out);
 
 void destroy_fcmp_pp_verify_input(struct FcmpPpVerifyInputUnsafe *fcmp_pp_verify_input);

@@ -366,7 +366,7 @@ namespace boost
     {
       a & x.reference_block;
       a & x.n_tree_layers;
-      a & x.fcmp_pp;
+      a & x.fcmp_pps;
     }
     if (x.rangeSigs.empty())
       a & x.pseudoOuts;
@@ -402,7 +402,7 @@ namespace boost
     {
       a & x.p.reference_block;
       a & x.p.n_tree_layers;
-      a & x.p.fcmp_pp;
+      a & x.p.fcmp_pps;
     }
     if (x.type == rct::RCTTypeBulletproof || x.type == rct::RCTTypeBulletproof2 || x.type == rct::RCTTypeCLSAG || x.type == rct::RCTTypeBulletproofPlus || x.type == rct::RCTTypeFcmpPlusPlus)
       a & x.p.pseudoOuts;

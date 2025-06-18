@@ -285,17 +285,17 @@ bool verify(const std::vector<fcmp_pp::FcmpPpVerifyInput> &fcmp_pp_verify_inputs
 }
 //----------------------------------------------------------------------------------------------------------------------
 bool verify(const crypto::hash &signable_tx_hash,
-    const fcmp_pp::FcmpPpProof &fcmp_pp_proof,
     const std::size_t n_tree_layers,
     const fcmp_pp::TreeRootShared &tree_root,
+    const std::vector<fcmp_pp::FcmpPpProof> &fcmp_pp_proofs,
     const std::vector<crypto::ec_point> &pseudo_outs,
     const std::vector<crypto::key_image> &key_images)
 {
     auto fcmp_pp_verify_input = fcmp_pp::fcmp_pp_verify_input_new(
             signable_tx_hash,
-            fcmp_pp_proof,
             n_tree_layers,
             tree_root,
+            fcmp_pp_proofs,
             pseudo_outs,
             key_images
         );

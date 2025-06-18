@@ -57,7 +57,7 @@ namespace
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 static constexpr rct::xmr_amount MAX_AMOUNT_FCMP_PP = MONEY_SUPPLY /
-(FCMP_PLUS_PLUS_MAX_INPUTS + FCMP_PLUS_PLUS_MAX_OUTPUTS + 1);
+(FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX + FCMP_PLUS_PLUS_MAX_OUTPUTS + 1);
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 using CarrotEnoteVariant = tools::variant<CarrotCoinbaseEnoteV1, CarrotEnoteV1>;
@@ -204,8 +204,10 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
     alice.generate();
     bob.generate();
 
-    const size_t n_inputs = crypto::rand_range<size_t>(CARROT_MIN_TX_INPUTS, FCMP_PLUS_PLUS_MAX_INPUTS);
-    const size_t n_outputs = crypto::rand_range<size_t>(CARROT_MIN_TX_OUTPUTS, FCMP_PLUS_PLUS_MAX_OUTPUTS);
+    const size_t n_inputs = FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX; // crypto::rand_range<size_t>(CARROT_MIN_TX_INPUTS, FCMP_PLUS_PLUS_MAX_INPUTS);
+    const size_t n_outputs = FCMP_PLUS_PLUS_MAX_OUTPUTS; // crypto::rand_range<size_t>(CARROT_MIN_TX_OUTPUTS, FCMP_PLUS_PLUS_MAX_OUTPUTS);
+
+    LOG_PRINT_L1("FCMP++ tx weight: " << std::to_string(cryptonote::get_fcmp_pp_transaction_weight_v1(n_inputs, n_outputs, 0)));
 
     const std::size_t selene_chunk_width = fcmp_pp::curve_trees::SELENE_CHUNK_WIDTH;
     const std::size_t helios_chunk_width = fcmp_pp::curve_trees::HELIOS_CHUNK_WIDTH;
@@ -531,18 +533,25 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
 
     // Make FCMP membership proof
     LOG_PRINT_L1("Generating FCMP++ membership proofs");
-    std::vector<fcmp_pp::FcmpPpProveMembershipInput> fcmp_proof_inputs_rust;
+    std::vector<std::vector<fcmp_pp::FcmpPpProveMembershipInput>> fcmp_proof_inputs_rust;
+    fcmp_proof_inputs_rust.emplace_back();
     for (size_t i = 0; i < n_inputs; ++i)
     {
+        if (fcmp_proof_inputs_rust.back().size() == FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP)
+            fcmp_proof_inputs_rust.emplace_back();
+
         fcmp_pp::ProofInput &proof_input = fcmp_proof_inputs.at(i);
-        fcmp_proof_inputs_rust.push_back(fcmp_pp::fcmp_pp_prove_input_new(
+        fcmp_proof_inputs_rust.back().push_back(fcmp_pp::fcmp_pp_prove_input_new(
             proof_input.path,
             proof_input.output_blinds,
             proof_input.selene_branch_blinds,
             proof_input.helios_branch_blinds));
     }
-    const fcmp_pp::FcmpMembershipProof membership_proof = fcmp_pp::prove_membership(fcmp_proof_inputs_rust,
-        n_tree_layers);
+
+    std::vector<fcmp_pp::FcmpMembershipProof> membership_proofs;
+    membership_proofs.reserve(fcmp_proof_inputs_rust.size());
+    for (const auto &proof_input : fcmp_proof_inputs_rust)
+        membership_proofs.emplace_back(fcmp_pp::prove_membership(proof_input, n_tree_layers));
 
     // Attach rctSigPrunable to tx
     LOG_PRINT_L1("Storing rctSig prunable");
@@ -550,7 +559,7 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
     tx.rct_signatures.p = store_fcmp_proofs_to_rct_prunable_v1(std::move(bpp),
         rerandomized_outputs,
         sal_proofs,
-        membership_proof,
+        membership_proofs,
         fcmp_block_reference_index,
         n_tree_layers);
     tx.pruned = false;
@@ -596,11 +605,13 @@ TEST(carrot_fcmp, receive_scan_spend_and_verify_serialized_carrot_tx)
     ASSERT_EQ(deserialized_tx.vin.size(), n_inputs);
     ASSERT_EQ(deserialized_tx.vin.size(), deserialized_tx.rct_signatures.p.fcmp_ver_helper_data.key_images.size());
     ASSERT_EQ(deserialized_tx.vin.size(), deserialized_tx.rct_signatures.p.pseudoOuts.size());
-    ASSERT_GT(deserialized_tx.rct_signatures.p.fcmp_pp.size(), (3*32 + FCMP_PP_SAL_PROOF_SIZE_V1) * n_inputs);
     for (size_t i = 0; i < n_inputs; ++i)
     {
-        const uint8_t * const pbytes = deserialized_tx.rct_signatures.p.fcmp_pp.data() +
-            (3*32 + FCMP_PP_SAL_PROOF_SIZE_V1) * i;
+        const size_t fcmp_pp_idx = i / FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP;
+        const auto &fcmp_pp = deserialized_tx.rct_signatures.p.fcmp_pps.at(fcmp_pp_idx);
+        const size_t fcmp_pp_input_idx = i % FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP;
+        ASSERT_GT(fcmp_pp.size(), (3*32 + FCMP_PP_SAL_PROOF_SIZE_V1) * fcmp_pp_input_idx);
+        const uint8_t * const pbytes = fcmp_pp.data() + (3*32 + FCMP_PP_SAL_PROOF_SIZE_V1) * fcmp_pp_input_idx;
         FcmpInputCompressed input;
         fcmp_pp::FcmpPpSalProof sal_proof(FCMP_PP_SAL_PROOF_SIZE_V1);
         memcpy(&input, pbytes, 3*32);

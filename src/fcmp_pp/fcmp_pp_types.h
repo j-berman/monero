@@ -118,9 +118,9 @@ DEFINE_FCMP_FFI_TYPE(FcmpPpProveMembershipInput,
 
 DEFINE_FCMP_FFI_TYPE(FcmpPpVerifyInput,
     fcmp_pp_verify_input_new(const crypto::hash &signable_tx_hash,
-        const fcmp_pp::FcmpPpProof &fcmp_pp_proof,
         const std::size_t n_tree_layers,
         const fcmp_pp::TreeRootShared &tree_root,
+        const std::vector<fcmp_pp::FcmpPpProof> &fcmp_pp_proofs,
         const std::vector<crypto::ec_point> &pseudo_outs,
         const std::vector<crypto::key_image> &key_images));
 //----------------------------------------------------------------------------------------------------------------------
@@ -150,11 +150,18 @@ struct FcmpVerifyHelperData final
     TreeRootShared tree_root;
     std::vector<crypto::key_image> key_images;
 };
-
-// Serialize types into a single byte buffer
-FcmpPpProof fcmp_pp_proof_from_parts_v1(const std::vector<FcmpRerandomizedOutputCompressed> &rerandomized_outputs,
+//----------------------------------------------------------------------------------------------------------------------
+FcmpPpProof fcmp_pp_proof_from_parts_v1(
+    const std::vector<FcmpRerandomizedOutputCompressed> &rerandomized_outputs,
     const std::vector<FcmpPpSalProof> &sal_proofs,
     const FcmpMembershipProof &membership_proof,
+    const std::uint8_t n_tree_layers);
+
+// Serialize FCMP++ parts into FCMP++ proof byte buffers
+std::vector<FcmpPpProof> fcmp_pp_proofs_from_parts_v1(
+    const std::vector<FcmpRerandomizedOutputCompressed> &rerandomized_outputs,
+    const std::vector<FcmpPpSalProof> &sal_proofs,
+    const std::vector<FcmpMembershipProof> &membership_proofs,
     const std::uint8_t n_tree_layers);
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------

@@ -517,13 +517,13 @@ rct::rctSigPrunable store_fcmp_proofs_to_rct_prunable_v1(
     rct::BulletproofPlus &&bulletproof_plus,
     const std::vector<FcmpRerandomizedOutputCompressed> &rerandomized_outputs,
     const std::vector<fcmp_pp::FcmpPpSalProof> &sal_proofs,
-    const fcmp_pp::FcmpMembershipProof &membership_proof,
+    const std::vector<fcmp_pp::FcmpMembershipProof> &membership_proofs,
     const std::uint64_t fcmp_reference_block,
     const std::uint8_t n_tree_layers)
 {
-    fcmp_pp::FcmpPpProof fcmp_pp_proof_bytes = fcmp_pp::fcmp_pp_proof_from_parts_v1(rerandomized_outputs,
+    auto fcmp_pp_proofs = fcmp_pp::fcmp_pp_proofs_from_parts_v1(rerandomized_outputs,
         sal_proofs,
-        membership_proof,
+        membership_proofs,
         n_tree_layers);
 
     // extract C~
@@ -537,7 +537,7 @@ rct::rctSigPrunable store_fcmp_proofs_to_rct_prunable_v1(
         .pseudoOuts = std::move(pseudoOuts),
         .reference_block = fcmp_reference_block,
         .n_tree_layers = n_tree_layers,
-        .fcmp_pp = std::move(fcmp_pp_proof_bytes)
+        .fcmp_pps = std::move(fcmp_pp_proofs)
     };
 }
 //-------------------------------------------------------------------------------------------------------------------

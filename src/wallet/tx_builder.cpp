@@ -268,7 +268,7 @@ static std::vector<carrot::CarrotTransactionProposalV1> make_carrot_transaction_
         selfsend_payment_proposals.back().proposal.enote_type = carrot::CarrotEnoteType::CHANGE;
 
     // make `n_txs` tx proposals with `n_dests_per_tx` payment proposals each
-    const size_t n_txs = div_ceil<size_t>(n_inputs, FCMP_PLUS_PLUS_MAX_INPUTS);
+    const size_t n_txs = div_ceil<size_t>(n_inputs, FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX);
     std::vector<carrot::CarrotTransactionProposalV1> tx_proposals(n_txs);
     for (carrot::CarrotTransactionProposalV1 &tx_proposal : tx_proposals)
     {
@@ -1113,10 +1113,14 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
         "finalize_all_proofs_from_transfer_details: some prove jobs failed");
 
     // collect FCMP Rust API proving structures
-    std::vector<fcmp_pp::FcmpPpProveMembershipInput> membership_proving_inputs;
-    membership_proving_inputs.reserve(n_inputs);
+    std::vector<std::vector<fcmp_pp::FcmpPpProveMembershipInput>> membership_proving_inputs;
+    membership_proving_inputs.reserve(fcmp_pp::get_n_fcmp_pps(n_inputs));
+    membership_proving_inputs.emplace_back();
     for (size_t i = 0; i < n_inputs; ++i)
     {
+        if (membership_proving_inputs.back().size() == FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP)
+            membership_proving_inputs.emplace_back();
+
         const fcmp_pp::Path &path_rust = fcmp_paths_rust.at(i);
         const fcmp_pp::OutputBlinds output_blinds = fcmp_pp::output_blinds_new(
             blinded_o_blinds.at(i),
@@ -1138,7 +1142,7 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
             helios_branch_blinds.emplace_back(std::move(flat_helios_branch_blinds.at(flat_idx)));
         }
 
-        membership_proving_inputs.push_back(fcmp_pp::fcmp_pp_prove_input_new(
+        membership_proving_inputs.back().push_back(fcmp_pp::fcmp_pp_prove_input_new(
             path_rust,
             output_blinds,
             selene_branch_blinds,
@@ -1147,21 +1151,37 @@ cryptonote::transaction finalize_all_proofs_from_transfer_details(
 
     // prove membership
     PERF_TIMER(prove_membership);
-    const fcmp_pp::FcmpMembershipProof membership_proof = fcmp_pp::prove_membership(membership_proving_inputs,
-        n_tree_layers);
+
+    tools::threadpool::waiter membership_waiter(tpool);
+    std::vector<fcmp_pp::FcmpMembershipProof> membership_proofs(membership_proving_inputs.size());
+
+    for (size_t i = 0; i < membership_proofs.size(); ++i)
+    {
+        tpool.submit(&membership_waiter,
+            [&membership_proving_inputs, &membership_proofs, n_tree_layers, n_inputs, i]() {
+                membership_proofs[i] = fcmp_pp::prove_membership(membership_proving_inputs[i], n_tree_layers);
+
+                const size_t exp_sz = (i < (membership_proofs.size() - 1))
+                    ? fcmp_pp::membership_proof_len(FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP, n_tree_layers)
+                    : fcmp_pp::get_last_membership_proof_len(n_inputs, n_tree_layers);
+                CHECK_AND_ASSERT_THROW_MES(membership_proofs[i].size() == exp_sz,
+                    "finalize_all_proofs_from_transfer_details: unexpected FCMP membership proof length");
+            });
+    }
+    CHECK_AND_ASSERT_THROW_MES(membership_waiter.wait(),
+        "finalize_all_proofs_from_transfer_details: proving membership failed");
     PERF_TIMER_PAUSE(prove_membership);
-    CHECK_AND_ASSERT_THROW_MES(membership_proof.size() == fcmp_pp::membership_proof_len(n_inputs, n_tree_layers),
-        "finalize_all_proofs_from_transfer_details: unexpected FCMP membership proof length");
 
     // store proofs
     tx.rct_signatures.p = carrot::store_fcmp_proofs_to_rct_prunable_v1(std::move(bpp),
         rerandomized_outputs,
         sal_proofs,
-        membership_proof,
+        membership_proofs,
         reference_block,
         n_tree_layers);
     tx.pruned = false;
-    CHECK_AND_ASSERT_THROW_MES(tx.rct_signatures.p.fcmp_pp.size() == fcmp_pp::fcmp_pp_proof_len(n_inputs, n_tree_layers),
+    CHECK_AND_ASSERT_THROW_MES(
+        fcmp_pp::fcmp_pps_are_expected_size(tx.rct_signatures.p.fcmp_pps, n_inputs, n_tree_layers),
         "finalize_all_proofs_from_transfer_details: unexpected FCMP++ combined proof length");
 
     // get FCMP tree root from provided path

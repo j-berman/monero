@@ -31,28 +31,106 @@
 #include "fcmp_pp_rust/fcmp++.h"
 #include "misc_log_ex.h"
 
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+template <typename T>
+static constexpr T div_ceil(T dividend, T divisor)
+{
+    static_assert(std::is_unsigned_v<T>, "T not unsigned int");
+    CHECK_AND_ASSERT_THROW_MES(divisor > 0, "div_ceil: divisor must be > 0");
+    return (dividend + divisor - 1) / divisor;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 namespace fcmp_pp
 {
 //----------------------------------------------------------------------------------------------------------------------
-std::size_t membership_proof_len(const std::size_t n_inputs, const uint8_t n_layers)
+std::size_t membership_proof_len(const std::size_t n_fcmp_inputs, const uint8_t n_layers)
 {
-    CHECK_AND_ASSERT_THROW_MES(n_inputs > 0, "n_inputs must be >0");
-    CHECK_AND_ASSERT_THROW_MES(n_layers > 0, "n_layers must be >0");
-    CHECK_AND_ASSERT_THROW_MES(n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS, "n_inputs must be <= FCMP_PLUS_PLUS_MAX_INPUTS");
-    CHECK_AND_ASSERT_THROW_MES(n_layers <= FCMP_PLUS_PLUS_MAX_LAYERS, "n_layers must be <= FCMP_PLUS_PLUS_MAX_LAYERS");
+    CHECK_AND_ASSERT_THROW_MES(n_fcmp_inputs > 0, "membership_proof_len: n_fcmp_inputs must be >0");
+    CHECK_AND_ASSERT_THROW_MES(n_layers > 0,      "membership_proof_len: n_layers must be >0");
 
-    static_assert(sizeof(uint32_t) * FCMP_PLUS_PLUS_MAX_INPUTS * FCMP_PLUS_PLUS_MAX_LAYERS == sizeof(PROOF_LEN_TABLE),
+    CHECK_AND_ASSERT_THROW_MES(n_fcmp_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP,
+        "membership_proof_len: n_fcmp_inputs must be <= FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP");
+    CHECK_AND_ASSERT_THROW_MES(n_layers <= FCMP_PLUS_PLUS_MAX_LAYERS,
+        "membership_proof_len: n_layers must be <= FCMP_PLUS_PLUS_MAX_LAYERS");
+
+    static_assert(
+        sizeof(uint16_t) * FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP * FCMP_PLUS_PLUS_MAX_LAYERS == sizeof(PROOF_LEN_TABLE),
         "unexpected table size");
 
-    // This will break platforms with < 32-bit word size. One solution is to use uint32_t for the proof len everywhere
-    static_assert(sizeof(std::size_t) >= sizeof(uint32_t), "cannot cast uint32_t to size_t");
-    return (std::size_t) PROOF_LEN_TABLE[n_inputs-1][n_layers-1];
+    // This will break platforms with < 16-bit word size. A solution is to use uint16_t for the proof len everywhere
+    static_assert(sizeof(std::size_t) >= sizeof(uint16_t), "cannot cast uint16_t to size_t");
+    return (std::size_t) PROOF_LEN_TABLE[n_fcmp_inputs-1][n_layers-1];
 };
 
-std::size_t fcmp_pp_proof_len(const std::size_t n_inputs, const uint8_t n_layers)
+std::size_t fcmp_pp_proof_len(const std::size_t n_fcmp_inputs, const uint8_t n_layers)
 {
-    return membership_proof_len(n_inputs, n_layers)
-        + (n_inputs * (FCMP_PP_INPUT_TUPLE_SIZE_V1 + FCMP_PP_SAL_PROOF_SIZE_V1));
+    CHECK_AND_ASSERT_THROW_MES(n_fcmp_inputs > 0, "fcmp_pp_proof_len: n_fcmp_inputs must be >0");
+    CHECK_AND_ASSERT_THROW_MES(n_layers > 0,      "fcmp_pp_proof_len: n_layers must be >0");
+
+    CHECK_AND_ASSERT_THROW_MES(n_fcmp_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP,
+        "fcmp_pp_proof_len: n_fcmp_inputs must be <= FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP");
+    CHECK_AND_ASSERT_THROW_MES(n_layers <= FCMP_PLUS_PLUS_MAX_LAYERS,
+        "fcmp_pp_proof_len: n_layers must be <= FCMP_PLUS_PLUS_MAX_LAYERS");
+
+    return membership_proof_len(n_fcmp_inputs, n_layers)
+        + (n_fcmp_inputs * (FCMP_PP_INPUT_TUPLE_SIZE_V1 + FCMP_PP_SAL_PROOF_SIZE_V1));
 };
+//----------------------------------------------------------------------------------------------------------------------
+std::size_t get_n_fcmp_pps(const std::size_t n_tx_inputs)
+{
+    CHECK_AND_ASSERT_THROW_MES(n_tx_inputs > 0, "get_n_fcmp_pps: n_tx_inputs is 0");
+    const std::size_t n_fcmp_pps = div_ceil(n_tx_inputs,
+        static_cast<std::size_t>(FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP));
+    CHECK_AND_ASSERT_THROW_MES(n_fcmp_pps > 0, "get_n_fcmp_pps: n_fcmp_pps is 0");
+    return n_fcmp_pps;
+}
+//----------------------------------------------------------------------------------------------------------------------
+std::size_t get_last_fcmp_pp_n_inputs(const std::size_t n_tx_inputs)
+{
+    const std::size_t last_offset = n_tx_inputs % FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP;
+    return last_offset > 0 ? last_offset : FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP;
+}
+//----------------------------------------------------------------------------------------------------------------------
+std::size_t get_last_membership_proof_len(const std::size_t n_tx_inputs, const uint8_t n_layers)
+{
+    return membership_proof_len(get_last_fcmp_pp_n_inputs(n_tx_inputs), n_layers);
+}
+//----------------------------------------------------------------------------------------------------------------------
+std::size_t get_last_fcmp_pp_proof_len(const std::size_t n_tx_inputs, const uint8_t n_layers)
+{
+    return fcmp_pp_proof_len(get_last_fcmp_pp_n_inputs(n_tx_inputs), n_layers);
+}
+//----------------------------------------------------------------------------------------------------------------------
+bool fcmp_pps_are_expected_size(const std::vector<std::vector<uint8_t>> &fcmp_pps,
+    const std::size_t n_tx_inputs,
+    const uint8_t n_layers)
+{
+    if (fcmp_pps.empty())
+        return false;
+    if (n_tx_inputs == 0 || n_tx_inputs > FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX)
+        return false;
+    if (n_layers == 0 || n_layers > FCMP_PLUS_PLUS_MAX_LAYERS)
+        return false;
+    // The first FCMP++ proofs are all expected to have max n inputs
+    for (std::size_t i = 0; i < fcmp_pps.size()-1; ++i)
+    {
+        const std::size_t act_sz = fcmp_pps.at(i).size();
+        if (act_sz == 0)
+            return false;
+        const std::size_t exp_sz = fcmp_pp::fcmp_pp_proof_len(FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP, n_layers);
+        if (act_sz != exp_sz)
+            return false;
+    }
+    // The last FCMP++ proof has the remainder
+    const std::size_t act_sz = fcmp_pps.back().size();
+    if (act_sz == 0)
+        return false;
+    const std::size_t exp_sz = fcmp_pp::get_last_fcmp_pp_proof_len(n_tx_inputs, n_layers);
+    if (act_sz != exp_sz)
+        return false;
+    return true;
+}
 //----------------------------------------------------------------------------------------------------------------------
 }//namespace fcmp_pp

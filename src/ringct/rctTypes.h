@@ -426,7 +426,7 @@ namespace rct {
         // FCMP data
         uint64_t reference_block{0}; // used to get the tree root as of when this reference block index enters the chain
         uint8_t n_tree_layers{0}; // number of layers in the tree as of the block when the reference block index enters the chain
-        fcmp_pp::FcmpPpProof fcmp_pp; // FCMP++ SAL and membership proof
+        std::vector<fcmp_pp::FcmpPpProof> fcmp_pps; // FCMP++ SAL and membership proofs
         fcmp_pp::FcmpVerifyHelperData fcmp_ver_helper_data; // used to verify FCMP proofs (not serialized, reconstructed)
 
         // when changing this function, update cryptonote::get_pruned_transaction_weight
@@ -506,23 +506,47 @@ namespace rct {
             // n_tree_layers can be inferred from the reference_block, however, if we didn't save n_tree_layers on the
             // tx, we would need a db read (for n_tree_layers as of the block) in order to de-serialize the FCMP++ proof
             VARINT_FIELD(n_tree_layers)
-            ar.tag("fcmp_pp");
+            ar.tag("fcmp_pps");
+            ar.begin_array();
             if (inputs == 0)
               return false;
-            if (inputs > FCMP_PLUS_PLUS_MAX_INPUTS)
+            if (inputs > FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX)
               return false;
             if (n_tree_layers == 0)
               return false;
             if (n_tree_layers > FCMP_PLUS_PLUS_MAX_LAYERS)
               return false;
-            const std::size_t proof_len = fcmp_pp::fcmp_pp_proof_len(inputs, n_tree_layers);
+            const std::size_t n_fcmp_pp_proofs = fcmp_pp::get_n_fcmp_pps(inputs);
+            if (n_fcmp_pp_proofs == 0)
+              return false;
             if (!typename Archive<W>::is_saving())
-              fcmp_pp.resize(proof_len);
-            if (fcmp_pp.size() != proof_len)
+              fcmp_pps.resize(n_fcmp_pp_proofs);
+            if (fcmp_pps.size() != n_fcmp_pp_proofs)
               return false;
-            ar.serialize_blob(fcmp_pp.data(), proof_len);
-            if (!ar.good())
+            auto serialize_fcmp_pp = [&](fcmp_pp::FcmpPpProof &fcmp_pp, const std::size_t proof_len) -> bool
+            {
+              if (!typename Archive<W>::is_saving())
+                fcmp_pp.resize(proof_len);
+              if (fcmp_pp.size() != proof_len)
+                return false;
+              ar.serialize_blob(fcmp_pp.data(), proof_len);
+              if (!ar.good())
+                return false;
+              return true;
+            };
+            // Every FCMP++ proof has max of FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP. "Fully packed" means it has the max.
+            for (std::size_t i = 0; i < (n_fcmp_pp_proofs - 1); ++i)
+            {
+              // All FCMP++ proofs except the last are *always* expected to be "fully packed" (the last one may or may not be)
+              const std::size_t fully_packed_proof_len = fcmp_pp::fcmp_pp_proof_len(FCMP_PLUS_PLUS_MAX_INPUTS_PER_FCMP, n_tree_layers);
+              if (!serialize_fcmp_pp(fcmp_pps.at(i), fully_packed_proof_len))
+                return false;
+              ar.delimit_array();
+            }
+            // Now do the last FCMP++, which covers the remainder
+            if (!serialize_fcmp_pp(fcmp_pps.back(), fcmp_pp::get_last_fcmp_pp_proof_len(inputs, n_tree_layers)))
               return false;
+            ar.end_array();
           }
           else if (type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus)
           {
@@ -641,7 +665,7 @@ namespace rct {
           FIELD(CLSAGs)
           VARINT_FIELD(reference_block)
           VARINT_FIELD(n_tree_layers)
-          FIELD(fcmp_pp)
+          FIELD(fcmp_pps)
           FIELD(pseudoOuts)
         END_SERIALIZE()
     };

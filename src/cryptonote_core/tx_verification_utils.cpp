@@ -197,7 +197,7 @@ static bool is_canonical_bulletproof_plus_layout(const std::vector<rct::Bulletpr
     return true;
 }
 
-static bool is_canonical_fcmp_plus_plus_layout(const uint64_t reference_block, const uint8_t n_tree_layers, const std::size_t n_inputs, const std::size_t n_outputs, const fcmp_pp::FcmpPpProof &proof)
+static bool is_canonical_fcmp_plus_plus_layout(const uint64_t reference_block, const uint8_t n_tree_layers, const std::size_t n_inputs, const std::size_t n_outputs, const std::vector<fcmp_pp::FcmpPpProof> &proofs)
 {
     // Must have non-0 reference block since tree does not have elems at genesis
     if (reference_block == 0)
@@ -205,17 +205,13 @@ static bool is_canonical_fcmp_plus_plus_layout(const uint64_t reference_block, c
     // Tree must have layers if FCMP++ is included
     if (n_tree_layers == 0 || n_tree_layers > FCMP_PLUS_PLUS_MAX_LAYERS)
         return false;
-    if (n_inputs == 0 || n_inputs > FCMP_PLUS_PLUS_MAX_INPUTS)
+    if (n_inputs == 0 || n_inputs > FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX)
         return false;
     if (n_outputs == 0 || n_outputs > FCMP_PLUS_PLUS_MAX_OUTPUTS)
         return false;
-    if (proof.empty())
+    if (proofs.empty())
         return false;
-    const std::size_t act_sz = proof.size();
-    if (act_sz == 0)
-        return false;
-    const std::size_t exp_sz = fcmp_pp::fcmp_pp_proof_len(n_inputs, n_tree_layers);
-    if (act_sz != exp_sz)
+    if (!fcmp_pp::fcmp_pps_are_expected_size(proofs, n_inputs, n_tree_layers))
         return false;
     return true;
 }
@@ -442,9 +438,9 @@ static bool collect_fcmp_pp_tx_verify_inputs(cryptonote::transaction &tx,
 
     auto fcmp_pp_verify_input = fcmp_pp::fcmp_pp_verify_input_new(
             rct::rct2hash(signable_tx_hash),
-            rv.p.fcmp_pp,
             n_tree_layers,
             rv.p.fcmp_ver_helper_data.tree_root,
+            rv.p.fcmp_pps,
             pseudo_outs,
             rv.p.fcmp_ver_helper_data.key_images
         );
@@ -650,7 +646,7 @@ bool ver_mixed_rct_semantics(std::vector<const rct::rctSig*> rvv)
                     rv.p.n_tree_layers,
                     rv.p.pseudoOuts.size(), // number of tx inputs
                     rv.outPk.size(),        // number of tx outputs
-                    rv.p.fcmp_pp))
+                    rv.p.fcmp_pps))
             {
                 MERROR("fcmp_plus_plus does not have canonical form");
                 return false;

@@ -216,7 +216,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_transfer_2)
     tools::wallet2::transfer_container transfers;
     std::uint64_t top_block_index = 0;
     std::unordered_map<crypto::public_key, std::size_t> allowed_transfers;
-    for (size_t i = 0; i < FCMP_PLUS_PLUS_MAX_INPUTS + 2; ++i)
+    for (size_t i = 0; i < FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX + 2; ++i)
     {
         tools::wallet2::transfer_details &td = tools::add_element(transfers);
         td = gen_transfer_details();
@@ -418,14 +418,14 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
     bob.generate();
 
     // generate transfers list
-    static constexpr size_t n_transfers = FCMP_PLUS_PLUS_MAX_INPUTS * 2;
+    static constexpr size_t n_transfers = FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX * 2;
     tools::wallet2::transfer_container transfers;
     transfers.reserve(n_transfers);
     for (size_t i = 0; i < n_transfers; ++i)
         transfers.push_back(gen_transfer_details());
 
     // generate random indices into transfer list
-    static constexpr size_t n_selected_transfers = FCMP_PLUS_PLUS_MAX_INPUTS + 1;
+    static constexpr size_t n_selected_transfers = FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX + 1;
     std::set<size_t> selected_transfer_indices;
     while (selected_transfer_indices.size() < n_selected_transfers)
         selected_transfer_indices.insert(crypto::rand_idx(n_transfers));
@@ -459,7 +459,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
         /*fee_per_weight=*/1,
         /*extra=*/{},
         top_block_index);
-    static constexpr size_t n_txs = (n_selected_transfers+FCMP_PLUS_PLUS_MAX_INPUTS-1) / FCMP_PLUS_PLUS_MAX_INPUTS;
+    static constexpr size_t n_txs = (n_selected_transfers+FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX-1) / FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX;
     static_assert(n_txs > 1);
     ASSERT_EQ(n_txs, tx_proposals.size());
 
@@ -467,7 +467,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_4)
     size_t n_actual_inputs = 0;
     for (const carrot::CarrotTransactionProposalV1 &tx_proposal : tx_proposals)
     {
-        ASSERT_LE(tx_proposal.input_proposals.size(), FCMP_PLUS_PLUS_MAX_INPUTS);
+        ASSERT_LE(tx_proposal.input_proposals.size(), FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX);
         ASSERT_EQ(n_dests_per_tx, tx_proposal.normal_payment_proposals.size());
         ASSERT_EQ(1, tx_proposal.selfsend_payment_proposals.size());
         ASSERT_EQ(0, tx_proposal.selfsend_payment_proposals.at(0).proposal.amount);
@@ -501,14 +501,14 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
     alice.generate();
 
     // generate transfers list
-    static constexpr size_t n_transfers = FCMP_PLUS_PLUS_MAX_INPUTS * 2;
+    static constexpr size_t n_transfers = FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX * 2;
     tools::wallet2::transfer_container transfers;
     transfers.reserve(n_transfers);
     for (size_t i = 0; i < n_transfers; ++i)
         transfers.push_back(gen_transfer_details());
 
     // generate random indices into transfer list
-    static constexpr size_t n_selected_transfers = FCMP_PLUS_PLUS_MAX_INPUTS + 1;
+    static constexpr size_t n_selected_transfers = FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX + 1;
     static_assert(n_selected_transfers < n_transfers);
     std::set<size_t> selected_transfer_indices;
     while (selected_transfer_indices.size() < n_selected_transfers)
@@ -543,7 +543,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
         /*fee_per_weight=*/1,
         /*extra=*/{},
         top_block_index);
-    static constexpr size_t n_txs = (n_selected_transfers+FCMP_PLUS_PLUS_MAX_INPUTS-1) / FCMP_PLUS_PLUS_MAX_INPUTS;
+    static constexpr size_t n_txs = (n_selected_transfers+FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX-1) / FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX;
     static_assert(n_txs > 1);
     ASSERT_EQ(n_txs, tx_proposals.size());
 
@@ -551,7 +551,7 @@ TEST(wallet_tx_builder, make_carrot_transaction_proposals_wallet2_sweep_5)
     size_t n_actual_inputs = 0;
     for (const carrot::CarrotTransactionProposalV1 &tx_proposal : tx_proposals)
     {
-        ASSERT_LE(tx_proposal.input_proposals.size(), FCMP_PLUS_PLUS_MAX_INPUTS);
+        ASSERT_LE(tx_proposal.input_proposals.size(), FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX);
         ASSERT_EQ(n_dests_per_tx == 1 ? 1 : 0, tx_proposal.normal_payment_proposals.size());
         ASSERT_EQ(n_dests_per_tx, tx_proposal.selfsend_payment_proposals.size());
         if (!tx_proposal.normal_payment_proposals.empty())

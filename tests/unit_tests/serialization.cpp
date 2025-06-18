@@ -1383,7 +1383,7 @@ TEST(Serialization, tx_fcmp_pp)
     fcmp_pp.reserve(proof_len);
     for (std::size_t i = 0; i < proof_len; ++i)
       fcmp_pp.push_back(i);
-    tx.rct_signatures.p.fcmp_pp = std::move(fcmp_pp);
+    tx.rct_signatures.p.fcmp_pps = {std::move(fcmp_pp)};
 
     return tx;
   };
@@ -1399,7 +1399,7 @@ TEST(Serialization, tx_fcmp_pp)
     ASSERT_EQ(tx, tx1);
     ASSERT_EQ(tx.rct_signatures.p.reference_block, reference_block);
     ASSERT_EQ(tx.rct_signatures.p.reference_block, tx1.rct_signatures.p.reference_block);
-    ASSERT_EQ(tx.rct_signatures.p.fcmp_pp, tx1.rct_signatures.p.fcmp_pp);
+    ASSERT_EQ(tx.rct_signatures.p.fcmp_pps, tx1.rct_signatures.p.fcmp_pps);
   }
 
   // 2. fcmp++ proof is longer than expected when serializing
@@ -1407,8 +1407,8 @@ TEST(Serialization, tx_fcmp_pp)
     transaction tx = make_dummy_fcmp_pp_tx();
 
     // Extend fcmp++ proof
-    ASSERT_TRUE(tx.rct_signatures.p.fcmp_pp.size() == proof_len);
-    tx.rct_signatures.p.fcmp_pp.push_back(0x01);
+    ASSERT_TRUE(tx.rct_signatures.p.fcmp_pps.at(0).size() == proof_len);
+    tx.rct_signatures.p.fcmp_pps.at(0).push_back(0x01);
 
     string blob;
     ASSERT_FALSE(serialization::dump_binary(tx, blob));
@@ -1419,9 +1419,9 @@ TEST(Serialization, tx_fcmp_pp)
     transaction tx = make_dummy_fcmp_pp_tx();
 
     // Shorten the fcmp++ proof
-    ASSERT_TRUE(tx.rct_signatures.p.fcmp_pp.size() == proof_len);
-    ASSERT_TRUE(tx.rct_signatures.p.fcmp_pp.size() > 1);
-    tx.rct_signatures.p.fcmp_pp.pop_back();
+    ASSERT_TRUE(tx.rct_signatures.p.fcmp_pps.at(0).size() == proof_len);
+    ASSERT_TRUE(tx.rct_signatures.p.fcmp_pps.at(0).size() > 1);
+    tx.rct_signatures.p.fcmp_pps.at(0).pop_back();
 
     string blob;
     ASSERT_FALSE(serialization::dump_binary(tx, blob));
@@ -1430,10 +1430,10 @@ TEST(Serialization, tx_fcmp_pp)
   const auto fcmp_pp_to_hex_str = [](const transaction &tx)
   {
     std::string fcmp_pp_str;
-    for (std::size_t i = 0; i < tx.rct_signatures.p.fcmp_pp.size(); ++i)
+    for (std::size_t i = 0; i < tx.rct_signatures.p.fcmp_pps.at(0).size(); ++i)
     {
       std::stringstream ss;
-      ss << std::hex << std::setfill('0') << std::setw(2) << (int)tx.rct_signatures.p.fcmp_pp[i];
+      ss << std::hex << std::setfill('0') << std::setw(2) << (int)tx.rct_signatures.p.fcmp_pps.at(0)[i];
       fcmp_pp_str += ss.str();
     }
     return fcmp_pp_str;
@@ -1500,7 +1500,7 @@ TEST(Serialization, BinaryArchiveConstantVarInts)
 
   // If any of these fail, modify tx weight calculations
   static constexpr VarIntPair constant_varints[] = {
-    { FCMP_PLUS_PLUS_MAX_INPUTS                , 2 },
+    { FCMP_PLUS_PLUS_MAX_INPUTS_PER_TX         , 2 },
     { FCMP_PLUS_PLUS_MAX_OUTPUTS               , 1 },
     { 127                                      , 1 },
     { 128                                      , 2 },
