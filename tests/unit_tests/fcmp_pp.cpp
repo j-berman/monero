@@ -32,13 +32,17 @@
 #include "common/container_helpers.h"
 #include "common/threadpool.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_basic/verification_context.h"
+#include "cryptonote_core/tx_verification_utils.h"
 #include "curve_trees.h"
 #include "fcmp_pp/fcmp_pp_types.h"
 #include "fcmp_pp/proof_len.h"
 #include "fcmp_pp/prove.h"
 #include "fcmp_pp/tower_cycle.h"
+#include "fcmp_pp/tree_cache.h"
 #include "misc_log_ex.h"
 #include "ringct/rctOps.h"
+#include "wallet/tx_builder.h"
 
 #include "crypto/crypto.h"
 #include "crypto/generators.h"
@@ -501,8 +505,8 @@ TEST(fcmp_pp, verify)
     const auto paths = curve_trees->get_dummy_paths(new_outputs.outputs, n_layers);
 
     const auto tree_root = n_layers % 2 == 0
-        ? fcmp_pp::helios_tree_root(paths.c2_layers.back().find(0)->second.back())
-        : fcmp_pp::selene_tree_root(paths.c1_layers.back().find(0)->second.back());
+        ? fcmp_pp::helios_tree_root(curve_trees->m_c2->from_bytes(paths.c2_layers.back().find(0)->second.chunk_bytes.back()))
+        : fcmp_pp::selene_tree_root(curve_trees->m_c1->from_bytes(paths.c1_layers.back().find(0)->second.chunk_bytes.back()));
 
     // Make branch blinds once purely for performance reasons (DO NOT DO THIS IN PRODUCTION)
     const size_t expected_num_selene_branch_blinds = n_layers / 2;
@@ -553,15 +557,14 @@ TEST(fcmp_pp, verify)
             const auto &leaf_chunk = paths.leaves_by_chunk_idx.find(leaf_chunk_idx)->second;
             const auto &leaf = leaf_chunk[leaf_offset];
 
-            const fcmp_pp::curve_trees::OutputPair output_pair = {rct::rct2pk(leaf.O), leaf.C};
-            const auto output_tuple = fcmp_pp::curve_trees::output_to_tuple(output_pair);
+            const auto output_tuple = fcmp_pp::curve_trees::output_to_tuple(leaf.output_pair);
 
             const auto &x = new_outputs.x_vec[leaf_idx];
             const auto &y = new_outputs.y_vec[leaf_idx];
 
             // Construct single path from dummy paths
-            const auto path = curve_trees->get_single_dummy_path(paths, expected_n_leaves, leaf_idx);
-            ASSERT_TRUE(curve_trees->audit_path(path, output_pair, expected_n_leaves));
+            const auto path = curve_trees->path_bytes_to_path(curve_trees->get_single_dummy_path(paths, expected_n_leaves, leaf_idx));
+            ASSERT_TRUE(curve_trees->audit_path(path, leaf.output_pair, expected_n_leaves));
 
             // Leaves
             const auto path_for_proof = curve_trees->path_for_proof(path, output_tuple);
@@ -572,7 +575,7 @@ TEST(fcmp_pp, verify)
             pseudo_outs.emplace_back(rct::rct2pt(load_key(rerandomized_output.input.C_tilde)));
 
             key_images.emplace_back();
-            crypto::generate_key_image(rct::rct2pk(leaf.O),
+            crypto::generate_key_image(leaf.output_pair.output_pubkey,
                 new_outputs.x_vec[leaf_idx],
                 key_images.back());
 
@@ -1067,6 +1070,197 @@ TEST(fcmp_pp, dump_tx_bytesizes)
             }
 
             std::cout << "-----------------------------------------\n";
+        }
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(fcmp_pp, tx_sizes_and_verification_times)
+{
+    // 1. Make fake paths for a tree of 7 layers
+    const uint8_t n_layers = 7;
+    const auto curve_trees = fcmp_pp::curve_trees::curve_trees_v1();
+
+    // Generate full chunks of outputs, enough to construct a tx with max inputs
+    std::size_t n_generated_outputs = FCMP_PLUS_PLUS_MAX_INPUTS;
+    if (n_generated_outputs % curve_trees->m_c1_width)
+        n_generated_outputs = curve_trees->m_c1_width * ((n_generated_outputs / curve_trees->m_c1_width) + 1);
+
+    // Make sure we generated enough outputs and calculate expected n leaves in a dummy tree
+    uint64_t expected_n_leaves = curve_trees->m_c1_width;
+    for (uint8_t i = 1; i < n_layers; ++i)
+        expected_n_leaves *= (i % 2 != 0) ? curve_trees->m_c2_width : curve_trees->m_c1_width;
+    ASSERT_EQ(curve_trees->n_layers(expected_n_leaves), n_layers);
+
+    // Init an account we're going to "receive" the outputs to and "send" from
+    cryptonote::account_base account;
+    account.generate();
+    const auto account_keys = account.get_keys();
+
+    // Generate a bunch of miner txs, we'll use outputs from the miner txs to make the tree
+    std::vector<fcmp_pp::curve_trees::OutputContext> outputs;
+    std::vector<cryptonote::transaction> txs;
+    std::unordered_map<rct::xmr_amount, rct::key> transparent_amount_commitments;
+    for (std::size_t i = 0; i < n_generated_outputs; ++i)
+    {
+        bool r = cryptonote::construct_miner_tx(0, 0, 5000, 500, 500, account_keys.m_account_address, txs.emplace_back());
+        ASSERT_TRUE(r);
+
+        const auto tx_out = txs.back().vout.back();
+        crypto::public_key out_pubkey;
+        ASSERT_TRUE(cryptonote::get_output_public_key(tx_out, out_pubkey));
+
+        if (transparent_amount_commitments.find(tx_out.amount) == transparent_amount_commitments.end())
+            transparent_amount_commitments[tx_out.amount] = rct::zeroCommitVartime(tx_out.amount);
+
+        outputs.push_back({
+                .output_id = i,
+                .torsion_checked = true,
+                .output_pair = {out_pubkey, transparent_amount_commitments[tx_out.amount]}
+            });
+    }
+    ASSERT_GE(expected_n_leaves, outputs.size());
+
+    // Instantiate dummy paths in the truee
+    const auto paths = curve_trees->get_dummy_paths(outputs, n_layers);
+
+    // 2. Initialize tree cache
+    fcmp_pp::curve_trees::TreeCacheV1 tree_cache(curve_trees);
+    tree_cache.force_set_top_block_unsafe({ .blk_idx = 60/*coinbase unlock*/, .blk_hash = {}, .n_leaf_tuples = expected_n_leaves });
+
+    // 3. Force add paths for every input
+    for (std::size_t n_inputs = 1; n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS; ++n_inputs)
+    {
+        const size_t leaf_idx = n_inputs - 1;
+        const auto &output = outputs.at(leaf_idx).output_pair;
+        const auto path = curve_trees->get_single_dummy_path(paths, expected_n_leaves, leaf_idx);
+        tree_cache.register_output(output);
+        tree_cache.force_add_output_path(output, leaf_idx, path, expected_n_leaves);
+    }
+
+    crypto::ec_point tree_root;
+    tree_cache.get_tree_root(tree_root);
+    const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddrs{{ account_keys.m_account_address.m_spend_public_key, {0,0} }};
+
+    // 4. Build the txs
+    printf("Inputs, Outputs, Size (bytes), Verify (ms)\n");
+    for (std::size_t n_inputs = 1; n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS; ++n_inputs)
+    {
+        // 4a. Collect inputs
+        std::vector<wallet2_basic::transfer_details> inputs;
+        inputs.reserve(n_inputs);
+        for (std::size_t i = 0; i < n_inputs; ++i)
+        {
+            const auto &input_tx = txs.at(i);
+            const auto &output = outputs.at(i);
+            const size_t internal_output_idx = input_tx.vout.size() - 1;
+
+            const crypto::public_key in_tx_pub_key = cryptonote::get_tx_pub_key_from_extra(input_tx);
+            cryptonote::keypair in_ephemeral;
+            crypto::key_image key_image;
+            bool r = cryptonote::generate_key_image_helper(
+                account_keys,
+                subaddrs,
+                output.output_pair.output_pubkey,
+                in_tx_pub_key,
+                {},
+                internal_output_idx,
+                in_ephemeral,
+                key_image,
+                hw::get_device("default"));
+            ASSERT_TRUE(r);
+
+            wallet2_basic::transfer_details wallet2_td{
+                    .m_block_height = 0,
+                    .m_tx = input_tx,
+                    .m_txid = cryptonote::get_transaction_hash(input_tx),
+                    .m_internal_output_index = internal_output_idx,
+                    .m_global_output_index = i,
+                    .m_spent = false,
+                    .m_frozen = false,
+                    .m_spent_height = 0,
+                    .m_key_image = key_image,
+                    .m_mask = rct::identity(),
+                    .m_amount = input_tx.vout.at(internal_output_idx).amount,
+                    .m_rct = input_tx.version >= 2,
+                    .m_key_image_known = true,
+                    .m_key_image_request = false,
+                    .m_pk_index = 0,
+                    .m_subaddr_index = {},
+                    .m_key_image_partial = false,
+                    .m_multisig_k = {},
+                    .m_multisig_info = {},
+                    .m_uses = {},
+                };
+
+            inputs.emplace_back(std::move(wallet2_td));
+        }
+
+        // 4b. Make the txs with the inputs
+        for (std::size_t n_outputs = 2; n_outputs <= FCMP_PLUS_PLUS_MAX_OUTPUTS; ++n_outputs)
+        {
+            const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(
+                inputs,
+                subaddrs,
+                /*only_below*/MONEY_SUPPLY,
+                /*address*/account_keys.m_account_address,
+                /*is_subaddress*/false,
+                /*n_dests_per_tx*/n_outputs,
+                /*payment_id*/{},
+                /*fee_per_weight=*/1,
+                /*extra=*/{},
+                /*subaddr_account=*/0,
+                /*subaddr_indices=*/{},
+                /*top_block_index*/tree_cache.n_synced_blocks()-1);
+
+            ASSERT_EQ(tx_proposals.size(), 1);
+
+            const cryptonote::transaction finalized_tx = tools::wallet::finalize_all_proofs_from_transfer_details(tx_proposals.front(),
+                inputs,
+                tree_cache,
+                *curve_trees,
+                account_keys);
+
+            // Serialize and de-serialize, then validate the de-serialized tx
+            cryptonote::blobdata tx_blob;
+            ASSERT_TRUE(cryptonote::tx_to_blob(finalized_tx, tx_blob));
+
+            // 4c. Validate the tx
+            const uint64_t start_validate = tools::get_tick_count();
+
+            // Parse the tx
+            const uint64_t start_parse = tools::get_tick_count();
+            cryptonote::transaction tx;
+            ASSERT_TRUE(cryptonote::parse_and_validate_tx_from_blob(tx_blob, tx));
+            const uint64_t end_parse = tools::get_tick_count();
+
+            // Verify non-input consensus rules
+            const uint64_t start_non_input = tools::get_tick_count();
+            cryptonote::tx_verification_context tvc;
+            ASSERT_TRUE(cryptonote::ver_non_input_consensus(tx, tvc, HF_VERSION_FCMP_PLUS_PLUS));
+            ASSERT_FALSE(tvc.m_verifivation_failed);
+            const uint64_t end_non_input = tools::get_tick_count();
+
+            // Verify input proofs
+            const uint64_t start_input = tools::get_tick_count();
+            cryptonote::rct_ver_cache_t rct_cache;
+            ASSERT_TRUE(cryptonote::ver_rct_non_semantics_simple_cached(tx, {}, tree_root, rct_cache, rct::RCTTypeFcmpPlusPlus));
+            const uint64_t end_input = tools::get_tick_count();
+
+            // 4d. Print byte size and verification time
+            // Collect timings
+            const auto ticks_to_ms = [](const uint64_t ticks) -> uint64_t { return tools::ticks_to_ns(ticks) / 1e6; };
+            const uint64_t validate_ms = ticks_to_ms(end_input - start_validate);
+            const uint64_t parse_ms = ticks_to_ms(end_parse - start_parse);
+            const uint64_t non_input_ms = ticks_to_ms(end_non_input - start_non_input);
+            const uint64_t input_ms = ticks_to_ms(end_input - start_input);
+
+            LOG_PRINT_L1("Tx: " << obj_to_json_str(tx));
+            LOG_PRINT_L1("Timings (ms) ... validate: " << validate_ms
+                << " , parse: "                        << parse_ms
+                << " , non_input_ms: "                 << non_input_ms
+                << " , input_ms: "                     << input_ms);
+
+            printf("%lu, %lu, %lu, %lu\n", tx.vin.size(), tx.vout.size(), tx_blob.size(), validate_ms);
         }
     }
 }

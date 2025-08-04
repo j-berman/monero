@@ -211,6 +211,14 @@ struct PathIndexes final
     std::vector<Range> layers;
 };
 
+// Contains minimum path elems necessary for multiple paths (e.g. only contains the root once)
+struct ConsolidatedPaths final
+{
+    std::unordered_map<uint64_t, std::vector<OutputContext>> leaves_by_chunk_idx;
+    std::vector<std::unordered_map<uint64_t, ChunkBytes>> c1_layers;
+    std::vector<std::unordered_map<uint64_t, ChunkBytes>> c2_layers;
+};
+
 //----------------------------------------------------------------------------------------------------------------------
 // Hash a chunk of new children
 template<typename C>
@@ -313,14 +321,6 @@ public:
         bool empty() const { return leaves.empty() && c1_layers.empty() && c2_layers.empty(); }
     };
 
-    // Contains minimum path elems necessary for multiple paths (e.g. only contains the root once)
-    struct ConsolidatedPaths final
-    {
-        std::unordered_map<uint64_t, std::vector<OutputTuple>> leaves_by_chunk_idx;
-        std::vector<std::unordered_map<uint64_t, std::vector<typename C1::Point>>> c1_layers;
-        std::vector<std::unordered_map<uint64_t, std::vector<typename C2::Point>>> c2_layers;
-    };
-
     // A path ready to be used to construct an FCMP++ proof
     struct PathForProof final
     {
@@ -378,7 +378,7 @@ public:
     ConsolidatedPaths get_dummy_paths(const std::vector<fcmp_pp::curve_trees::OutputContext> &outputs,
         uint8_t n_layers) const;
 
-    Path get_single_dummy_path(const ConsolidatedPaths &dummy_paths,
+    PathBytes get_single_dummy_path(const ConsolidatedPaths &dummy_paths,
         const uint64_t n_leaf_tuples,
         const uint64_t leaf_tuple_idx) const;
 private:
