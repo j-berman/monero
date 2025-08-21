@@ -174,14 +174,6 @@ public:
         bool empty() const { return leaves.empty() && c1_layers.empty() && c2_layers.empty(); }
     };
 
-    // Contains minimum path elems necessary for multiple paths (e.g. only contains the root once)
-    struct ConsolidatedPaths final
-    {
-        std::unordered_map<uint64_t, std::vector<OutputTuple>> leaves_by_chunk_idx;
-        std::vector<std::unordered_map<uint64_t, std::vector<typename C1::Point>>> c1_layers;
-        std::vector<std::unordered_map<uint64_t, std::vector<typename C2::Point>>> c2_layers;
-    };
-
     // A path ready to be used to construct an FCMP++ proof
     struct PathForProof final
     {
@@ -240,9 +232,17 @@ public:
 
     TreeExtension path_to_tree_extension(const CompressedPath &path_bytes, const PathIndexes &path_idxs) const;
 
+    ConsolidatedPaths consolidate_paths(const uint64_t n_leaf_tuples,
+        const std::vector<AssignedLeafIdx> &leaf_idxs,
+        std::vector<PathBytes> &&paths) const;
+
+    std::vector<PathBytes> deconsolidate_paths(const uint64_t n_leaf_tuples,
+        const std::vector<AssignedLeafIdx> &leaf_idxs,
+        const ConsolidatedPaths &paths) const;
+
     ConsolidatedPaths get_dummy_paths(const std::vector<fcmp_pp::UnifiedOutput> &outputs, uint8_t n_layers) const;
 
-    Path get_single_dummy_path(const ConsolidatedPaths &dummy_paths,
+    PathBytes get_single_dummy_path(const ConsolidatedPaths &dummy_paths,
         const uint64_t n_leaf_tuples,
         const uint64_t leaf_tuple_idx) const;
 private:

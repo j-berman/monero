@@ -517,9 +517,10 @@ TEST(fcmp_pp, verify)
     // Instantiate dummy paths
     const auto paths = curve_trees->get_dummy_paths(new_outputs.outputs, n_layers);
 
+    const auto &tree_root_bytes = paths.layer_chunks_by_chunk_idx.back().find(0)->second.chunk_bytes.back();
     const auto tree_root = n_layers % 2 == 0
-        ? fcmp_pp::helios_tree_root(paths.c2_layers.back().find(0)->second.back())
-        : fcmp_pp::selene_tree_root(paths.c1_layers.back().find(0)->second.back());
+        ? fcmp_pp::helios_tree_root(curve_trees->m_c2->from_bytes(tree_root_bytes))
+        : fcmp_pp::selene_tree_root(curve_trees->m_c1->from_bytes(tree_root_bytes));
 
     // Make branch blinds once purely for performance reasons (DO NOT DO THIS IN PRODUCTION)
     const size_t expected_num_selene_branch_blinds = n_layers / 2;
@@ -570,17 +571,14 @@ TEST(fcmp_pp, verify)
             const auto &leaf_chunk = paths.leaves_by_chunk_idx.find(leaf_chunk_idx)->second;
             const auto &leaf = leaf_chunk[leaf_offset];
 
-            const fcmp_pp::OutputPair output_pair = fcmp_pp::LegacyOutputPair{{
-                (crypto::public_key&)leaf.O,
-                (crypto::ec_point&)leaf.C}};
-            const auto output_tuple = fcmp_pp::curve_trees::output_to_tuple(output_pair);
+            const auto output_tuple = fcmp_pp::curve_trees::output_to_tuple(leaf.output_pair);
 
             const auto &x = new_outputs.x_vec[leaf_idx];
             const auto &y = new_outputs.y_vec[leaf_idx];
 
             // Construct single path from dummy paths
-            const auto path = curve_trees->get_single_dummy_path(paths, expected_n_leaves, leaf_idx);
-            ASSERT_TRUE(curve_trees->audit_path(path, output_pair, expected_n_leaves));
+            const auto path = curve_trees->path_bytes_to_path(curve_trees->get_single_dummy_path(paths, expected_n_leaves, leaf_idx));
+            ASSERT_TRUE(curve_trees->audit_path(path, leaf.output_pair, expected_n_leaves));
 
             // Leaves
             const auto path_for_proof = curve_trees->path_for_proof(path, output_tuple);
@@ -590,7 +588,7 @@ TEST(fcmp_pp, verify)
             pseudo_outs.emplace_back(rct::rct2pt(load_key(rerandomized_output.input.C_tilde)));
 
             key_images.emplace_back();
-            crypto::generate_key_image((crypto::public_key&)leaf.O,
+            crypto::generate_key_image(leaf.output_pair.output_pubkey,
                 new_outputs.x_vec[leaf_idx],
                 key_images.back());
 
