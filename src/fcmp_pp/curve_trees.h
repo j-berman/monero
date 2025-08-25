@@ -369,6 +369,8 @@ public:
 
     Path path_bytes_to_path(const PathBytes &path_bytes) const;
 
+    PathBytes path_to_path_bytes(const Path &path, const std::vector<uint64_t> &output_ids) const;
+
     PathForProof path_for_proof(const Path &path, const OutputTuple &output_tuple) const;
 
     std::vector<crypto::ec_point> calc_hashes_from_path(const Path &path, const bool replace_last_hash = false) const;

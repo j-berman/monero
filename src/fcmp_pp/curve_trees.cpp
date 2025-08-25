@@ -1091,6 +1091,53 @@ CurveTrees<Selene, Helios>::Path CurveTrees<Selene, Helios>::path_bytes_to_path(
     return path;
 }
 //----------------------------------------------------------------------------------------------------------------------
+template<>
+PathBytes CurveTrees<Selene, Helios>::path_to_path_bytes(const CurveTrees<Selene, Helios>::Path &path,
+    const std::vector<uint64_t> &output_ids) const
+{
+    CHECK_AND_ASSERT_THROW_MES(path.leaves.size() == output_ids.size(), "path.leaves.size() != output_ids.size()");
+
+    PathBytes path_bytes;
+
+    // Leaves
+    path_bytes.leaves.reserve(path.leaves.size());
+    for (std::size_t i = 0; i < path.leaves.size(); ++i)
+        path_bytes.leaves.emplace_back(fcmp_pp::curve_trees::OutputContext{
+            .output_id=output_ids.at(i),
+            .torsion_checked=0,
+            .output_pair={.output_pubkey=rct::rct2pk(path.leaves[i].O), .commitment=path.leaves[i].C}
+        });
+
+    // Layers
+    bool parent_is_c1 = true;
+    std::size_t c1_idx = 0, c2_idx = 0;
+    for (std::size_t i = 0; i < (path.c1_layers.size() + path.c2_layers.size()); ++i)
+    {
+        auto &layer_bytes = path_bytes.layer_chunks.emplace_back();
+
+        if (parent_is_c1)
+        {
+            const auto &layer = path.c1_layers.at(c1_idx);
+            layer_bytes.chunk_bytes.reserve(layer.size());
+            for (const auto &elem : layer)
+                layer_bytes.chunk_bytes.emplace_back(m_c1->to_bytes(elem));
+            ++c1_idx;
+        }
+        else
+        {
+            const auto &layer = path.c2_layers.at(c2_idx);
+            layer_bytes.chunk_bytes.reserve(layer.size());
+            for (const auto &elem : layer)
+                layer_bytes.chunk_bytes.emplace_back(m_c2->to_bytes(elem));
+            ++c2_idx;
+        }
+
+        parent_is_c1 = !parent_is_c1;
+    }
+
+    return path_bytes;
+}
+//----------------------------------------------------------------------------------------------------------------------
 template<typename C1, typename C2>
 std::vector<crypto::ec_point> CurveTrees<C1, C2>::calc_hashes_from_path(
     const typename CurveTrees<C1, C2>::Path &path,
