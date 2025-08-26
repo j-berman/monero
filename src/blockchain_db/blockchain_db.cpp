@@ -349,6 +349,12 @@ void BlockchainDB::grow_tree(const uint64_t blk_idx, std::vector<fcmp_pp::curve_
 
   MDEBUG("Growing tree usable once block " << blk_idx << " is in the chain");
 
+  // Get the number of leaf tuples that exist in the current tree
+  const uint64_t old_n_leaf_tuples = this->get_n_leaf_tuples();
+
+  if (blk_idx == 0)
+    CHECK_AND_ASSERT_THROW_MES(old_n_leaf_tuples == 0, "Tree is not empty at blk idx 0");
+
   // Get the prev block's tree edge (i.e. the current tree edge before growing)
   std::vector<crypto::ec_point> prev_tree_edge;
   uint64_t prev_blk_idx = 0;
@@ -364,11 +370,6 @@ void BlockchainDB::grow_tree(const uint64_t blk_idx, std::vector<fcmp_pp::curve_
 
     prev_tree_edge = this->get_tree_edge(prev_blk_idx);
   }
-
-  // Get the number of leaf tuples that exist in the current tree
-  const uint64_t old_n_leaf_tuples = this->get_n_leaf_tuples();
-
-  CHECK_AND_ASSERT_THROW_MES(blk_idx == 0 && old_n_leaf_tuples != 0, "Tree is not empty at blk idx 0");
 
   // We re-save the prev tree edge at this next block if the tree doesn't grow
   const auto save_prev_tree_edge = [&, this]() { this->save_tree_meta(blk_idx, old_n_leaf_tuples, prev_tree_edge); };
