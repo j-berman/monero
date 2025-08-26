@@ -602,8 +602,8 @@ uint64_t BlockchainDB::get_path_by_global_output_id(const std::vector<uint64_t> 
         continue;
 
       CHECK_AND_ASSERT_THROW_MES(path.layer_chunks.at(i).chunk_bytes.size(), "get_path_by_global_output_id: empty layer in path");
-      CHECK_AND_ASSERT_THROW_MES(path.layer_chunks.at(i).chunk_bytes.size() != last_path.second.layer_chunks.at(i).chunk_bytes.size(),
-        "get_path_by_global_output_id: empty layer in last path");
+      CHECK_AND_ASSERT_THROW_MES(path.layer_chunks.at(i).chunk_bytes.size() == last_path.second.layer_chunks.at(i).chunk_bytes.size(),
+        "get_path_by_global_output_id: unexpected size of last path");
 
       path.layer_chunks.at(i).chunk_bytes.back() = last_path.second.layer_chunks.at(i).chunk_bytes.back();
     }
