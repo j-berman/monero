@@ -1968,22 +1968,14 @@ public:
 
 };  // class BlockchainDB
 
-class db_txn_guard
+class db_rtxn_guard
 {
 public:
-  db_txn_guard(BlockchainDB *db, bool readonly): db(db), readonly(readonly), active(false)
+  db_rtxn_guard(const BlockchainDB *db): db(db), active(false)
   {
-    if (readonly)
-    {
-      active = db->block_rtxn_start();
-    }
-    else
-    {
-      db->block_wtxn_start();
-      active = true;
-    }
+    active = db->block_rtxn_start();
   }
-  virtual ~db_txn_guard()
+  virtual ~db_rtxn_guard()
   {
     stop();
   }
@@ -1991,30 +1983,51 @@ public:
   {
     if (active)
     {
-      if (readonly)
-        db->block_rtxn_stop();
-      else
-        db->block_wtxn_stop();
+      db->block_rtxn_stop();
       active = false;
     }
   }
   void abort()
   {
-    if (readonly)
-      db->block_rtxn_abort();
-    else
-      db->block_wtxn_abort();
+    db->block_rtxn_abort();
+    active = false;
+  }
+
+private:
+  const BlockchainDB *db;
+  bool active;
+};
+
+class db_wtxn_guard
+{
+public:
+  db_wtxn_guard(BlockchainDB *db): db(db), active(false)
+  {
+    db->block_wtxn_start();
+    active = true;
+  }
+  virtual ~db_wtxn_guard()
+  {
+    stop();
+  }
+  void stop()
+  {
+    if (active)
+    {
+      db->block_wtxn_stop();
+      active = false;
+    }
+  }
+  void abort()
+  {
+    db->block_wtxn_abort();
     active = false;
   }
 
 private:
   BlockchainDB *db;
-  bool readonly;
   bool active;
 };
-
-class db_rtxn_guard: public db_txn_guard { public: db_rtxn_guard(BlockchainDB *db): db_txn_guard(db, true) {} };
-class db_wtxn_guard: public db_txn_guard { public: db_wtxn_guard(BlockchainDB *db): db_txn_guard(db, false) {} };
 
 BlockchainDB *new_db();
 
