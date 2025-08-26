@@ -1852,7 +1852,7 @@ public:
   //
 
   // TODO: descriptions
-  void advance_tree(const uint64_t block_idx, const std::vector<fcmp_pp::curve_trees::OutputContext> &known_new_outputs);
+  virtual void advance_tree(const uint64_t block_idx, const std::vector<fcmp_pp::curve_trees::OutputContext> &known_new_outputs);
 
   void grow_tree(const uint64_t block_idx, std::vector<fcmp_pp::curve_trees::OutputContext> &&new_outputs);
 

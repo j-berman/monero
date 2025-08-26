@@ -122,6 +122,7 @@ public:
   virtual void remove_spent_key(const crypto::key_image& k_image) override {}
 
   virtual void add_locked_outs(const fcmp_pp::curve_trees::OutsByLastLockedBlock& outs_by_last_locked_block, const std::unordered_map<uint64_t/*output_id*/, uint64_t/*last locked block_id*/>& timelocked_outputs) override {};
+  virtual void advance_tree(const uint64_t block_idx, const std::vector<fcmp_pp::curve_trees::OutputContext> &known_new_outputs) override {};
   virtual std::vector<fcmp_pp::curve_trees::OutputContext> get_outs_at_last_locked_block_idx(uint64_t block_id) const override { return std::vector<fcmp_pp::curve_trees::OutputContext>{}; };
   virtual void del_locked_outs_at_block_idx(uint64_t block_idx) override {};
   virtual uint64_t get_tree_block_idx() const override { return 0; };
