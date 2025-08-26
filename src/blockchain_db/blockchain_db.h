@@ -553,6 +553,35 @@ private:
    */
   virtual void remove_spent_key(const crypto::key_image& k_image) = 0;
 
+  //
+  // Curve tree related db calls (private)
+  //
+
+  // TODO: descriptions
+  virtual std::vector<fcmp_pp::curve_trees::OutputContext> get_outs_at_last_locked_block_idx(uint64_t block_id) const = 0;
+
+  virtual void del_locked_outs_at_block_idx(uint64_t block_idx) = 0;
+
+  virtual uint64_t get_tree_block_idx() const = 0;
+
+  virtual std::vector<crypto::ec_point> get_tree_edge(uint64_t block_id) const = 0;
+
+  virtual uint64_t trim_leaves(const uint64_t new_n_leaf_tuples, const uint64_t trim_block_idx) = 0;
+
+  virtual void trim_layers(const uint64_t new_n_leaf_tuples,
+    const std::vector<uint64_t> &n_elems_per_layer,
+    const std::vector<crypto::ec_point> &prev_tree_edge,
+    const uint64_t expected_root_idx) = 0;
+
+  virtual void save_tree_meta(const uint64_t block_idx, const uint64_t n_leaf_tuples, const std::vector<crypto::ec_point> &tree_edge) = 0;
+
+  virtual void del_tree_meta(const uint64_t block_idx) = 0;
+
+  virtual std::vector<crypto::ec_point> grow_with_tree_extension(const fcmp_pp::curve_trees::CurveTreesV1::TreeExtension &tree_extension) = 0;
+
+  virtual fcmp_pp::curve_trees::PathBytes get_path(const fcmp_pp::curve_trees::PathIndexes &path_indexes) const = 0;
+
+  virtual uint64_t find_leaf_idx_by_output_id_bounded_search(uint64_t output_id, uint64_t leaf_idx_start, uint64_t leaf_idx_end) const = 0;
 
   /*********************************************************************
    * private concrete members
@@ -1818,6 +1847,26 @@ public:
    */
   virtual bool for_all_alt_blocks(std::function<bool(const crypto::hash &blkid, const alt_block_data_t &data, const cryptonote::blobdata_ref *blob)> f, bool include_blob = false) const = 0;
 
+  //
+  // Curve tree related db calls (public)
+  //
+
+  // TODO: descriptions
+  void advance_tree(const uint64_t block_idx, const std::vector<fcmp_pp::curve_trees::OutputContext> &known_new_outputs);
+
+  void grow_tree(const uint64_t block_idx, std::vector<fcmp_pp::curve_trees::OutputContext> &&new_outputs);
+
+  void trim_block();
+
+  void trim_tree(const uint64_t new_n_leaf_tuples, const uint64_t trim_block_idx);
+
+  std::pair<uint64_t, fcmp_pp::curve_trees::PathBytes> get_last_path(const uint64_t block_idx) const;
+
+  uint64_t get_path_by_global_output_id(const std::vector<uint64_t> &global_output_ids,
+    const uint64_t as_of_n_blocks,
+    std::vector<uint64_t> &leaf_idxs_out,
+    std::vector<fcmp_pp::curve_trees::PathBytes> &paths_out) const;
+
   /**
    * @brief add outs to locked outputs tables
    *
@@ -1830,16 +1879,7 @@ public:
    */
   virtual void add_locked_outs(const fcmp_pp::curve_trees::OutsByLastLockedBlock& outs_by_last_locked_block, const std::unordered_map<uint64_t/*output_id*/, uint64_t/*last locked block_id*/>& timelocked_outputs) = 0;
 
-  virtual void advance_tree(const uint64_t block_idx, const std::vector<fcmp_pp::curve_trees::OutputContext> &known_new_outputs) = 0;
-
-  // TODO: description and make private
-  virtual void grow_tree(const uint64_t block_id, std::vector<fcmp_pp::curve_trees::OutputContext> &&new_outputs) = 0;
-
-  virtual void trim_tree(const uint64_t new_n_leaf_tuples, const uint64_t trim_block_id) = 0;
-
-  virtual std::pair<uint64_t, fcmp_pp::curve_trees::PathBytes> get_last_path(const uint64_t block_idx) const = 0;
-
-  // TODO: description
+  // TODO: descriptions
   virtual bool audit_tree(const uint64_t expected_n_leaf_tuples) const = 0;
   virtual uint64_t get_n_leaf_tuples() const = 0;
   virtual uint64_t get_block_n_leaf_tuples(const uint64_t block_idx) const = 0;
@@ -1880,12 +1920,6 @@ public:
    * @return custom timelocked outputs grouped by last locked block
    */
   virtual fcmp_pp::curve_trees::OutsByLastLockedBlock get_custom_timelocked_outputs(uint64_t start_block_idx) const = 0;
-
-  // TODO: description
-  virtual uint64_t get_path_by_global_output_id(const std::vector<uint64_t> &global_output_ids,
-    const uint64_t as_of_n_blocks,
-    std::vector<uint64_t> &leaf_idxs_out,
-    std::vector<fcmp_pp::curve_trees::PathBytes> &paths_out) const = 0;
 
   //
   // Hard fork related storage
