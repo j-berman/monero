@@ -636,7 +636,7 @@ namespace cryptonote
   {
     db_rtxn_guard txn_guard(&m_core.get_blockchain_storage().get_db());
 
-    CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().get_db().get_block_height(init_hash) == init_block_idx, false,
+    CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().get_db().get_block_hash_from_height(init_block_idx) == init_hash, false,
       "set_init_tree_sync_data: mismatched init_hash to init_block_idx");
 
     init_tree_sync_data = COMMAND_RPC_GET_BLOCKS_FAST::init_tree_sync_data_t{};
