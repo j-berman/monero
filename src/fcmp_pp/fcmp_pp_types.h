@@ -156,6 +156,15 @@ FcmpPpProof fcmp_pp_proof_from_parts_v1(const std::vector<FcmpRerandomizedOutput
     const std::vector<FcmpPpSalProof> &sal_proofs,
     const FcmpMembershipProof &membership_proof,
     const std::uint8_t n_tree_layers);
+
+// De-serialize types from a single byte buffer
+void fcmp_pp_parts_from_proof_v1(
+    const fcmp_pp::FcmpPpProof &proof_bytes,
+    const std::vector<crypto::ec_point> &pseudo_outs,
+    const std::uint8_t n_tree_layers,
+    fcmp_pp::FcmpMembershipProof &membership_proof_out,
+    std::vector<fcmp_pp::FcmpPpSalProof> &sal_proofs_out,
+    std::vector<FcmpInputCompressed> &fcmp_raw_inputs_out);
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 }//namespace fcmp_pp

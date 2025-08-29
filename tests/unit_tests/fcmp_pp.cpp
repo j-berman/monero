@@ -1161,12 +1161,12 @@ TEST(fcmp_pp, tx_sizes_and_verification_times)
 
     crypto::ec_point tree_root;
     tree_cache.get_tree_root(tree_root);
+    const auto tree_root_ptr = curve_trees->get_tree_root_from_bytes(n_layers, tree_root);
     const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddrs{{ account_keys.m_account_address.m_spend_public_key, {0,0} }};
 
     // 4. Build the txs
-    printf("Inputs, Outputs, Size (bytes), Verify (ms)\n");
-    // for (std::size_t n_inputs = 1; n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS; ++n_inputs)
-    for (std::size_t n_inputs : std::vector<std::size_t>{1, 2, 4, 8, 16, 32, 64, 128})
+    printf("Inputs, Outputs, FCMP++ Size (bytes), Verify (ms), Membership Proof Size (bytes), Membership Proof Verify (ms)\n");
+    for (std::size_t n_inputs = 1; n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS; ++n_inputs)
     {
         // 4a. Collect inputs
         std::vector<wallet2_basic::transfer_details> inputs;
@@ -1219,8 +1219,7 @@ TEST(fcmp_pp, tx_sizes_and_verification_times)
         }
 
         // 4b. Make the txs with the inputs
-        // for (std::size_t n_outputs = 2; n_outputs <= FCMP_PLUS_PLUS_MAX_OUTPUTS; ++n_outputs)
-        for (std::size_t n_outputs = 2; n_outputs <= 2; ++n_outputs)
+        for (std::size_t n_outputs = 2; n_outputs <= FCMP_PLUS_PLUS_MAX_OUTPUTS; ++n_outputs)
         {
             const auto tx_proposals = tools::wallet::make_carrot_transaction_proposals_wallet2_sweep_all(
                 inputs,
@@ -1277,13 +1276,46 @@ TEST(fcmp_pp, tx_sizes_and_verification_times)
             const uint64_t non_input_ms = ticks_to_ms(end_non_input - start_non_input);
             const uint64_t input_ms = ticks_to_ms(end_input - start_input);
 
+            // 5. Do the membership proof only
+            fcmp_pp::FcmpMembershipProof membership_proof;
+            std::vector<FcmpInputCompressed> fcmp_raw_inputs;
+
+            // Collect the membership proof inputs only
+            {
+                std::vector<crypto::ec_point> pseudo_outs;
+                for (const auto &po : finalized_tx.rct_signatures.p.pseudoOuts)
+                    pseudo_outs.emplace_back(rct::rct2pt(po));
+
+                std::vector<fcmp_pp::FcmpPpSalProof> sal_proofs;
+                fcmp_pp::fcmp_pp_parts_from_proof_v1(
+                    tx.rct_signatures.p.fcmp_pp,
+                    pseudo_outs,
+                    n_layers,
+                    membership_proof,
+                    sal_proofs,
+                    fcmp_raw_inputs);
+            }
+
+            const uint64_t start_membership = tools::get_tick_count();
+            ASSERT_TRUE(fcmp_pp::verify_membership(membership_proof, n_layers, tree_root_ptr, fcmp_raw_inputs));
+            const uint64_t end_membership = tools::get_tick_count();
+
+            const uint64_t membership_ms = ticks_to_ms(end_membership - start_membership);
+
             LOG_PRINT_L1("Tx: " << obj_to_json_str(tx));
             LOG_PRINT_L1("Timings (ms) ... validate: " << validate_ms
                 << " , parse: "                        << parse_ms
                 << " , non_input_ms: "                 << non_input_ms
-                << " , input_ms: "                     << input_ms);
+                << " , input_ms: "                     << input_ms
+                << " , membership_ms: "                << membership_ms);
 
-            printf("%lu, %lu, %lu, %lu\n", tx.vin.size(), tx.vout.size(), tx_blob.size(), validate_ms);
+            printf("%lu, %lu, %lu, %lu, %lu, %lu\n",
+                tx.vin.size(),
+                tx.vout.size(),
+                tx_blob.size(),
+                validate_ms,
+                membership_proof.size(),
+                membership_ms);
         }
     }
 }
