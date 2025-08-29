@@ -1165,7 +1165,7 @@ TEST(fcmp_pp, tx_sizes_and_verification_times)
     const std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddrs{{ account_keys.m_account_address.m_spend_public_key, {0,0} }};
 
     // 4. Build the txs
-    printf("Inputs, Outputs, FCMP++ Size (bytes), Verify (ms), Membership Proof Size (bytes), Membership Proof Verify (ms)\n");
+    printf("Inputs, Outputs, Tx Size (bytes), Verify (ms), Membership Proof Size (bytes), Membership Proof Verify (ms)\n");
     for (std::size_t n_inputs = 1; n_inputs <= FCMP_PLUS_PLUS_MAX_INPUTS; ++n_inputs)
     {
         // 4a. Collect inputs
