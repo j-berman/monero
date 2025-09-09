@@ -1753,6 +1753,69 @@ namespace cryptonote
     return n_removed;
   }
   //---------------------------------------------------------------------------------
+  size_t tx_memory_pool::kick_stale_fcmp_pp_txs()
+  {
+    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    CRITICAL_REGION_LOCAL1(m_blockchain);
+
+    LockedTXN lock(m_blockchain.get_db());
+
+    const uint64_t cur_n_blocks = m_blockchain.get_db().height();
+    const uint64_t tip_block_idx = std::max<uint64_t>(cur_n_blocks, 1) - 1;
+    const uint64_t default_last_locked_block = cryptonote::get_default_last_locked_block_index(tip_block_idx);
+    // All FCMP++ txs with reference_block below default_last_locked_block get kicked
+
+    // Get all FCMP++ tx id's with invalid reference block
+    std::vector<crypto::hash> remove;
+    m_blockchain.for_all_txpool_txes([&remove, default_last_locked_block](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref *bd) {
+      if (meta.pruned) // skip pruned txes
+        return true;
+      cryptonote::transaction tx;
+      if (!parse_and_validate_tx_from_blob(*bd, tx))
+      {
+        MWARNING("Failed to parse tx from txpool, removing");
+        remove.push_back(txid);
+        return true;
+      }
+      if (!rct::is_rct_fcmp(tx.rct_signatures.type))
+        return true;
+      if (default_last_locked_block >= tx.rct_signatures.p.reference_block)
+        return true;
+      remove.emplace_back(txid);
+      return true;
+    }, true, relay_category::all);
+
+    // Remove them from pool
+    std::size_t count = 0;
+    for (const crypto::hash &txid : remove)
+    {
+      try
+      {
+        size_t weight;
+        uint64_t fee;
+        cryptonote::transaction tx;
+        cryptonote::blobdata blob;
+        bool relayed, do_not_relay, double_spend_seen, pruned;
+        if (!take_tx(txid, tx, blob, weight, fee, relayed, do_not_relay, double_spend_seen, pruned))
+        {
+          MERROR("Failed to remove stale FCMP++ tx " << txid << " from txpool");
+        }
+        else
+        {
+          MINFO("Removed stale FCMP++ tx " << txid << " from pool");
+          ++count;
+        }
+        continue;
+      }
+      catch (const std::exception &e)
+      {
+        MERROR("Failed to remove stale FCMP++ tx " << txid << " from txpool: " << e.what());
+        continue;
+      }
+    }
+    return count;
+  }
+  //---------------------------------------------------------------------------------
   void tx_memory_pool::add_tx_to_transient_lists(const crypto::hash& txid, double fee, time_t receive_time)
   {
 

@@ -407,6 +407,13 @@ namespace cryptonote
      */
     size_t validate(uint8_t version);
 
+    /**
+     * @brief kick FCMP++ transactions from the pool that reference a tree root that is no longer valid
+     *
+     * @return the number of transactions removed
+     */
+    size_t kick_stale_fcmp_pp_txs();
+
      /**
       * @brief return the cookie
       *

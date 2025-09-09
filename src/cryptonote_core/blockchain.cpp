@@ -686,6 +686,11 @@ block Blockchain::pop_block_from_blockchain()
     m_tx_pool.validate(new_hf_version);
   }
 
+  if (new_hf_version >= HF_VERSION_FCMP_PLUS_PLUS)
+  {
+    m_tx_pool.kick_stale_fcmp_pp_txs();
+  }
+
   return popped_block;
 }
 //------------------------------------------------------------------
