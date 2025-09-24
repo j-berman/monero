@@ -4,25 +4,25 @@ This documentation provides useful information explaining the full-chain members
 
 Here are the core components of the integration:
 
-1. [Rust FFI](#a.-rust-ffi)
-2. [Curve trees merkle tree](#b.-curve-trees-merkle-tree)
+1. [Rust FFI](#1.rust-ffi)
+2. [Curve trees merkle tree](#2.curve-trees-merkle-tree)
     1. Preparing locked outputs for insertion to the tree upon unlock
     2. `grow_tree` algorithm
     3. Grow the tree as the node syncs
     4. Trim the tree on reorg and on pop blocks
     5. LMDB changes
     6. Migrating cryptonote outputs into the tree
-3. [Transaction struct changes for FCMP++](#c.-transaction-struct-changes-for-fcmp)
-4. [Constructing FCMP++ transactions](#d.-constructing-fcmp-transactions)
-5. [Verifying FCMP++ transactions](#e.-verifying-fcmp-transactions)
-6. [Consensus changes for FCMP++](#f.-consensus-changes-for-fcmp)
-7. [Wallet sync](#g.-wallet-sync)
+3. [Transaction struct changes for FCMP++](#3.transaction-struct-changes-for-fcmp)
+4. [Constructing FCMP++ transactions](#4.constructing-fcmp-transactions)
+5. [Verifying FCMP++ transactions](#5.verifying-fcmp-transactions)
+6. [Consensus changes for FCMP++](#6.consensus-changes-for-fcmp)
+7. [Wallet sync](#7.wallet-sync)
     1. Tree cache
     2. Handling restore from an arbitrary restore height
 8. Daemon RPC: fetching outputs by output ID
 9. `scan_tx`
 
-# A. Rust FFI
+# 1. Rust FFI
 
 Since much of the full-chain membership proof++ code is written in Rust, we implement a Foreign Function Interface ([FFI](https://doc.rust-lang.org/nomicon/ffi.html)) to call the Rust code from C++. Using cmake, the Rust code is compiled into a static lib (`libfcmp_pp_rust.a`) when you run `make` from the root of the monero repo. The static lib's functions are exposed via the C++ header file `src/fcmp_pp/fcmp_pp_rust/fcmp++.h` (generated with the help of [cbindgen](https://github.com/mozilla/cbindgen) and modified slightly). The heavy lifting on the Rust side is done in the crates located in the [`monero-oxide` repo](https://github.com/monero-oxide/monero-oxide/tree/fcmp%2B%2B).
 
@@ -33,10 +33,10 @@ The C++ has clear responsibilities: manage tree state, update/read the db, ed255
 Here is what the structure looks like at time of writing:
 
 <p align="center">
-  <img src="./fcmp_pp_code_structure.png" alt="FCMP++ code structure"/>
+  <img src="./FCMP++_CODE_STRUCTURE.png" alt="FCMP++ code structure"/>
 </p>
 
-# B. Curve trees merkle tree
+# 2. Curve trees merkle tree
 
 The curve trees merkle tree is a new store for **spendable** transaction outputs in the chain. FCMP++'s work by proving you own (and can spend) an output in the tree, without revealing which output is yours. All existing **valid** cryptonote outputs will be inserted into the tree **as soon as the outputs unlock**. Once an output is in the tree, users can construct FCMP++'s with that output. Thus, the anon set will roughly be the entire chain since genesis.
 
@@ -67,7 +67,7 @@ There are 3 critical steps to growing the tree:
 
 These are the core steps the function `handle_fcmp_tree` accomplishes, immediately after the daemon successfully adds a block to the chain inside `src/cryptonote_core/blockchain.cpp`'s `handle_block_to_main_chain`.
 
-## 1.i. Curve trees merkle tree: Preparing locked outputs for insertion to the tree upon unlock
+## 2.i. Curve trees merkle tree: Preparing locked outputs for insertion to the tree upon unlock
 
 ### Keeping track of outputs by last locked block
 
@@ -139,7 +139,7 @@ Some outputs include an `unlock_time` which should either be interpreted as the 
 
 Note it is possible (likely) for the returned `last_locked_block_index` to be distinct from current consensus' enforced unlock block **for timestamp-based locked outputs only**. The proposal is for consensus to enforce this new rule for FCMP++ txs, meaning that users won't be able to construct an FCMP++ tx spending outputs until the outputs unlock according to the rules of  `get_last_locked_block_index`.
 
-## 1.ii. Curve trees merkle tree: `grow_tree`
+## 2.ii. Curve trees merkle tree: `grow_tree`
 
 This function takes a set of new outputs and uses them to grow the tree.
 
@@ -195,7 +195,7 @@ TreeExtension get_tree_extension(const uint64_t old_n_leaf_tuples,
     b. Get the `LayerExtension` for the current layer to add to the `TreeExtension` struct.
       - We use `GrowLayerInstructions` to determine correct values when hashing the preceding "child" layer.
 
-## 1.iii. Curve trees merkle tree: Grow the tree as the node syncs
+## 2.iii. Curve trees merkle tree: Grow the tree as the node syncs
 
 As soon as a block is added to the chain, we call `handle_fcmp_tree` to grow the tree. Assume we're adding block index 91 to the chain, and follow along below, noting that the default last locked block of outputs created in block index 91 is block 100:
 
@@ -340,7 +340,7 @@ void BlockchainDB::grow_tree(const uint64_t blk_idx, std::vector<fcmp_pp::curve_
 
 `BlockchainLMDB::grow_with_tree_extension` strictly reads values from the `tree_extension` and inserts them into the db.
 
-## 1.iv. Curve trees merkle tree: Trim the tree on reorg and on pop blocks
+## 2.iv. Curve trees merkle tree: Trim the tree on reorg and on pop blocks
 
 ### `BlockchainDB::trim_block()`
 
@@ -420,7 +420,7 @@ Inside `trim_leaves`, we read all the outputs we're going to remove from the db,
 
 Inside `trim_layers`, we delete all layer elements needed from each layer, and update the last layer element using the previous tree edge.
 
-## 1.v. Curve trees merkle tree: LMDB changes
+## 2.v. Curve trees merkle tree: LMDB changes
 
 The following changes to the db are necessary in order to store and update the curve trees merkle tree.
 
@@ -502,7 +502,7 @@ DB Flags: `MDB_INTEGERKEY | MDB_CREATE`
 
 Enables an efficient query to determine how many leaf tuples there are in the tree assuming a specific block is highest in the chain.
 
-## 1.vi. Curve trees merkle tree: Migrating cryptonote outputs into the tree
+## 2.vi. Curve trees merkle tree: Migrating cryptonote outputs into the tree
 
 All existing cryptonote outputs need to be migrated into the merkle tree.
 
@@ -514,7 +514,7 @@ All existing cryptonote outputs need to be migrated into the merkle tree.
   2. Grow the tree block by block.
 - The migration can theoretically be made asynchronous (it can run in the background while nodes start immediately, until the hard fork when the migration **must** run before nodes can continue syncing). Such a change would be a solid lift.
 
-# C. Transaction struct changes for FCMP++
+# 3. Transaction struct changes for FCMP++
 
 ### `cryptonote::transaction::rctSig`
 
@@ -560,19 +560,19 @@ struct FcmpVerifyHelperData final
 
 `TreeRootShared` is a shared pointer to a FFI-friendly tree root type.
 
-# D. Constructing FCMP++ transactions
+# 4. Constructing FCMP++ transactions
 
 TODO
 
-# E. Verifying FCMP++ transactions
+# 5. Verifying FCMP++ transactions
 
 TODO
 
-# F. Consensus changes for FCMP++
+# 6. Consensus changes for FCMP++
 
 TODO
 
-# G. Wallet sync
+# 7. Wallet sync
 
 TODO
 
