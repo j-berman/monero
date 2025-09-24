@@ -4,19 +4,19 @@ This documentation provides useful information explaining the full-chain members
 
 Here are the core components of the integration:
 
-1. [Rust FFI](#1.rust-ffi)
-2. [Curve trees merkle tree](#2.curve-trees-merkle-tree)
+1. [Rust FFI](#1-rust-ffi)
+2. [Curve trees merkle tree](#2-curve-trees-merkle-tree)
     1. Preparing locked outputs for insertion to the tree upon unlock
     2. `grow_tree` algorithm
     3. Grow the tree as the node syncs
     4. Trim the tree on reorg and on pop blocks
     5. LMDB changes
     6. Migrating cryptonote outputs into the tree
-3. [Transaction struct changes for FCMP++](#3.transaction-struct-changes-for-fcmp)
-4. [Constructing FCMP++ transactions](#4.constructing-fcmp-transactions)
-5. [Verifying FCMP++ transactions](#5.verifying-fcmp-transactions)
-6. [Consensus changes for FCMP++](#6.consensus-changes-for-fcmp)
-7. [Wallet sync](#7.wallet-sync)
+3. [Transaction struct changes for FCMP++](#3-transaction-struct-changes-for-fcmp)
+4. [Constructing FCMP++ transactions](#4-constructing-fcmp-transactions)
+5. [Verifying FCMP++ transactions](#5-verifying-fcmp-transactions)
+6. [Consensus changes for FCMP++](#6-consensus-changes-for-fcmp)
+7. [Wallet sync](#7-wallet-sync)
     1. Tree cache
     2. Handling restore from an arbitrary restore height
 8. Daemon RPC: fetching outputs by output ID
