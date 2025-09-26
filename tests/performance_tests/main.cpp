@@ -67,6 +67,7 @@
 #include "multiexp.h"
 #include "sig_mlsag.h"
 #include "sig_clsag.h"
+#include "torsion_ops.h"
 
 namespace po = boost::program_options;
 
@@ -201,6 +202,8 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE0(filter, p, test_derive_secret_key);
   TEST_PERFORMANCE1(filter, p, test_fe_batch_invert, true); // batched
   TEST_PERFORMANCE1(filter, p, test_fe_batch_invert, false); // individual inversions
+  TEST_PERFORMANCE1(filter, p, test_torsion_ops, true); // check for torsion
+  TEST_PERFORMANCE1(filter, p, test_torsion_ops, false); // clear torsion
   TEST_PERFORMANCE0(filter, p, test_ge_frombytes_vartime);
   TEST_PERFORMANCE0(filter, p, test_ge_tobytes);
   TEST_PERFORMANCE0(filter, p, test_generate_keypair);

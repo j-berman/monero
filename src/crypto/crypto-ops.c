@@ -39,7 +39,6 @@ DISABLE_VS_WARNINGS(4146 4244)
 
 /* Predeclarations */
 
-static void fe_sq(fe, const fe);
 static void ge_madd(ge_p1p1 *, const ge_p3 *, const ge_precomp *);
 static void ge_msub(ge_p1p1 *, const ge_p3 *, const ge_precomp *);
 static void ge_p2_0(ge_p2 *);
@@ -91,7 +90,7 @@ void fe_0(fe h) {
 h = 1
 */
 
-static void fe_1(fe h) {
+void fe_1(fe h) {
   h[0] = 1;
   h[1] = 0;
   h[2] = 0;
@@ -231,7 +230,7 @@ static void fe_cmov(fe f, const fe g, unsigned int b) {
 h = f
 */
 
-static void fe_copy(fe h, const fe f) {
+void fe_copy(fe h, const fe f) {
   int32_t f0 = f[0];
   int32_t f1 = f[1];
   int32_t f2 = f[2];
@@ -357,7 +356,7 @@ Preconditions:
    |f| bounded by 1.1*2^26,1.1*2^25,1.1*2^26,1.1*2^25,etc.
 */
 
-static int fe_isnegative(const fe f) {
+int fe_isnegative(const fe f) {
   unsigned char s[32];
   fe_tobytes(s, f);
   return s[0] & 1;
@@ -638,7 +637,7 @@ Postconditions:
    |h| bounded by 1.1*2^25,1.1*2^24,1.1*2^25,1.1*2^24,etc.
 */
 
-static void fe_neg(fe h, const fe f) {
+void fe_neg(fe h, const fe f) {
   int32_t f0 = f[0];
   int32_t f1 = f[1];
   int32_t f2 = f[2];
@@ -688,7 +687,7 @@ Postconditions:
 See fe_mul.c for discussion of implementation strategy.
 */
 
-static void fe_sq(fe h, const fe f) {
+void fe_sq(fe h, const fe f) {
   int32_t f0 = f[0];
   int32_t f1 = f[1];
   int32_t f2 = f[2];
@@ -992,7 +991,7 @@ Postconditions:
    |h| bounded by 1.1*2^26,1.1*2^25,1.1*2^26,1.1*2^25,etc.
 */
 
-static void fe_sub(fe h, const fe f, const fe g) {
+void fe_sub(fe h, const fe f, const fe g) {
   int32_t f0 = f[0];
   int32_t f1 = f[1];
   int32_t f2 = f[2];
@@ -3920,4 +3919,68 @@ int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p) {
 
   // Y/Z = 0/0
   return 0;
+}
+
+// https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.2
+static void fe_ed_derivatives_to_wei_x(unsigned char *wei_x, const fe inv_one_minus_y, const fe one_plus_y)
+{
+  // (1/(1-y))*(1+y)
+  fe inv_one_minus_y_mul_one_plus_y;
+  fe_mul(inv_one_minus_y_mul_one_plus_y, inv_one_minus_y, one_plus_y);
+
+  // wei x = (1/(1-y))*(1+y) + (A/3)
+  fe wei_x_fe;
+  fe_add(wei_x_fe, inv_one_minus_y_mul_one_plus_y, fe_a_inv_3);
+  fe_tobytes(wei_x, wei_x_fe);
+}
+
+// https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.2
+void fe_ed_derivatives_to_wei_x_y(unsigned char *wei_x, unsigned char *wei_y, const fe inv_one_minus_y, const fe one_plus_y, const fe inv_one_minus_y_mul_x)
+{
+  fe_ed_derivatives_to_wei_x(wei_x, inv_one_minus_y, one_plus_y);
+
+  // c*(1+y)
+  fe fe_c_mul_one_plus_y;
+  fe_mul(fe_c_mul_one_plus_y, fe_c, one_plus_y);
+
+  // wei y = c * (1+y) * (1/((1-y)*x))
+  fe wei_y_fe;
+  fe_mul(wei_y_fe, fe_c_mul_one_plus_y, inv_one_minus_y_mul_x);
+  fe_tobytes(wei_y, wei_y_fe);
+}
+
+/*
+Since fe_add and fe_sub enforce the following conditions:
+
+Preconditions:
+   |f| bounded by 1.1*2^25,1.1*2^24,1.1*2^25,1.1*2^24,etc.
+   |g| bounded by 1.1*2^25,1.1*2^24,1.1*2^25,1.1*2^24,etc.
+
+Postconditions:
+   |h| bounded by 1.1*2^26,1.1*2^25,1.1*2^26,1.1*2^25,etc.
+
+We sometimes need to "reduce" field elems when they are in the poscondition's
+larger domain to match the precondition domain. This way we can take the output
+of fe_add or fe_sub and use it as input to another call to fe_add or fe_sub.
+
+We reduce by converting the field elem to its byte repr, then re-deriving the
+field elem from the byte repr.
+*/
+void fe_reduce(fe reduced_f, const fe f)
+{
+  unsigned char f_bytes[32];
+  fe_tobytes(f_bytes, f);
+  fe_frombytes_vartime(reduced_f, f_bytes);
+}
+
+void fe_dbl(fe h, const fe f)
+{
+  // Reduce the input for safety to ensure we meet the preconditions for fe_add
+  fe f_reduced;
+  fe_reduce(f_reduced, f);
+  fe h_res;
+  fe_add(h_res, f_reduced, f_reduced);
+  // Reduce the output for safety to ensure the result can be used as input to
+  // fe_add or fe_sub without an extra call to fe_reduce
+  fe_reduce(h, h_res);
 }
