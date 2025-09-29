@@ -1332,6 +1332,25 @@ done:
             DP(mgVerd);
             if (!mgVerd) {
               LOG_PRINT_L1("MG signature verification failed");
+              LOG_PRINT_L1("Txn fee: " << rv.txnFee);
+              for (const auto &ss : rv.p.MGs[0].ss)
+              {
+                LOG_PRINT_L1("__ss__");
+                for (const auto &key : ss)
+                  LOG_PRINT_L1("ss: " << key);
+              }
+              LOG_PRINT_L1("cc: " << rv.p.MGs[0].cc);
+              for (const auto &II : rv.p.MGs[0].II)
+                LOG_PRINT_L1("II: " << II);
+              for (const auto &mixRing : rv.mixRing)
+              {
+                LOG_PRINT_L1("__mixRing__");
+                for (const auto &ctkey : mixRing)
+                  LOG_PRINT_L1("mixRing: " << ctkey.dest << " , " << ctkey.mask);
+              }
+              for (const auto &ctkey : rv.outPk)
+                LOG_PRINT_L1("outPk: " << ctkey.dest << " , " << ctkey.mask);
+              LOG_PRINT_L1("Pre mlsag hash: " << get_pre_mlsag_hash(rv, hw::get_device("default")));
               return false;
             }
           }
