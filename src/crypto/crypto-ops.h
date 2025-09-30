@@ -167,3 +167,5 @@ void fe_mul(fe out, const fe, const fe);
 void fe_0(fe h);
 
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p);
+
+void fe_reduce(fe reduced_f, const fe f);
