@@ -3862,6 +3862,20 @@ int sc_isnonzero(const unsigned char *s) {
     s[27] | s[28] | s[29] | s[30] | s[31]) - 1) >> 8) + 1;
 }
 
+// return 1 if a == b, else 0
+int fe_equals(const fe a, const fe b) {
+  unsigned char a_bytes[32];
+  unsigned char b_bytes[32];
+  fe_tobytes(a_bytes, a);
+  fe_tobytes(b_bytes, b);
+
+  int r = 1;
+  for (int i = 0; i < 32; ++i) {
+    r &= a_bytes[i] == b_bytes[i];
+  }
+  return r;
+}
+
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p) {
   // https://eprint.iacr.org/2008/522
   // X == T == 0 and Y/Z == 1
