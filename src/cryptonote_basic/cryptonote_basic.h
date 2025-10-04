@@ -179,11 +179,17 @@ namespace cryptonote
     std::vector<uint8_t> extra;
 
     BEGIN_SERIALIZE()
+      LOG_PRINT_L0("(De-)serializing tx prefix version");
       VARINT_FIELD(version)
+      LOG_PRINT_L0("(De-)serializing tx prefix version: " << version);
       if((version == 0 || CURRENT_TRANSACTION_VERSION < version)) return false;
+      LOG_PRINT_L0("(De-)serializing unlock_time");
       VARINT_FIELD(unlock_time)
+      LOG_PRINT_L0("(De-)serializing vin");
       FIELD(vin)
+      LOG_PRINT_L0("(De-)serializing vout");
       FIELD(vout)
+      LOG_PRINT_L0("(De-)serializing extra");
       FIELD(extra)
     END_SERIALIZE()
 
@@ -240,6 +246,7 @@ namespace cryptonote
     void set_blob_size(size_t sz) const { blob_size = sz; set_blob_size_valid(true); }
 
     BEGIN_SERIALIZE_OBJECT()
+      LOG_PRINT_L0("(De-)serializing tx");
       if (!typename Archive<W>::is_saving())
       {
         set_hash_valid(false);
@@ -249,11 +256,13 @@ namespace cryptonote
 
       const auto start_pos = ar.getpos();
 
+      LOG_PRINT_L0("(De-)serializing tx prefix");
       FIELDS(*static_cast<transaction_prefix *>(this))
 
       if (std::is_same<Archive<W>, binary_archive<W>>())
         prefix_size = ar.getpos() - start_pos;
 
+      LOG_PRINT_L0("(De-)serializing tx version " << version);
       if (version == 1)
       {
         if (std::is_same<Archive<W>, binary_archive<W>>())
@@ -313,6 +322,7 @@ namespace cryptonote
           }
         }
       }
+      LOG_PRINT_L0("Finished (De-)serializing tx version " << version);
       if (!typename Archive<W>::is_saving())
         pruned = false;
     END_SERIALIZE()
@@ -573,21 +583,29 @@ namespace cryptonote
     mutable crypto::hash hash;
 
     BEGIN_SERIALIZE_OBJECT()
+      LOG_PRINT_L0("(De-)serializing block");
       if (!typename Archive<W>::is_saving())
         set_hash_valid(false);
 
+      LOG_PRINT_L0("(De-)serializing block header");
       FIELDS(*static_cast<block_header *>(this))
+      LOG_PRINT_L0("(De-)serializing block miner tx");
       FIELD(miner_tx)
+      LOG_PRINT_L0("(De-)serializing block tx hashes");
       FIELD(tx_hashes)
+      LOG_PRINT_L0(tx_hashes.size() << " tx hashes");
       if (tx_hashes.size() > CRYPTONOTE_MAX_TX_PER_BLOCK)
         return false;
       if (major_version >= HF_VERSION_FCMP_PLUS_PLUS)
       {
+        LOG_PRINT_L0("(De-)serializing n layers at " << major_version);
         FIELD(fcmp_pp_n_tree_layers)
+        LOG_PRINT_L0(fcmp_pp_n_tree_layers << " layers");
         if (fcmp_pp_n_tree_layers > FCMP_PLUS_PLUS_MAX_LAYERS)
           return false;
         FIELD(fcmp_pp_tree_root)
       }
+      LOG_PRINT_L0("Finished block serialization");
     END_SERIALIZE()
   };
 
