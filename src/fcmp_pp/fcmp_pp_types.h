@@ -178,6 +178,31 @@ static_assert(std::has_unique_object_representations_v<CarrotOutputPairV1>);
 
 using OutputPair = std::variant<LegacyOutputPair, CarrotOutputPairV1>;
 
+bool output_pair_type(const OutputPair &output_pair, uint8_t &type_out)
+{
+    type_out = 0;
+    const std::size_t type = output_pair.index();
+    static_assert(std::variant_size_v<OutputPair> <= std::numeric_limits<uint8_t>::max(), "expect type idx to fit in uint8_t");
+    type_out = static_cast<uint8_t>(type);
+    return true;
+};
+
+template<typename... Args>
+OutputPair output_pair_from_idx(const uint8_t idx, Args&&... args)
+{
+    switch (idx)
+    {
+        case 0: return OutputPair(std::in_place_index<0>, std::forward<Args>(args)...);
+        case 1: return OutputPair(std::in_place_index<1>, std::forward<Args>(args)...);
+        default:
+        {
+            static_assert(std::variant_size_v<OutputPair> == 2, 
+                "Added/Removed a variant type to Output Pair, need to update the switch statement");
+            CHECK_AND_ASSERT_THROW_MES(false, "Unexpected output pair type");
+        }
+    }
+}
+
 const crypto::public_key &output_pubkey_cref(const OutputPair &output_pair);
 const crypto::ec_point &commitment_cref(const OutputPair &output_pair);
 
@@ -204,6 +229,66 @@ struct UnifiedOutput final
 };
 
 #define SIZEOF_SERIALIZED_UNIFIED_OUTPUT 73 // 8+1+32+32
+
+static_assert(std::variant_size_v<OutputPair> <= std::numeric_limits<uint8_t>::max(),
+    "Serialized Output Pair expects 1 byte for variant type");
+
+// Useful for key-value serialization of multiple unified outputs
+struct UnifiedOutputs final
+{
+    std::vector<uint64_t> unified_ids;
+    std::vector<uint8_t> output_types;
+    std::vector<crypto::public_key> output_pubkeys;
+    std::vector<crypto::ec_point> commitments;
+
+    UnifiedOutputs() = default;
+
+    bool size_check() const
+    {
+        return unified_ids.size() == output_types.size()
+            && unified_ids.size() == output_pubkeys.size()
+            && unified_ids.size() == commitments.size();
+    }
+
+    UnifiedOutputs(const std::vector<UnifiedOutput> &unified_outputs)
+    {
+        unified_ids.reserve(unified_outputs.size());
+        output_types.reserve(unified_outputs.size());
+        output_pubkeys.reserve(unified_outputs.size());
+        commitments.reserve(unified_outputs.size());
+        for (const auto &oc : unified_outputs)
+        {
+            unified_ids.push_back(oc.unified_id);
+            output_pair_type(oc.output_pair, output_types.emplace_back());
+            output_pubkeys.push_back(output_pubkey_cref(oc.output_pair));
+            commitments.push_back(commitment_cref(oc.output_pair));
+        }
+    }
+
+    std::vector<UnifiedOutput> to_unified_outputs_vec() const
+    {
+        if (!size_check())
+            return {};
+        std::vector<UnifiedOutput> unified_outputs;
+        unified_outputs.reserve(unified_ids.size());
+        for (std::size_t i = 0; i < unified_ids.size(); ++i)
+        {
+            unified_outputs.emplace_back(UnifiedOutput{
+                .unified_id   = unified_ids.at(i),
+                .output_pair = output_pair_from_idx(output_types.at(i), output_pubkeys.at(i), commitments.at(i))
+            });
+        }
+        return unified_outputs;
+    };
+
+    BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(unified_ids)
+        KV_SERIALIZE(output_type)
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(output_pubkeys)
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(commitments)
+        if (!size_check()) return false;
+    END_KV_SERIALIZE_MAP()
+};
 
 using OutsByLastLockedBlock = std::unordered_map<uint64_t, std::vector<UnifiedOutput>>;
 
@@ -298,76 +383,77 @@ struct ConsolidatedPaths final
     std::unordered_map<uint64_t, std::vector<UnifiedOutput>> leaves_by_chunk_idx;
     std::vector<std::unordered_map<uint64_t, CompressedChunk>> layer_chunks_by_chunk_idx;
 
+private:
     // Serializable helper types
-    struct LeafChunk
-    {
-        uint64_t chunk_idx;
-        std::vector<UnifiedOutput> chunk;
-
-        BEGIN_KV_SERIALIZE_MAP()
-            KV_SERIALIZE(chunk_idx)
-            KV_SERIALIZE_CONTAINER_POD_AS_BLOB(chunk)
-        END_KV_SERIALIZE_MAP()
-    };
-
-    struct LayerChunk
-    {
-        uint64_t chunk_idx;
-        CompressedChunk chunk;
-
-        BEGIN_KV_SERIALIZE_MAP()
-            KV_SERIALIZE(chunk_idx)
-            KV_SERIALIZE(chunk)
-        END_KV_SERIALIZE_MAP()
-    };
-
     struct LayerEntry
     {
-        std::vector<LayerChunk> layer_chunks;
+        std::vector<uint64_t> chunk_idxs;
+        std::vector<CompressedChunk> chunks;
 
         BEGIN_KV_SERIALIZE_MAP()
-            KV_SERIALIZE(layer_chunks)
+            KV_SERIALIZE(chunk_idxs)
+            KV_SERIALIZE(chunks)
+            if (chunk_idxs.size() != chunks.size())
+                return false;
         END_KV_SERIALIZE_MAP()
     };
 
-    std::vector<LeafChunk> leaves_by_chunk_idx_vec;
+    std::vector<uint64_t> leaf_chunk_idxs;
+    std::vector<UnifiedOutputs> leaves_by_chunk_idx_vec;
     std::vector<LayerEntry> layer_chunks_by_chunk_idx_vec;
 
     BEGIN_KV_SERIALIZE_MAP()
+        leaf_chunk_idxs.clear();
         leaves_by_chunk_idx_vec.clear();
         layer_chunks_by_chunk_idx_vec.clear();
 
         // Writing
         if (is_store)
         {
+            leaf_chunk_idxs.reserve(leaves_by_chunk_idx.size());
             leaves_by_chunk_idx_vec.reserve(leaves_by_chunk_idx.size());
             for (const auto &leaf_chunk : leaves_by_chunk_idx)
-                leaves_by_chunk_idx_vec.push_back(LeafChunk{leaf_chunk.first, leaf_chunk.second});
+            {
+                leaf_chunk_idxs.push_back(leaf_chunk.first);
+                leaves_by_chunk_idx_vec.push_back(OutputContexts(leaf_chunk.second));
+            }
 
             layer_chunks_by_chunk_idx_vec.reserve(layer_chunks_by_chunk_idx.size());
             for (const auto &layer : layer_chunks_by_chunk_idx)
             {
-                auto &last = layer_chunks_by_chunk_idx_vec.emplace_back().layer_chunks;
-                last.reserve(layer.size());
+                auto &last = layer_chunks_by_chunk_idx_vec.emplace_back();
+                last.chunk_idxs.reserve(layer.size());
+                last.chunks.reserve(layer.size());
                 for (const auto &layer_chunk : layer)
-                    last.push_back(LayerChunk{layer_chunk.first, layer_chunk.second});
+                {
+                    last.chunk_idxs.push_back(layer_chunk.first);
+                    last.chunks.push_back(layer_chunk.second);
+                }
             }
         }
 
+        KV_SERIALIZE(leaf_chunk_idxs)
         KV_SERIALIZE_N(leaves_by_chunk_idx_vec, "leaves_by_chunk_idx")
         KV_SERIALIZE_N(layer_chunks_by_chunk_idx_vec, "layer_chunks_by_chunk_idx")
 
         // Reading
         if (!is_store)
         {
-            for (const auto &leaf_chunk : leaves_by_chunk_idx_vec)
-                leaves_by_chunk_idx[leaf_chunk.chunk_idx] = std::move(leaf_chunk.chunk);
+            if (leaf_chunk_idxs.size() != leaves_by_chunk_idx_vec.size())
+                return false;
+            for (std::size_t i = 0; i < leaf_chunk_idxs.size(); ++i)
+                leaves_by_chunk_idx[leaf_chunk_idxs[i]] = leaves_by_chunk_idx_vec.at(i).to_unified_outputs_vec();
             layer_chunks_by_chunk_idx.resize(layer_chunks_by_chunk_idx_vec.size());
             for (std::size_t i = 0; i < layer_chunks_by_chunk_idx.size(); ++i)
-                for (auto &layer_chunk : layer_chunks_by_chunk_idx_vec.at(i).layer_chunks)
-                    layer_chunks_by_chunk_idx.at(i)[layer_chunk.chunk_idx] = std::move(layer_chunk.chunk);
+            {
+                auto &this_layer = layer_chunks_by_chunk_idx[i];
+                auto &read_layer = layer_chunks_by_chunk_idx_vec.at(i);
+                for (std::size_t j = 0; j < read_layer.chunk_idxs.size(); ++j )
+                    this_layer[read_layer.chunk_idxs[j]] = std::move(read_layer.chunks.at(j));
+            }
         }
 
+        leaf_chunk_idxs.clear();
         leaves_by_chunk_idx_vec.clear();
         layer_chunks_by_chunk_idx_vec.clear();
     END_KV_SERIALIZE_MAP()
