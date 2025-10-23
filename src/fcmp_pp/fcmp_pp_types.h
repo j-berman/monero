@@ -393,11 +393,9 @@ struct AssignedLeafIdx final
 // Contains minimum path elems necessary for multiple paths (e.g. only contains the root once)
 struct ConsolidatedPaths final
 {
-    // Useful types to use in the code
     std::unordered_map<uint64_t, std::vector<UnifiedOutput>> leaves_by_chunk_idx;
     std::vector<std::unordered_map<uint64_t, CompressedChunk>> layer_chunks_by_chunk_idx;
 
-private:
     // Serializable helper types
     struct LayerEntry
     {
@@ -412,14 +410,10 @@ private:
         END_KV_SERIALIZE_MAP()
     };
 
-    std::vector<uint64_t> leaf_chunk_idxs;
-    std::vector<UnifiedOutputs> leaves_by_chunk_idx_vec;
-    std::vector<LayerEntry> layer_chunks_by_chunk_idx_vec;
-
     BEGIN_KV_SERIALIZE_MAP()
-        leaf_chunk_idxs.clear();
-        leaves_by_chunk_idx_vec.clear();
-        layer_chunks_by_chunk_idx_vec.clear();
+        std::vector<uint64_t> leaf_chunk_idxs;
+        std::vector<UnifiedOutputs> leaves_by_chunk_idx_vec;
+        std::vector<LayerEntry> layer_chunks_by_chunk_idx_vec;
 
         // Writing
         if (is_store)
@@ -446,9 +440,9 @@ private:
             }
         }
 
-        KV_SERIALIZE(leaf_chunk_idxs)
-        KV_SERIALIZE_N(leaves_by_chunk_idx_vec, "leaves_by_chunk_idx")
-        KV_SERIALIZE_N(layer_chunks_by_chunk_idx_vec, "layer_chunks_by_chunk_idx")
+        epee::serialization::selector<is_store>::serialize(leaf_chunk_idxs, stg, hparent_section, "leaf_chunk_idxs");
+        epee::serialization::selector<is_store>::serialize(leaves_by_chunk_idx_vec, stg, hparent_section, "leaves_by_chunk_idx");
+        epee::serialization::selector<is_store>::serialize(layer_chunks_by_chunk_idx_vec, stg, hparent_section, "layer_chunks_by_chunk_idx");
 
         // Reading
         if (!is_store)
@@ -466,10 +460,6 @@ private:
                     this_layer[read_layer.chunk_idxs[j]] = std::move(read_layer.chunks.at(j));
             }
         }
-
-        leaf_chunk_idxs.clear();
-        leaves_by_chunk_idx_vec.clear();
-        layer_chunks_by_chunk_idx_vec.clear();
     END_KV_SERIALIZE_MAP()
 };
 //----------------------------------------------------------------------------------------------------------------------
