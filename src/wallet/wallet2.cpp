@@ -2086,16 +2086,23 @@ void wallet2::handle_needed_path_data(const uint64_t n_blocks_synced,
       const boost::lock_guard<boost::recursive_mutex> lock{m_daemon_rpc_mutex};
       bool r = net_utils::invoke_http_bin("/get_path_by_unified_id.bin", req, res, *m_http_client, rpc_timeout);
       THROW_WALLET_EXCEPTION_IF(!r || res.status != CORE_RPC_STATUS_OK, error::wallet_internal_error, "Failed to get paths by unified id from daemon");
-      THROW_WALLET_EXCEPTION_IF(res.leaf_idxs.size() != req.unified_ids.size(), error::wallet_internal_error, "Mismatched number of leaf in request for paths by unified id");
+      THROW_WALLET_EXCEPTION_IF(res.leaf_idxs.size() != req.unified_ids.size() || !res.unassigned_global_output_ids.empty(), error::wallet_internal_error, "Expected all leaves to be assigned");
       THROW_WALLET_EXCEPTION_IF(n_leaf_tuples > 0 && n_leaf_tuples != res.n_leaf_tuples, error::wallet_internal_error, "Unexpected different n_leaf_tuples across responses");
       n_leaf_tuples = res.n_leaf_tuples;
     }
 
+    // Collect all the assigned leaf idxs
+    std::vector<fcmp_pp::AssignedLeafIdx> res_leaf_idxs;
+    res_leaf_idxs.reserve(res.leaf_idxs.size());
+    for (std::size_t j = 0; j < res.leaf_idxs.size(); ++j)
+    {
+      res_leaf_idxs.emplace_back(fcmp_pp::AssignedLeafIdx{.assigned_leaf_idx = true, .leaf_idx = res.leaf_idxs.at(j)});
+      leaf_idxs.push_back(res.leaf_idxs.at(j));
+    }
+
     // De-consolidate the paths
-    auto res_paths = m_curve_trees->deconsolidate_paths(n_leaf_tuples, res.leaf_idxs, res.paths);
+    auto res_paths = m_curve_trees->deconsolidate_paths(n_leaf_tuples, res_leaf_idxs, res.paths);
     paths.insert(paths.end(), std::make_move_iterator(res_paths.begin()), std::make_move_iterator(res_paths.end()));
-    for (const auto &leaf_idx : res.leaf_idxs)
-      leaf_idxs.push_back(leaf_idx.leaf_idx);
   }
   THROW_WALLET_EXCEPTION_IF(paths.size() != unified_ids.size(), error::wallet_internal_error, "Mismatched number of paths to unified id's");
   THROW_WALLET_EXCEPTION_IF(leaf_idxs.size() != unified_ids.size(), error::wallet_internal_error, "Mismatched number of leaf_idxs to unified id's");

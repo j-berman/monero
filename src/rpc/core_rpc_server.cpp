@@ -1146,9 +1146,23 @@ namespace cryptonote
 
     try
     {
+      std::vector<fcmp_pp::AssignedLeafIdx> leaf_idxs;
       std::vector<fcmp_pp::CompressedPath> full_paths;
-      res.n_leaf_tuples = m_core.get_blockchain_storage().get_db().get_path_by_unified_id(req.unified_ids, req.as_of_n_blocks, res.leaf_idxs, full_paths);
-      res.paths = fcmp_pp::curve_trees::curve_trees_v1()->consolidate_paths(res.n_leaf_tuples, res.leaf_idxs, std::move(full_paths));
+      res.n_leaf_tuples = m_core.get_blockchain_storage().get_db().get_path_by_unified_id(req.unified_ids, req.as_of_n_blocks, leaf_idxs, full_paths);
+      res.paths = fcmp_pp::curve_trees::curve_trees_v1()->consolidate_paths(res.n_leaf_tuples, leaf_idxs, std::move(full_paths));
+
+      // Collect leaf idxs and their assigned status for response. Order is important so the client can tell which
+      // global output id corresponds to which leaf idx.
+      CHECK_AND_ASSERT_MES(req.global_output_ids.size() == leaf_idxs.size(), true, "Unexpected mismatch global output ids <> leaf idxs");
+      for (std::size_t i = 0; i < req.global_output_ids.size(); ++i)
+      {
+        if (!leaf_idxs.at(i).assigned_leaf_idx)
+        {
+          res.unassigned_global_output_ids.push_back(req.global_output_ids.at(i));
+          continue;
+        }
+        res.leaf_idxs.push_back(leaf_idxs.at(i));
+      }
     }
     catch (...)
     {

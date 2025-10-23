@@ -668,12 +668,14 @@ inline const std::string get_rpc_status(const bool trusted_daemon, const std::st
     struct response_t: public rpc_access_response_base
     {
       uint64_t n_leaf_tuples;
+      std::vector<uint64_t> unassigned_global_output_ids;
       std::vector<fcmp_pp::AssignedLeafIdx> leaf_idxs;
-      fcmp_pp::ConsolidatedPaths paths;
+      fcmp_pp::curve_trees::ConsolidatedPaths paths;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_PARENT(rpc_access_response_base)
         KV_SERIALIZE(n_leaf_tuples)
+        KV_SERIALIZE(unassigned_global_output_ids)
         KV_SERIALIZE(leaf_idxs)
         KV_SERIALIZE(paths)
       END_KV_SERIALIZE_MAP()
