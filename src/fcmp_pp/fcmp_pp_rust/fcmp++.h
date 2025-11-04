@@ -344,6 +344,9 @@ bool fcmp_pp_verify_sal(const uint8_t signable_tx_hash[32],
                                              const struct FcmpInputCompressed *input,
                                              const uint8_t L[32],
                                              const uint8_t sal_proof[FCMP_PP_SAL_PROOF_SIZE_V1]);
+
+int set_mallopt_for_fcmp_pp_verify();
+
 /**
  * brief: fcmp_pp_verify_membership - Verify a FCMP++ membership proof
  * param: inputs - a slice of fcmp_input_ref pointers

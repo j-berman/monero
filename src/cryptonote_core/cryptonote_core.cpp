@@ -46,6 +46,7 @@ using namespace epee;
 #include "warnings.h"
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
+#include "fcmp_pp/fcmp_pp_rust/fcmp++.h"
 #include "misc_language.h"
 #include "file_io_utils.h"
 #include <csignal>
@@ -495,6 +496,12 @@ namespace cryptonote
     }
     // folder might not be a directory, etc, etc
     catch (...) { }
+
+    if (::set_mallopt_for_fcmp_pp_verify() == 0)
+    {
+      MERROR_VER("Failed to set mallopt for FCMP++ verification!!! You may have memory issues when syncing.");
+      // Not fatal because memory issues might not materialize
+    }
 
     std::unique_ptr<BlockchainDB> db(new_db());
     if (db == NULL)

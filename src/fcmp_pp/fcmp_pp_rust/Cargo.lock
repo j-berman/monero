@@ -253,6 +253,7 @@ dependencies = [
  "full-chain-membership-proofs",
  "generalized-bulletproofs",
  "helioselene",
+ "libc",
  "monero-fcmp-plus-plus",
  "monero-generators",
  "multiexp",
