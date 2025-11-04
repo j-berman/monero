@@ -33,6 +33,7 @@
 #include "common/threadpool.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "curve_trees.h"
+#include "fcmp_pp/fcmp_pp_rust/fcmp++.h"
 #include "fcmp_pp/fcmp_pp_types.h"
 #include "fcmp_pp/proof_len.h"
 #include "fcmp_pp/prove.h"
@@ -750,6 +751,10 @@ TEST(fcmp_pp, batch_verify_from_file)
     // Verify 50 FCMP++ 128-in proofs in parallel using the batch verifier
     const std::size_t n_proofs = 50;
     const std::size_t n_inputs = 128;
+
+    // If you run this test without this next line and observe memory usage via top,
+    // you may see memory usage go well past 8gb. See lib.rs for a deeper explanation.
+    ASSERT_FALSE(::set_mallopt_for_fcmp_pp_verify() == 0);
 
     crypto::hash signable_tx_hash;
     std::vector<uint8_t> fcmp_pp_proof;

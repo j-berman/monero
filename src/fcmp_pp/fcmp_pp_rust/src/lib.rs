@@ -32,6 +32,39 @@ use monero_generators::{
 
 use std::os::raw::c_int;
 
+use core::alloc::{GlobalAlloc, Layout};
+use libc::{malloc, free, c_void, mallopt, M_ARENA_MAX};
+
+/*
+We explicilty use the libc memory allocator to be sure that mallopt for
+fcmp_pp_verify works as intended, and that memory is allocated as
+expected when batch verifying FCMP++ proofs in parallel. If some
+other system allocator is used that has the same default behavior as
+libc, then batch verifying FCMP++ proofs in parallel could end up taking
+a lot more memory than expected.
+
+See the comment in set_mallopt_for_fcmp_pp_verify for more.
+*/
+pub struct LibcAllocator;
+
+unsafe impl GlobalAlloc for LibcAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = malloc(layout.size());
+        if ptr.is_null() {
+            std::ptr::null_mut()
+        } else {
+            ptr as *mut u8
+        }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        free(ptr as *mut c_void);
+    }
+}
+
+#[global_allocator]
+static GLOBAL: LibcAllocator = LibcAllocator;
+
 //-------------------------------------------------------------------------------------- Curve points
 
 #[no_mangle]
@@ -1110,6 +1143,18 @@ pub unsafe extern "C" fn fcmp_pp_verify_membership(
         }
         Err(_) => false,
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn set_mallopt_for_fcmp_pp_verify() -> c_int {
+    // By default, the libc allocator may cache allocated memory for reuse in multithreaded
+    // contexts. As a result, verifying many large batches of FCMP++ proofs in multithreaded
+    // contexts can end up using a lot of memory, even though memory is already freed.
+    // More on this here: https://gotplt.org/posts/malloc-per-thread-arenas-in-glibc.html
+    mallopt(M_ARENA_MAX, 2)
+    // We use mallopt here to set M_ARENA_MAX to 2 to aim to minimze number of memory pools
+    // while still benefiting multithreaded contexts to have more than 1 available.
+    // Also see: https://devcenter.heroku.com/articles/tuning-glibc-memory-behavior
 }
 
 /// # Safety

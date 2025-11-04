@@ -9,7 +9,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 rand_core = { version = "0.6", default-features = false }
-
+libc = "0.2"
 multiexp = "0.4"
 ciphersuite = { version = "0.4.2", features = ["ed25519"] }
 dalek-ff-group = "0.4.4"
