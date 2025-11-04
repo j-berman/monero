@@ -30,7 +30,10 @@
 
 #include "rctSigs.h"
 
+#include <algorithm>
 #include <condition_variable>
+#include <mutex>
+#include <utility>
 
 #include "misc_log_ex.h"
 #include "misc_language.h"
@@ -1695,6 +1698,13 @@ done:
       const std::size_t n_proofs = fcmp_pp_verify_inputs.size();
       CHECK_AND_ASSERT_MES(n_proofs == n_inputs_per_proof.size(), false, "Did not have matching n inputs per proof");
 
+      // Sort the inputs in ascending order based on input count. Smaller input counts will be batched together.
+      std::vector<std::pair<fcmp_pp::FcmpPpVerifyInput, std::size_t>> verify_inputs;
+      verify_inputs.reserve(n_proofs);
+      for (std::size_t i = 0; i < n_proofs; ++i)
+        verify_inputs.emplace_back(std::make_pair(std::move(fcmp_pp_verify_inputs.at(i)), n_inputs_per_proof.at(i)));
+      std::sort(verify_inputs.begin(), verify_inputs.end(), [](auto &a, auto &b) { return a.second < b.second; });
+
       tools::threadpool &tpool = tools::threadpool::getInstanceForCompute();
       tools::threadpool::waiter waiter(tpool);
       const std::size_t n_threads = std::max<std::size_t>(1, tpool.get_max_concurrency());
@@ -1719,10 +1729,10 @@ done:
         {
           // Avoid verifying more than the max n inputs in a single thread, because it can explode memory.
           // At time of writing, verifying a single 128-in takes ~800mb.
-          if ((n_inputs_in_batch + n_inputs_per_proof.at(j)) > FCMP_PLUS_PLUS_MAX_INPUTS)
+          if ((n_inputs_in_batch + verify_inputs.at(j).second) > FCMP_PLUS_PLUS_MAX_INPUTS)
             break;
-          batch.emplace_back(std::move(fcmp_pp_verify_inputs[j]));
-          n_inputs_in_batch += n_inputs_per_proof.at(j);
+          batch.emplace_back(std::move(verify_inputs[j].first));
+          n_inputs_in_batch += verify_inputs.at(j).second;
         }
 
         CHECK_AND_ASSERT_MES(batch.size(), false, "Empty batch in batchVerifyFcmpPpProofs");
