@@ -1718,7 +1718,7 @@ done:
         for (std::size_t j = i; j < end; ++j)
         {
           // Avoid verifying more than the max n inputs in a single thread, because it can explode memory.
-          // At time of writing, verifying a single 128-in takes ~1.2gb.
+          // At time of writing, verifying a single 128-in takes ~800mb.
           if ((n_inputs_in_batch + n_inputs_per_proof.at(j)) > FCMP_PLUS_PLUS_MAX_INPUTS)
             break;
           batch.emplace_back(std::move(fcmp_pp_verify_inputs[j]));
@@ -1732,10 +1732,10 @@ done:
       }
       CHECK_AND_ASSERT_THROW_MES(sanity_counter == n_proofs, "did not collect all FCMP++ inputs");
 
-      // Keep the max n inputs simultaneously verifying to 6*128. This should keep RAM requirements
-      // below 8GB, since 6*~1.2gb < 8GB.
+      // Keep the max n inputs simultaneously verifying to 8*128. This should keep RAM requirements
+      // below 8GB, since 8*~800mb < 8GB.
       // Note: perhaps the daemon could be passed a command line arg to allow more RAM.
-      static constexpr std::size_t MAX_VERIFYING_IN_QUEUE = 6 * FCMP_PLUS_PLUS_MAX_INPUTS;
+      static constexpr std::size_t MAX_VERIFYING_IN_QUEUE = 8 * FCMP_PLUS_PLUS_MAX_INPUTS;
       std::size_t inputs_currently_verifying = 0;
       std::mutex n_inputs_mutex;
       std::condition_variable cv;
