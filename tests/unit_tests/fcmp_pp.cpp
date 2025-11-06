@@ -748,8 +748,8 @@ TEST(fcmp_pp, verify)
 //----------------------------------------------------------------------------------------------------------------------
 TEST(fcmp_pp, batch_verify_from_file)
 {
-    // Verify 50 FCMP++ 128-in proofs in parallel using the batch verifier
-    const std::size_t n_proofs = 50;
+    // Verify 100 FCMP++ 128-in proofs in parallel using the batch verifier
+    const std::size_t n_proofs = 100;
     const std::size_t n_inputs = 128;
 
     // If you run this test without this next line and observe memory usage via top,

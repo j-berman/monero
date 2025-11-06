@@ -31,8 +31,6 @@
 #include "rctSigs.h"
 
 #include <algorithm>
-#include <condition_variable>
-#include <mutex>
 #include <utility>
 
 #include "misc_log_ex.h"
@@ -1697,12 +1695,18 @@ done:
         const std::vector<std::size_t> & n_inputs_per_proof) {
       const std::size_t n_proofs = fcmp_pp_verify_inputs.size();
       CHECK_AND_ASSERT_MES(n_proofs == n_inputs_per_proof.size(), false, "Did not have matching n inputs per proof");
+      if (n_proofs == 0)
+          return true;
 
       // Sort the inputs in ascending order based on input count. Smaller input counts will be batched together.
+      std::size_t total_n_inputs = 0;
       std::vector<std::pair<fcmp_pp::FcmpPpVerifyInput, std::size_t>> verify_inputs;
       verify_inputs.reserve(n_proofs);
       for (std::size_t i = 0; i < n_proofs; ++i)
+      {
+        total_n_inputs += n_inputs_per_proof.at(i);
         verify_inputs.emplace_back(std::make_pair(std::move(fcmp_pp_verify_inputs.at(i)), n_inputs_per_proof.at(i)));
+      }
       std::sort(verify_inputs.begin(), verify_inputs.end(), [](auto &a, auto &b) { return a.second < b.second; });
 
       tools::threadpool &tpool = tools::threadpool::getInstanceForCompute();
@@ -1710,50 +1714,46 @@ done:
       const std::size_t n_threads = std::max<std::size_t>(1, tpool.get_max_concurrency());
       const bool multithreaded = n_threads > 1;
 
+      // Keep the max n threads simultaneously verifying to 8. This should keep RAM requirements below 8GB,
+      // since it takes max ~800mb to batch verify FCMP++ proofs at time of writing, and 8*~800mb < 8GB.
+      // Note: perhaps the daemon could be passed a command line arg to allow more RAM.
+      static const std::size_t MAX_N_BATCHES = 8;
+      const std::size_t n_batches = std::min(n_threads, MAX_N_BATCHES);
+
       std::vector<std::vector<fcmp_pp::FcmpPpVerifyInput>> batches;
-      std::vector<std::size_t> n_inputs_per_batch;
-      batches.reserve(n_proofs); // over reserve
-      n_inputs_per_batch.reserve(n_proofs);
+      batches.reserve(n_batches);
 
-      // Split batches across all available threads
-      std::size_t sanity_counter = 0;
-      const std::size_t fcmp_pp_verify_batch_size = std::max<std::size_t>(1, (n_proofs / n_threads));
-      for (std::size_t i = 0; i < n_proofs;)
+      // Spread the load based on n inputs in each proof, to make it more even.
+      const std::size_t fcmp_pp_verify_batch_size = std::max<std::size_t>(1, (total_n_inputs / n_batches));
+      batches.emplace_back();
+      batches.back().reserve(fcmp_pp_verify_batch_size);
+      std::size_t n_inputs_in_batch = 0;
+      for (std::size_t i = 0; i < n_proofs; ++i)
       {
-        auto &batch = batches.emplace_back();
-        batch.reserve(fcmp_pp_verify_batch_size);
-
-        const std::size_t end = std::min(i + fcmp_pp_verify_batch_size, n_proofs);
-        std::size_t n_inputs_in_batch = 0;
-        for (std::size_t j = i; j < end; ++j)
+        if (batches.size() < n_batches && batches.back().size()
+            && (n_inputs_in_batch + verify_inputs.at(i).second) > fcmp_pp_verify_batch_size)
         {
-          // Avoid verifying more than the max n inputs in a single thread, because it can explode memory.
-          // At time of writing, verifying a single 128-in takes ~800mb.
-          if ((n_inputs_in_batch + verify_inputs.at(j).second) > FCMP_PLUS_PLUS_MAX_INPUTS)
-            break;
-          batch.emplace_back(std::move(verify_inputs[j].first));
-          n_inputs_in_batch += verify_inputs.at(j).second;
+          MDEBUG("FCMP++ batch " << batches.size() << " has " << n_inputs_in_batch << " total inputs across " << batches.back().size() << " txs");
+
+          // Start the next batch
+          batches.emplace_back();
+          batches.back().reserve(fcmp_pp_verify_batch_size);
+          n_inputs_in_batch = 0;
         }
 
-        CHECK_AND_ASSERT_MES(batch.size(), false, "Empty batch in batchVerifyFcmpPpProofs");
-        n_inputs_per_batch.push_back(n_inputs_in_batch);
-        sanity_counter += batch.size();
-        i += batch.size();
+        batches.back().emplace_back(std::move(verify_inputs.at(i).first));
+        n_inputs_in_batch += verify_inputs.at(i).second;
       }
-      CHECK_AND_ASSERT_THROW_MES(sanity_counter == n_proofs, "did not collect all FCMP++ inputs");
+      CHECK_AND_ASSERT_MES(batches.size() <= n_batches, false, "Too many batches");
 
-      // Keep the max n inputs simultaneously verifying to 8*128. This should keep RAM requirements
-      // below 8GB, since 8*~800mb < 8GB.
-      // Note: perhaps the daemon could be passed a command line arg to allow more RAM.
-      static constexpr std::size_t MAX_VERIFYING_IN_QUEUE = 8 * FCMP_PLUS_PLUS_MAX_INPUTS;
-      std::size_t inputs_currently_verifying = 0;
-      std::mutex n_inputs_mutex;
-      std::condition_variable cv;
+      MDEBUG("FCMP++ batch " << batches.size() << " has " << n_inputs_in_batch << " total inputs across " << batches.back().size() << " txs");
 
       std::deque<bool> results;
       results.resize(batches.size());
       for (std::size_t i = 0; i < batches.size(); ++i)
       {
+        CHECK_AND_ASSERT_MES(batches[i].size(), false, "Empty batch in batchVerifyFcmpPpProofs");
+
         if (!multithreaded)
         {
           results[i] = fcmp_pp::verify(batches[i]);
@@ -1763,33 +1763,11 @@ done:
         tpool.submit(&waiter,
             [&, i]()
             {
-              const std::size_t n_inputs_in_batch = n_inputs_per_batch.at(i);
-              std::size_t cur_total_inputs = 0;
-              {
-                // Wait until we're actively verifying <= the max allowed n inputs at one time
-                std::unique_lock<std::mutex> lock(n_inputs_mutex);
-                cv.wait(lock, [&inputs_currently_verifying, n_inputs_in_batch] {
-                    return (inputs_currently_verifying + n_inputs_in_batch) <= MAX_VERIFYING_IN_QUEUE;
-                  });
-                inputs_currently_verifying += n_inputs_in_batch;
-                cur_total_inputs = inputs_currently_verifying;
-              }
-
-              MDEBUG("Verifying FCMP++ batch " << (i+1) << " / " << batches.size() << " ("
-                << n_inputs_in_batch << " inputs in batch, "
-                << cur_total_inputs << " total inputs currently being verified)");
+              MDEBUG("Verifying FCMP++ batch " << (i+1));
 
               results[i] = fcmp_pp::verify(batches[i]);
 
               MDEBUG("Finished verifying FCMP++ batch " << (i+1) << " / " << batches.size());
-
-              {
-                std::unique_lock<std::mutex> lock(n_inputs_mutex);
-                inputs_currently_verifying -= n_inputs_in_batch;
-              }
-
-              // Notify all in case there is one able to be scheduled since it has fewer inputs to verify than another
-              cv.notify_all();
             },
             true
           );
