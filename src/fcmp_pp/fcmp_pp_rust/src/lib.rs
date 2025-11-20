@@ -997,7 +997,7 @@ pub unsafe extern "C" fn fcmp_pp_verify_input_new(
     let pseudo_outs = pseudo_outs.iter().map(|&x| CompressedPoint(x)).collect();
 
     // Read the FCMP++ proof
-    let Ok(fcmp_plus_plus) = FcmpPlusPlus::read(&pseudo_outs, n_tree_layers, &mut proof) else {
+    let Ok(fcmp_plus_plus) = FcmpPlusPlus::read(&pseudo_outs, proof_len, &mut proof) else {
         return -6;
     };
 
@@ -1091,8 +1091,10 @@ pub unsafe extern "C" fn fcmp_pp_verify_membership(
         return false;
     };
 
+    debug_assert_eq!(fcmp_proof_len, _slow_membership_proof_size(inputs.len(), n_tree_layers));
+
     let mut fcmp_proof_buf = core::slice::from_raw_parts(fcmp_proof, fcmp_proof_len);
-    let fcmp = match Fcmp::read(&mut fcmp_proof_buf, inputs.len(), n_tree_layers) {
+    let fcmp = match Fcmp::read(&mut fcmp_proof_buf, fcmp_proof_len) {
         Ok(p) => p,
         Err(_) => return false,
     };
