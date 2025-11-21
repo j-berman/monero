@@ -36,26 +36,29 @@
 #include "fcmp_pp/prove.h"
 #include "unit_tests_utils.h"
 
-#include <iosfwd>
 
-
-static std::string get_fcmp_pp_filename(const std::size_t n_inputs)
-{
-    return "../data/fcmp_pp_verify_inputs_" + std::to_string(n_inputs) + "in.bin";
-}
-
-template<std::size_t n_inputs>
+template<std::size_t n_inputs, std::size_t n_proofs_per_batch, std::size_t loop_count_>
 class test_fcmp_pp_verify
 {
 public:
-    static constexpr size_t loop_count =
-        n_inputs < 2 ? 1000 :
-        n_inputs < 16 ? 100 :
-        /*n_inputs >= 16*/ 8;
+    static const size_t loop_count = loop_count_;
 
     bool init()
     {
-        return unit_test::read_fcmp_pp_verify_input_from_file(get_fcmp_pp_filename(n_inputs),
+        crypto::hash signable_tx_hash;
+        std::vector<uint8_t> fcmp_pp_proof;
+        uint8_t n_layers;
+        fcmp_pp::TreeRootShared tree_root;
+        std::vector<crypto::ec_point> pseudo_outs;
+        std::vector<crypto::key_image> key_images;
+
+        const auto get_fcmp_pp_filename = [](std::size_t n) -> std::string
+        {
+            return "../data/fcmp_pp_verify_inputs_" + std::to_string(n) + "in.bin";
+        };
+
+        if (!unit_test::read_fcmp_pp_verify_input_from_file(
+                get_fcmp_pp_filename(n_inputs),
                 n_inputs,
                 signable_tx_hash,
                 fcmp_pp_proof,
@@ -63,26 +66,33 @@ public:
                 tree_root,
                 pseudo_outs,
                 key_images
-            );
+            )
+        )
+        {
+            return false;
+        }
+
+        fcmp_pp_verify_inputs.reserve(n_proofs_per_batch);
+        for (std::size_t i = 0; i < n_proofs_per_batch; ++i)
+        {
+            fcmp_pp_verify_inputs.emplace_back(fcmp_pp::fcmp_pp_verify_input_new(
+                    signable_tx_hash,
+                    fcmp_pp_proof,
+                    n_layers,
+                    tree_root,
+                    pseudo_outs,
+                    key_images
+                ));
+        }
+
+        return true;
     }
 
     bool test()
     {
-        return fcmp_pp::verify(
-                signable_tx_hash,
-                fcmp_pp_proof,
-                n_layers,
-                tree_root,
-                pseudo_outs,
-                key_images
-            );
+        return fcmp_pp::verify(fcmp_pp_verify_inputs);
     }
 
 private:
-    crypto::hash signable_tx_hash;
-    std::vector<uint8_t> fcmp_pp_proof;
-    uint8_t n_layers;
-    fcmp_pp::TreeRootShared tree_root;
-    std::vector<crypto::ec_point> pseudo_outs;
-    std::vector<crypto::key_image> key_images;
+    std::vector<fcmp_pp::FcmpPpVerifyInput> fcmp_pp_verify_inputs;
 };

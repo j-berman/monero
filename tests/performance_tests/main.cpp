@@ -618,12 +618,25 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE1(filter, p, test_zero_commit, true); // fast
   TEST_PERFORMANCE1(filter, p, test_zero_commit, false);
 
-  // Test with different n inputs
-  TEST_PERFORMANCE1(filter, p, test_fcmp_pp_verify, 1);
-  TEST_PERFORMANCE1(filter, p, test_fcmp_pp_verify, 2);
-  TEST_PERFORMANCE1(filter, p, test_fcmp_pp_verify, 4);
-  TEST_PERFORMANCE1(filter, p, test_fcmp_pp_verify, 8);
-  TEST_PERFORMANCE1(filter, p, test_fcmp_pp_verify, 128);
+  // n_inputs, n_proofs_per_batch, loop_count
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   1, 1, 1000);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   2, 1,  100);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   4, 1,  100);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   8, 1,  100);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify, 128, 1,   10);
+
+  // 128 total inputs, split
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify, 1, 128, 10);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify, 2,  64, 10);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify, 4,  32, 10);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify, 8,  16, 10);
+
+  // 4096 total inputs, split
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   1, 4096, 1);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   2, 2048, 1);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   4, 1024, 1);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify,   8,  512, 1);
+  TEST_PERFORMANCE3(filter, p, test_fcmp_pp_verify, 128,   32, 1);
 
   std::cout << "Tests finished. Elapsed time: " << timer.elapsed_ms() / 1000 << " sec" << std::endl;
 
