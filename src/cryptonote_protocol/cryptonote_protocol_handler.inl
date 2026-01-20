@@ -889,36 +889,16 @@ namespace cryptonote
       return 1;
     }
 
-    std::vector<std::pair<cryptonote::blobdata, block>> local_blocks;
-    std::vector<cryptonote::blobdata> local_txs;
-
-    std::vector<cryptonote::blobdata> txes;
-    if (!m_core.get_txpool_complement(arg.hashes, txes))
+    NOTIFY_TX_POOL_HASH::request inv_txes_req;
+    if (!m_core.get_txpool_complement(arg.hashes, inv_txes_req.t))
     {
       LOG_ERROR_CCONTEXT("failed to get txpool complement");
       return 1;
     }
 
-    // Avoid tripping the packet size limit by serving txs in batches
-    static const std::size_t SLICE_SIZE = max_n_txs_per_packet();
-    for (std::size_t i = 0; i < txes.size(); i += SLICE_SIZE)
-    {
-      const std::size_t end = std::min(txes.size(), i + SLICE_SIZE);
+    MLOG_P2P_MESSAGE("-->>NOTIFY_TX_POOL_HASH:" << " txs.size()=" << inv_txes_req.t.size());
+    post_notify<NOTIFY_TX_POOL_HASH>(inv_txes_req, context);
 
-      NOTIFY_NEW_TRANSACTIONS::request new_txes;
-      new_txes.txs.reserve(end - std::min(i, end));
-      for (std::size_t j = i; j < end; ++j)
-        new_txes.txs.emplace_back(std::move(txes.at(j)));
-
-      MLOG_P2P_MESSAGE
-      (
-          "-->>NOTIFY_NEW_TRANSACTIONS:"
-          << " txs.size()=" << new_txes.txs.size()
-          << ", pool txs " << i << " - " << end-1
-      );
-
-      post_notify<NOTIFY_NEW_TRANSACTIONS>(new_txes, context);
-    }
     return 1;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -926,6 +906,21 @@ namespace cryptonote
   int t_cryptonote_protocol_handler<t_core>::handle_notify_tx_pool_hash(int command, NOTIFY_TX_POOL_HASH::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_TX_POOL_HASH (" << arg.t.size() << " txes)");
+
+    if (!is_synchronized())
+    {
+      LOG_DEBUG_CC(context, "Received new tx hash while syncing, ignored");
+      return 1;
+    }
+
+    // If the peer's chain is too far ahead of us, then we ignore its reported pool txs.
+    // We don't need pool txs until we're synced. Uses a 2 block window in case we're in the process of adding blocks,
+    // and we should be able to capture the pool txs once synced.
+    if (context.m_remote_blockchain_height > (m_core.get_current_blockchain_height() + 2))
+    {
+      LOG_DEBUG_CC(context, "Received new tx hash from peer that is too far ahead of us, ignored");
+      return 1;
+    }
 
     // Create a list to hold transaction hashes missing in our local tx pool.
     std::vector<crypto::hash> missing_tx_hashes;
@@ -1942,7 +1937,7 @@ skip:
 
     // If we're not synchronized, we shouldn't be requesting any txs. Syncing might end up removing many tx requests
     // because the txs enter the chain.
-    if (!is_synchronized() || (m_core.get_target_blockchain_height() > m_core.get_current_blockchain_height()))
+    if (!is_synchronized())
     {
       MDEBUG("Skipping tx request queue check, not yet synced");
       return true;
