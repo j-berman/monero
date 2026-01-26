@@ -190,6 +190,27 @@ namespace cryptonote
     return MAX_N_TXS;
   }
   //-----------------------------------------------------------------------------------------------------------------------
+  static std::size_t max_n_tx_hashes_per_packet()
+  {
+    static const std::size_t MAX_N_TX_HASHES = get_command_max_bytes(NOTIFY_TX_POOL_HASH::ID) / sizeof(crypto::hash) * 95 / 100; // 95% for overhead
+    CHECK_AND_ASSERT_MES(MAX_N_TX_HASHES > 0, 100/*sane default*/, "MAX_N_TX_HASHES is expected >0, something is wrong.");
+    return MAX_N_TX_HASHES;
+  }
+  //-----------------------------------------------------------------------------------------------------------------------
+  static void shrink_to_fit_hashes_container(std::vector<crypto::hash> &hashes_inout)
+  {
+    static const std::size_t max_n_hashes = max_n_tx_hashes_per_packet();
+    if (max_n_hashes >= hashes_inout.size())
+      return;
+
+    // If this hits, it means we should look into updating the protocol for filling a node's empty txpool.
+    // The pool complement protocol is not designed to handle refilling huge pools. We truncate to avoid the worst case
+    // of connection drops, since missing pool txs is more desirable than dropped peers. But it would be better to have
+    // a protocol capable of refilling an empty pool when the pool is large.
+    MWARNING("Truncating " << (hashes_inout.size() - max_n_hashes) << " tx hashes for the pool complement");
+    hashes_inout.resize(max_n_hashes);
+  }
+  //-----------------------------------------------------------------------------------------------------------------------
   template<class t_core>
     t_cryptonote_protocol_handler<t_core>::t_cryptonote_protocol_handler(t_core& rcore, nodetool::i_p2p_endpoint<connection_context>* p_net_layout, bool offline):m_core(rcore),
                                                                                                               m_p2p(p_net_layout),
@@ -895,6 +916,8 @@ namespace cryptonote
       LOG_ERROR_CCONTEXT("failed to get txpool complement");
       return 1;
     }
+
+    shrink_to_fit_hashes_container(inv_txes_req.t);
 
     MLOG_P2P_MESSAGE("-->>NOTIFY_TX_POOL_HASH:" << " txs.size()=" << inv_txes_req.t.size());
     post_notify<NOTIFY_TX_POOL_HASH>(inv_txes_req, context);
@@ -2940,6 +2963,9 @@ skip:
       MERROR("Failed to get txpool hashes");
       return false;
     }
+
+    shrink_to_fit_hashes_container(r.hashes);
+
     MLOG_P2P_MESSAGE("-->>NOTIFY_GET_TXPOOL_COMPLEMENT: hashes.size()=" << r.hashes.size() );
     post_notify<NOTIFY_GET_TXPOOL_COMPLEMENT>(r, context);
     MLOG_PEER_STATE("requesting txpool complement");
