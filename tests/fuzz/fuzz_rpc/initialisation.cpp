@@ -30,7 +30,7 @@ bool DummyProtocol::is_synchronized() const {
   return true;
 }
 
-bool DummyProtocol::relay_transactions(cryptonote::NOTIFY_NEW_TRANSACTIONS::request&, const boost::uuids::uuid&, epee::net_utils::zone, cryptonote::relay_method) {
+bool DummyProtocol::relay_transactions(cryptonote::NOTIFY_NEW_TRANSACTIONS::request&, std::vector<crypto::hash>&&, const boost::uuids::uuid&, epee::net_utils::zone, cryptonote::relay_method) {
   return true;
 }
 
@@ -341,7 +341,8 @@ bool generate_random_blocks(cryptonote::core& core, FuzzedDataProvider& provider
   bool added_txs = false;
   for (const auto& tx_blob : cached_txs) {
     cryptonote::tx_verification_context tvc;
-    bool accepted = core.handle_incoming_tx(tx_blob, tvc, cryptonote::relay_method::block, true);
+    crypto::hash txid;
+    bool accepted = core.handle_incoming_tx(tx_blob, tvc, cryptonote::relay_method::block, true, txid);
     if (accepted || tvc.m_added_to_pool) {
       added_txs = true;
 
