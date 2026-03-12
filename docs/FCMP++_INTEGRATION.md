@@ -89,7 +89,7 @@ using OutsByLastLockedBlock = std::unordered_map<uint64_t/*block_idx*/, std::vec
 struct UnifiedOutput final
 {
     // Output's unique id in the chain, used to insert the output in the tree in the order it entered the chain
-    uint64_t output_id{0};
+    uint64_t unified_id{0};
     OutputPair output_pair;
 };
 
@@ -210,10 +210,10 @@ TreeExtension get_tree_extension(const uint64_t old_n_leaf_tuples,
 As soon as a block is added to the chain, we call `handle_fcmp_tree` to grow the tree. Assume we're adding block index 91 to the chain, and follow along below, noting that the default last locked block of outputs created in block index 91 is block 100:
 
 ```cpp
-static void handle_fcmp_tree(BlockchainDB *db, const uint64_t block_idx, const uint64_t first_output_id, const std::vector<std::reference_wrapper<const transaction>> &tx_refs, const std::unordered_map<uint64_t, rct::key> &transparent_amount_commitments)
+static void handle_fcmp_tree(BlockchainDB *db, const uint64_t block_idx, const uint64_t first_unified_id, const std::vector<std::reference_wrapper<const transaction>> &tx_refs, const std::unordered_map<uint64_t, rct::key> &transparent_amount_commitments)
 {
   // Collect outs by last locked block to add to the db
-  OutsByLastLockedBlockMeta new_locked_outs = cryptonote::get_outs_by_last_locked_block(tx_refs, transparent_amount_commitments, first_output_id, block_idx);
+  OutsByLastLockedBlockMeta new_locked_outs = cryptonote::get_outs_by_last_locked_block(tx_refs, transparent_amount_commitments, first_unified_id, block_idx);
 
   // Get the outputs with default last locked block
   const uint64_t default_last_locked_block = cryptonote::get_default_last_locked_block_index(block_idx);
