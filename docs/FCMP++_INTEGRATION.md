@@ -78,31 +78,41 @@ Take note of the function: `get_outs_by_last_locked_block`. Upon adding a block,
 ```cpp
 struct OutsByLastLockedBlockMeta
 {
-    fcmp_pp::curve_trees::OutsByLastLockedBlock outs_by_last_locked_block;
-    std::unordered_map<uint64_t/*output_id*/, uint64_t/*last locked block_id*/> timelocked_outputs;
-    uint64_t next_output_id;
+    fcmp_pp::OutsByLastLockedBlock outs_by_last_locked_block;
+    std::unordered_map<uint64_t/*unified_id*/, uint64_t/*last locked block_id*/> timelocked_outputs;
+    uint64_t next_unified_id;
 };
 
-using OutsByLastLockedBlock = std::unordered_map<uint64_t/*block_idx*/, std::vector<OutputContext/*sorted in the order of appearance in the chain*/>>;
+using OutsByLastLockedBlock = std::unordered_map<uint64_t/*block_idx*/, std::vector<UnifiedOutput/*sorted in the order of appearance in the chain*/>>;
 
-// Contextual wrapper for the output
-struct OutputContext final
+// Wrapper for outputs with context to insert the output into the FCMP++ curve tree
+struct UnifiedOutput final
 {
-    // Output's global id in the chain, used to insert the output in the tree in the order it entered the chain
+    // Output's unique id in the chain, used to insert the output in the tree in the order it entered the chain
     uint64_t output_id{0};
-    // True if the output pair elems are guaranteed to not have torsion and are not equal to identity
-    uint8_t torsion_checked{0};
     OutputPair output_pair;
 };
 
+using OutputPair = std::variant<LegacyOutputPair, CarrotOutputPairV1>;
+
+// May have torsion, use biased key image generator for I
+struct LegacyOutputPair : public OutputPairTemplate<LegacyOutputPair>{};
+// No torsion, use unbiased key image generator for I
+struct CarrotOutputPairV1 : public OutputPairTemplate<CarrotOutputPairV1>{};
+
 // Output pub key and commitment, ready to be converted to a leaf tuple
 // - From {output_pubkey,commitment} -> {O,C} -> {O.x,O.y,I.x,I.y,C.x,C.y}
-struct OutputPair final
+template<typename T>
+struct OutputPairTemplate
 {
     crypto::public_key output_pubkey;
-    rct::key           commitment;
+    crypto::ec_point commitment;
 };
 ```
+
+#### Unified Outputs
+
+"Unified Outputs" are the set of all outputs in the chain (pre-RCT, RCT, and Carrot). Each output has a `unified_id`, which is the ordered index given to the output upon entering the chain (when the tx that creates the output enters a block in the chain). We use the `unified_id` to determine the order to insert a batch of outputs into the curve tree merkle tree.
 
 ### Adding locked outputs to the db
 
@@ -139,7 +149,7 @@ Some outputs include an `unlock_time` which should either be interpreted as the 
 
 Note it is possible (likely) for the returned `last_locked_block_index` to be distinct from current consensus' enforced unlock block **for timestamp-based locked outputs only**. The proposal is for consensus to enforce this new rule for FCMP++ txs, meaning that users won't be able to construct an FCMP++ tx spending outputs until the outputs unlock according to the rules of  `get_last_locked_block_index`.
 
-## 2.ii. Curve trees merkle tree: `grow_tree`
+## 2.ii. Curve trees merkle tree: `BlokchcainDB::grow_tree`
 
 This function takes a set of new outputs and uses them to grow the tree.
 
@@ -153,14 +163,14 @@ Steps 1 and 3 are fairly straightforward. Step 2 carries the most weight and is 
 
 This step-wise approach enables clean separation of the db logic (steps 1 and 3) from the grow logic (step 2). It also enables reusable tree building code for wallet scanning.
 
-#### `get_tree_extension`
+#### `CurveTrees<C1, C2>::get_tree_extension`
 
 ```cpp
 // Take in the existing number of leaf tuples and the existing last hash in each layer in the tree, as well as new
 // outputs to add to the tree, and return a tree extension struct that can be used to extend a tree
 TreeExtension get_tree_extension(const uint64_t old_n_leaf_tuples,
     const LastHashes &existing_last_hashes,
-    std::vector<std::vector<OutputContext>> &&new_outputs,
+    std::vector<std::vector<UnifiedOutput>> &&new_outputs,
     const bool use_fast_torsion_check = false) const;
 ```
 
@@ -177,7 +187,7 @@ TreeExtension get_tree_extension(const uint64_t old_n_leaf_tuples,
     - We cannot insert points that are **not** on ed25519 into the tree, nor points equal to identity after clearing torsion.
     - Thus we ignore any outputs which have `output_pubkey` or `commitment` that are not on the ed255129 curve, or are equal to identity after clearing torsion.
     - Such outputs should either not be spendable today or are worth 0.
-    - See the `CurveTrees<Selene, Helios>::set_valid_leaves` function for the code.
+    - See the `CurveTrees<Selene, Helios>::outputs_to_leaves` function for the code.
 
     c. Place all leaf tuple members in a flat vector (`[{output 0 output pubkey and commitment}, {output 1 output pubkey and commitment},...]` becomes`[O.x,O.y,I.x,I.y,C.x,C.y,O.x,O.y,I.x,I.y,C.x,C.y,...]`).
 
@@ -210,7 +220,7 @@ static void handle_fcmp_tree(BlockchainDB *db, const uint64_t block_idx, const u
   auto new_default_locked_outs_it = new_locked_outs.outs_by_last_locked_block.find(default_last_locked_block);
   const auto new_default_locked_outs = new_default_locked_outs_it != new_locked_outs.outs_by_last_locked_block.end()
     ? std::move(new_default_locked_outs_it->second)
-    : std::vector<fcmp_pp::curve_trees::OutputContext>{};
+    : std::vector<fcmp_pp::UnifiedOutput>{};
 
   // Insert the new locked outputs into the db, excluding outputs created in
   // this block with default last locked block. Outputs with default last locked
@@ -242,7 +252,7 @@ For further explanation on why we keep the tree *ahead* of the main chain, and i
 `BlockchainDB::advance_tree` is the db function that actually extends the tree. Keep in mind we're calling it with `blk_idx = 91`:
 
 ```cpp
-void BlockchainDB::advance_tree(const uint64_t blk_idx, const std::vector<fcmp_pp::curve_trees::OutputContext> &known_new_outputs)
+void BlockchainDB::advance_tree(const uint64_t blk_idx, const std::vector<fcmp_pp::UnifiedOutput> &known_new_outputs)
 {
   LOG_PRINT_L3("BlockchainDB::" << __func__);
 
@@ -285,7 +295,7 @@ To speed up *trimming* the tree, we save the tree edge for each block in the db,
 The above is all context to understand `BlockchainDB::grow_tree` (note `blk_idx` is set to 100 in the example):
 
 ```cpp
-void BlockchainDB::grow_tree(const uint64_t blk_idx, std::vector<fcmp_pp::curve_trees::OutputContext> &&new_outputs)
+void BlockchainDB::grow_tree(const uint64_t blk_idx, std::vector<fcmp_pp::UnifiedOutput> &&new_outputs)
 {
   LOG_PRINT_L3("BlockchainDB::" << __func__);
 
@@ -332,13 +342,15 @@ void BlockchainDB::grow_tree(const uint64_t blk_idx, std::vector<fcmp_pp::curve_
     return;
   }
 
-  const uint64_t new_n_leaf_tuples = tree_extension.leaves.tuples.size() + old_n_leaf_tuples;
-  const auto tree_edge = this->grow_with_tree_extension(tree_extension);
+  const auto compressed_tree_extension = m_curve_trees->compress_tree_extension(std::move(tree_extension));
+  const auto tree_edge = this->grow_with_tree_extension(compressed_tree_extension);
+
+  const uint64_t new_n_leaf_tuples = compressed_tree_extension.leaves.tuples.size() + old_n_leaf_tuples;
   this->save_tree_meta(blk_idx, new_n_leaf_tuples, tree_edge);
 }
 ```
 
-`BlockchainLMDB::grow_with_tree_extension` strictly reads values from the `tree_extension` and inserts them into the db.
+`BlockchainLMDB::grow_with_tree_extension` strictly reads values from the `compressed_tree_extension` and inserts them into the db.
 
 ## 2.iv. Curve trees merkle tree: Trim the tree on reorg and on pop blocks
 
@@ -430,11 +442,11 @@ Potential outputs to be inserted into the merkle tree, indexed by each outputs' 
 
 ```
 Key: `block ID`
-Data: `[{OutputContext}...]`
+Data: `[{UnifiedOutput}...]`
 DB Flags: `MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE`
 ```
 
-We store the complete OutputContext to guarantee outputs are inserted into the tree in the order they appear in the chain.
+We store the complete UnifiedOutput to guarantee outputs are inserted into the tree in the order they appear in the chain.
 
 This table stores the output pub key and commitment (64 bytes) instead of `{O.x,O.y,I.x,I.y,C.x,C.y}`, since the latter (192 bytes) can be derived from the output pub key and commitment. Note that we should theoretically be able to stop storing the output public key and commitment in the `output_amounts` table at the hard fork, since that table should only be useful to construct and verify pre-FCMP++ txs.
 
@@ -444,11 +456,11 @@ Leaves in the tree.
 
 ```
 Key: `leaf_idx`
-Data: `{output_id}`
+Data: `{unified_id}`
 DB Flags: `MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_CREATE`
 ```
 
-We store the output ID so that when we trim the tree, we know where to place the output back into the locked outputs table.
+We store the unified ID so that when we trim the tree, we know where to place the output back into the locked outputs table.
 
 Note we also use the dummy zerokval key optimization for this table as explained in [this comment](https://github.com/monero-project/monero/blob/a1dc85c5373a30f14aaf7dcfdd95f5a7375d3623/src/blockchain_db/lmdb/db_lmdb.cpp#L207-L211):
 
