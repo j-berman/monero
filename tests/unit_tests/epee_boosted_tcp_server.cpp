@@ -238,7 +238,7 @@ TEST(test_epee_connection, test_lifetime)
     auto tag = create_connection();
     ASSERT_TRUE(shared_state->get_connections_count() == 1);
     bool success = shared_state->for_connection(tag, [shared_state](context_t& context){
-      shared_state->close(context.m_connection_id);
+      shared_state->close(context.m_connection_id, true);
       context.m_remote_address.get_zone();
       return true;
     });
@@ -254,9 +254,9 @@ TEST(test_epee_connection, test_lifetime)
     success = shared_state->foreach_connection([&index, shared_state, &tags, &create_connection](context_t& context){
       if (!index)
         for (const auto &t: tags)
-          shared_state->close(t);
+          shared_state->close(t, true);
 
-      shared_state->close(context.m_connection_id);
+      shared_state->close(context.m_connection_id, true);
       context.m_remote_address.get_zone();
       ++index;
 
@@ -270,7 +270,7 @@ TEST(test_epee_connection, test_lifetime)
 
     index = 0;
     success = shared_state->foreach_connection([&index, shared_state](context_t& context){
-      shared_state->close(context.m_connection_id);
+      shared_state->close(context.m_connection_id, true);
       context.m_remote_address.get_zone();
       ++index;
       return true;
@@ -300,7 +300,7 @@ TEST(test_epee_connection, test_lifetime)
         });
         ASSERT_TRUE(success);
       }
-      shared_state->close(tag);
+      shared_state->close(tag, true);
       ASSERT_TRUE(shared_state->get_connections_count() == 0);
     }
 
@@ -454,7 +454,7 @@ TEST(test_epee_connection, test_lifetime)
           auto tag = context.m_connection_id;
           boost::asio::post(io_context, [conn] { conn->cancel(); });
           conn.reset();
-          s->close(tag);
+          s->close(tag, true);
           while (s->sock_count);
         }
       });
@@ -647,7 +647,7 @@ TEST(boosted_tcp_server, strand_deadlock)
         }
         else if(context.m_recv_cnt == 2) {
           guard.unlock();
-          socket->close();
+          socket->close(false);
         }
       }
       return true;
