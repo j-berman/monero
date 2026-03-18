@@ -45,8 +45,7 @@ monero_add_executable(daemon
   ${daemon_sources}
   ${daemon_headers}
   ${daemon_private_headers})
-target_link_libraries(daemon
-  PRIVATE
+set(DAEMON_DEPS
     rpc
     blockchain_db
     cryptonote_core
@@ -68,8 +67,22 @@ target_link_libraries(daemon
     PkgConfig::libzmq
     ${GNU_READLINE_LIBRARY}
     ${EXTRA_LIBRARIES}
-    $<TARGET_NAME_IF_EXISTS:blocks>)
+    $<TARGET_NAME_IF_EXISTS:blocks>
+)
+target_link_libraries(daemon
+  PRIVATE
+    ${DAEMON_DEPS})
 set_property(TARGET daemon
   PROPERTY
     OUTPUT_NAME "monerod")
 install(TARGETS daemon DESTINATION bin)
+
+if(BUILD_TESTS)
+  monero_add_library(daemon_lib
+    ${daemon_sources}
+    ${daemon_headers}
+    ${daemon_private_headers})
+  target_link_libraries(daemon_lib
+    PRIVATE
+      ${DAEMON_DEPS})
+endif()

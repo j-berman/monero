@@ -117,6 +117,7 @@ target_link_libraries(unit_tests
     ringct
     cryptonote_protocol
     cryptonote_core
+    daemon_lib
     daemon_messages
     daemon_rpc_server
     blockchain_db
