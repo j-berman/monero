@@ -1153,15 +1153,13 @@ namespace cryptonote
 
       // Collect leaf idxs and their assigned status for response. Order is important so the client can tell which
       // global output id corresponds to which leaf idx.
-      CHECK_AND_ASSERT_MES(req.global_output_ids.size() == leaf_idxs.size(), true, "Unexpected mismatch global output ids <> leaf idxs");
-      for (std::size_t i = 0; i < req.global_output_ids.size(); ++i)
+      CHECK_AND_ASSERT_MES(req.unified_ids.size() == leaf_idxs.size(), true, "Unexpected mismatch unified ids <> leaf idxs");
+      for (std::size_t i = 0; i < req.unified_ids.size(); ++i)
       {
         if (!leaf_idxs.at(i).assigned_leaf_idx)
-        {
-          res.unassigned_global_output_ids.push_back(req.global_output_ids.at(i));
-          continue;
-        }
-        res.leaf_idxs.push_back(leaf_idxs.at(i));
+          res.unassigned_unified_ids.push_back(req.unified_ids.at(i));
+        else
+          res.leaf_idxs.push_back(leaf_idxs.at(i).leaf_idx);
       }
     }
     catch (...)
