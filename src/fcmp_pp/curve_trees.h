@@ -234,15 +234,15 @@ public:
 
     ConsolidatedPaths consolidate_paths(const uint64_t n_leaf_tuples,
         const std::vector<AssignedLeafIdx> &leaf_idxs,
-        std::vector<PathBytes> &&paths) const;
+        std::vector<CompressedPath> &&paths) const;
 
-    std::vector<PathBytes> deconsolidate_paths(const uint64_t n_leaf_tuples,
+    std::vector<CompressedPath> deconsolidate_paths(const uint64_t n_leaf_tuples,
         const std::vector<AssignedLeafIdx> &leaf_idxs,
         const ConsolidatedPaths &paths) const;
 
     ConsolidatedPaths get_dummy_paths(const std::vector<fcmp_pp::UnifiedOutput> &outputs, uint8_t n_layers) const;
 
-    PathBytes get_single_dummy_path(const ConsolidatedPaths &dummy_paths,
+    CompressedPath get_single_dummy_path(const ConsolidatedPaths &dummy_paths,
         const uint64_t n_leaf_tuples,
         const uint64_t leaf_tuple_idx) const;
 private:

@@ -306,7 +306,7 @@ struct ConsolidatedPaths final
 
         BEGIN_KV_SERIALIZE_MAP()
             KV_SERIALIZE(chunk_idx)
-            KV_SERIALIZE(chunk)
+            KV_SERIALIZE_CONTAINER_POD_AS_BLOB(chunk)
         END_KV_SERIALIZE_MAP()
     };
 

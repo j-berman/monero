@@ -1146,8 +1146,8 @@ namespace cryptonote
 
     try
     {
-      std::vector<fcmp_pp::curve_trees::PathBytes> full_paths;
-      res.n_leaf_tuples = m_core.get_blockchain_storage().get_db().get_path_by_global_output_id(req.global_output_ids, req.as_of_n_blocks, res.leaf_idxs, full_paths);
+      std::vector<fcmp_pp::CompressedPath> full_paths;
+      res.n_leaf_tuples = m_core.get_blockchain_storage().get_db().get_path_by_unified_id(req.unified_ids, req.as_of_n_blocks, res.leaf_idxs, full_paths);
       res.paths = fcmp_pp::curve_trees::curve_trees_v1()->consolidate_paths(res.n_leaf_tuples, res.leaf_idxs, std::move(full_paths));
     }
     catch (...)

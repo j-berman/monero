@@ -517,7 +517,7 @@ TEST(fcmp_pp, verify)
     // Instantiate dummy paths
     const auto paths = curve_trees->get_dummy_paths(new_outputs.outputs, n_layers);
 
-    const auto &tree_root_bytes = paths.layer_chunks_by_chunk_idx.back().find(0)->second.chunk_bytes.back();
+    const auto &tree_root_bytes = paths.layer_chunks_by_chunk_idx.back().find(0)->second.elems.back();
     const auto tree_root = n_layers % 2 == 0
         ? fcmp_pp::helios_tree_root(curve_trees->m_c2->from_bytes(tree_root_bytes))
         : fcmp_pp::selene_tree_root(curve_trees->m_c1->from_bytes(tree_root_bytes));
@@ -588,7 +588,7 @@ TEST(fcmp_pp, verify)
             pseudo_outs.emplace_back(rct::rct2pt(load_key(rerandomized_output.input.C_tilde)));
 
             key_images.emplace_back();
-            crypto::generate_key_image(leaf.output_pair.output_pubkey,
+            crypto::generate_key_image(fcmp_pp::output_pubkey_cref(leaf.output_pair),
                 new_outputs.x_vec[leaf_idx],
                 key_images.back());
 

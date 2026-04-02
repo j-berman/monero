@@ -2063,7 +2063,7 @@ void wallet2::handle_needed_path_data(const uint64_t n_blocks_synced,
 
   // Get all the paths from daemon using collected global output id's
   std::vector<fcmp_pp::CompressedPath> paths;
-  std::vector<fcmp_pp::AssignedLeafIdx> leaf_idxs;
+  std::vector<uint64_t> leaf_idxs;
   paths.reserve(unified_ids.size());
   leaf_idxs.reserve(unified_ids.size());
   static constexpr std::size_t N_PATHS_PER_REQ = 50; // MAX_RESTRICTED_PATHS_COUNT
