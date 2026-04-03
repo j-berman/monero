@@ -177,23 +177,36 @@ static_assert(std::has_unique_object_representations_v<LegacyOutputPair>);
 static_assert(std::has_unique_object_representations_v<CarrotOutputPairV1>);
 
 using OutputPair = std::variant<LegacyOutputPair, CarrotOutputPairV1>;
+static_assert(std::variant_size_v<OutputPair> == 2, "Added an OutputPairType, make sure to add the enum");
 
-bool output_pair_type(const OutputPair &output_pair, uint8_t &type_out)
+enum OutputPairType : uint8_t
 {
-    type_out = 0;
-    const std::size_t type = output_pair.index();
-    static_assert(std::variant_size_v<OutputPair> <= std::numeric_limits<uint8_t>::max(), "expect type idx to fit in uint8_t");
-    type_out = static_cast<uint8_t>(type);
-    return true;
+    Legacy   = 0,
+    CarrotV1 = 1,
 };
 
-template<typename... Args>
-OutputPair output_pair_from_idx(const uint8_t idx, Args&&... args)
+inline OutputPairType output_pair_type(const OutputPair &output_pair)
 {
-    switch (idx)
+    struct output_pair_visitor
     {
-        case 0: return OutputPair(std::in_place_index<0>, std::forward<Args>(args)...);
-        case 1: return OutputPair(std::in_place_index<1>, std::forward<Args>(args)...);
+        OutputPairType operator()(const LegacyOutputPair&) const
+        { return OutputPairType::Legacy; }
+        OutputPairType operator()(const CarrotOutputPairV1&) const
+        { return OutputPairType::CarrotV1; }
+    };
+    return std::visit(output_pair_visitor{}, output_pair);
+};
+
+inline OutputPair output_pair_from_type(const OutputPairType type,
+    const crypto::public_key &output_pubkey,
+    const crypto::ec_point &commitment)
+{
+    switch (type)
+    {
+        case OutputPairType::Legacy:
+            return LegacyOutputPair{{output_pubkey, commitment}};
+        case OutputPairType::CarrotV1:
+            return CarrotOutputPairV1{{output_pubkey, commitment}};
         default:
         {
             static_assert(std::variant_size_v<OutputPair> == 2, 
@@ -232,12 +245,13 @@ struct UnifiedOutput final
 
 static_assert(std::variant_size_v<OutputPair> <= std::numeric_limits<uint8_t>::max(),
     "Serialized Output Pair expects 1 byte for variant type");
+static_assert(sizeof(OutputPairType) == 1, "Expect 1 byte for OutputPairType");
 
 // Useful for key-value serialization of multiple unified outputs
 struct UnifiedOutputs final
 {
     std::vector<uint64_t> unified_ids;
-    std::vector<uint8_t> output_types;
+    std::vector<OutputPairType> output_types;
     std::vector<crypto::public_key> output_pubkeys;
     std::vector<crypto::ec_point> commitments;
 
@@ -259,7 +273,7 @@ struct UnifiedOutputs final
         for (const auto &oc : unified_outputs)
         {
             unified_ids.push_back(oc.unified_id);
-            output_pair_type(oc.output_pair, output_types.emplace_back());
+            output_types.emplace_back(output_pair_type(oc.output_pair));
             output_pubkeys.push_back(output_pubkey_cref(oc.output_pair));
             commitments.push_back(commitment_cref(oc.output_pair));
         }
@@ -275,15 +289,15 @@ struct UnifiedOutputs final
         {
             unified_outputs.emplace_back(UnifiedOutput{
                 .unified_id   = unified_ids.at(i),
-                .output_pair = output_pair_from_idx(output_types.at(i), output_pubkeys.at(i), commitments.at(i))
+                .output_pair = output_pair_from_type(output_types.at(i), output_pubkeys.at(i), commitments.at(i))
             });
         }
         return unified_outputs;
     };
 
     BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(unified_ids)
-        KV_SERIALIZE(output_type)
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(unified_ids)
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(output_types)
         KV_SERIALIZE_CONTAINER_POD_AS_BLOB(output_pubkeys)
         KV_SERIALIZE_CONTAINER_POD_AS_BLOB(commitments)
         if (!size_check()) return false;
@@ -415,7 +429,7 @@ private:
             for (const auto &leaf_chunk : leaves_by_chunk_idx)
             {
                 leaf_chunk_idxs.push_back(leaf_chunk.first);
-                leaves_by_chunk_idx_vec.push_back(OutputContexts(leaf_chunk.second));
+                leaves_by_chunk_idx_vec.push_back(UnifiedOutputs(leaf_chunk.second));
             }
 
             layer_chunks_by_chunk_idx_vec.reserve(layer_chunks_by_chunk_idx.size());
