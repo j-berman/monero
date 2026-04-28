@@ -894,6 +894,12 @@ namespace nodetool
           "lykcas4tus7mkm4bhsgqe4drtd4awi7gja24goscc47xfgzj54yofyqd.onion:18083",
         };
       }
+      else if (m_nettype == cryptonote::TESTNET)
+      {
+        return {
+          "stressgguj7ugyxtqe7czeoelobeb3cnyhltooueuae2t3avd5ynepid.onion:28184",
+        };
+      }
       return {};
     case epee::net_utils::zone::i2p:
       if (m_nettype == cryptonote::MAINNET)
