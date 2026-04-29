@@ -2276,9 +2276,9 @@ inline const std::string get_rpc_status(const bool trusted_daemon, const std::st
         KV_SERIALIZE_PARENT(rpc_response_base)
         KV_SERIALIZE(version)
         KV_SERIALIZE(release)
-        KV_SERIALIZE_OPT(current_height, (uint64_t)0)
-        KV_SERIALIZE_OPT(target_height, (uint64_t)0)
-        KV_SERIALIZE_OPT(hard_forks, std::vector<hf_entry>())
+        KV_SERIALIZE(current_height)
+        KV_SERIALIZE(target_height)
+        KV_SERIALIZE(hard_forks)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<response_t> response;
