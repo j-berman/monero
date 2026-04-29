@@ -6662,7 +6662,7 @@ bool wallet2::check_version(uint32_t *version, bool *wallet_is_outdated, bool *d
   // check wallet compatibility with daemon's hard fork version
   if (!m_allow_mismatched_daemon_version)
   {
-    if (rpc_version < MAKE_CORE_RPC_VERSION(3, 17))
+    if (rpc_version < MAKE_CORE_RPC_VERSION(3, 100))
     {
       // Wallet cannot init FCMP++ tree while syncing if pointing to an older daemon
       if (daemon_is_outdated)
