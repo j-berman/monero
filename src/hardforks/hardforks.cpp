@@ -141,7 +141,7 @@ bool check_fork_version_compatibility(
 {
   const size_t client_num_hard_forks = nettype == cryptonote::network_type::TESTNET ? num_testnet_hard_forks
     : nettype == cryptonote::network_type::STAGENET ? num_stagenet_hard_forks : num_mainnet_hard_forks;
-  const hardfork_t *client_hard_forks = cryptonote::network_type::TESTNET ? testnet_hard_forks
+  const hardfork_t *client_hard_forks = nettype == cryptonote::network_type::TESTNET ? testnet_hard_forks
     : nettype == cryptonote::network_type::STAGENET ? stagenet_hard_forks : mainnet_hard_forks;
 
   // Make sure we're pointing to an FCMP++ compatible daemon in order for client
