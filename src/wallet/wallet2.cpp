@@ -6709,7 +6709,7 @@ bool wallet2::check_hard_fork_version(cryptonote::network_type nettype, const st
     : nettype == STAGENET ? stagenet_hard_forks : mainnet_hard_forks;
 
   // FCMP++ compatible wallet must point to FCMP++ compatible daemon to sync the tree
-  if (daemon_hard_forks.size() < HF_VERSION_FCMP_PLUS_PLUS)
+  if (daemon_hard_forks.empty() || daemon_hard_forks.back().first < HF_VERSION_FCMP_PLUS_PLUS)
   {
     if (daemon_is_outdated)
       *daemon_is_outdated = true;
