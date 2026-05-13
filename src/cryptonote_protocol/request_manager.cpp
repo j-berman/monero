@@ -138,6 +138,18 @@ std::vector<crypto::hash> request_manager::fly_available_requests(const boost::u
   return tx_hashes;
 }
 
+template<typename T, typename U>
+void request_manager::remove_found_tx_request(T &it, U &container) {
+  CHECK_AND_ASSERT_MES(it != container.end(),, "Expected found tx request");
+  const boost::uuids::uuid &peer_id = it->peer_id;
+  if (it->in_flight && m_connection_stats[peer_id].in_flight_requests > 0)
+  {
+    --m_connection_stats[peer_id].in_flight_requests;
+    MINFO("Decremented in_flight_requests count for peer: " << epee::string_tools::pod_to_hex(peer_id) << ", current in_flight_requests: " << m_connection_stats[peer_id].in_flight_requests);
+  }
+  it = container.erase(it);
+}
+
 bool request_manager::remove_request(const crypto::hash &tx_hash) {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   auto& by_tx_hash = get_requests_by_tx_hash(m_requested_txs);
@@ -147,15 +159,22 @@ bool request_manager::remove_request(const crypto::hash &tx_hash) {
     return false;
   }
   for (auto it = range.first; it != range.second;) {
-    const boost::uuids::uuid &peer_id = it->peer_id;
-    MDEBUG("Removing tx request " << it->tx_hash << " for peer " << epee::string_tools::pod_to_hex(peer_id));
-    if (it->in_flight && m_connection_stats[peer_id].in_flight_requests > 0)
-    {
-      --m_connection_stats[peer_id].in_flight_requests;
-      MINFO("Decremented in_flight_requests count for peer: " << epee::string_tools::pod_to_hex(peer_id) << ", current in_flight_requests: " << m_connection_stats[peer_id].in_flight_requests);
-    }
-    it = by_tx_hash.erase(it);
+    MDEBUG("Removing tx request " << it->tx_hash << " for peer " << epee::string_tools::pod_to_hex(it->peer_id));
+    remove_found_tx_request(it, by_tx_hash);
   }
+  return true;
+}
+
+bool request_manager::remove_request(const crypto::hash &tx_hash, const boost::uuids::uuid &peer_id) {
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  auto& by_peer_and_tx = get_requests_by_peer_and_tx(m_requested_txs);
+  auto it = by_peer_and_tx.find(boost::make_tuple(peer_id, tx_hash));
+  if (it == by_peer_and_tx.end()) {
+    MDEBUG("No requests for tx " << tx_hash << " from peer " << peer_id);
+    return false;
+  }
+  MDEBUG("Removing tx request " << it->tx_hash << " only for peer " << epee::string_tools::pod_to_hex(peer_id));
+  remove_found_tx_request(it, by_peer_and_tx);
   return true;
 }
 

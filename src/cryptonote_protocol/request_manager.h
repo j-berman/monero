@@ -93,6 +93,10 @@ public:
   // true: found, false: not found or none in-flight
   bool remove_request(const crypto::hash &tx_hash);
 
+  // Remove current in-flight request for a transaction from a single peer, if present
+  // true: found, false: not found or none in-flight
+  bool remove_request(const crypto::hash &tx_hash, const boost::uuids::uuid &peer_id);
+
   // Returns the vector of tx hashes to request
   std::vector<crypto::hash> fly_available_requests(const boost::uuids::uuid &peer_id);
 
@@ -102,6 +106,10 @@ private:
 
   // Return true if *any* peer has the provided tx hash request in flight
   bool request_is_in_flight(const crypto::hash &tx_hash) const;
+
+  // Removes a tx request that has already been found in the container
+  template<typename T, typename U>
+  void remove_found_tx_request(T &it, U &container);
 };
 
 #endif // CRYPTONOTE_PROTOCOL_REQUEST_MANAGER_H

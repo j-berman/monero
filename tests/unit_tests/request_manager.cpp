@@ -126,7 +126,7 @@ TEST(request_manager, multiple_peers)
     const auto drop_peers = req_manager.remove_stale_requests();
     ASSERT_TRUE(drop_peers.empty());
 
-    // 6. Available reqs should be all the tx hashes from step 3
+    // 6. Available reqs should be all the tx hashes from step 4
     for (char i = 0; i < MAX_IN_FLIGHT; ++i)
     {
         const crypto::hash hash{i};
@@ -143,6 +143,39 @@ TEST(request_manager, multiple_peers)
         const boost::uuids::uuid peer = uuid_from_char(i);
         req_manager.remove_peer(peer);
     }
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(request_manager, remove_from_peer)
+{
+    const crypto::hash hash{0};
+    const std::vector<boost::uuids::uuid> peers{{uuid_from_char(0), uuid_from_char(1), uuid_from_char(2)}};
+
+    const uint8_t MAX_IN_FLIGHT = 1;
+    request_manager req_manager(MAX_IN_FLIGHT);
+
+    // 1. Request hash from all peers, only first should be able to send request
+    ASSERT_TRUE(req_manager.add_request(hash, peers.at(0)));
+    ASSERT_FALSE(req_manager.add_request(hash, peers.at(1)));
+    ASSERT_FALSE(req_manager.add_request(hash, peers.at(2)));
+
+    // 2. Remove hash for peer{0}
+    ASSERT_TRUE(req_manager.remove_request(hash, peers.at(0)));
+
+    // 3. peer{1} should be able to send req for hash now
+    const std::vector<crypto::hash> hashes = req_manager.fly_available_requests(peers.at(1));
+    ASSERT_TRUE(hashes.size());
+    ASSERT_EQ(hashes.front(), hash);
+
+    // 4. Remove for all peers
+    ASSERT_TRUE(req_manager.remove_request(hash));
+
+    // 5. None should be able to fly the req
+    for (const auto &peer : peers)
+        ASSERT_TRUE(req_manager.fly_available_requests(peer).empty());
+
+    // 6. Remove peers
+    for (const auto &peer : peers)
+        req_manager.remove_peer(peer);
 }
 //----------------------------------------------------------------------------------------------------------------------
 TEST(request_manager, drop_peers)

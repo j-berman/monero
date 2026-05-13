@@ -115,6 +115,14 @@ public: \
 #define KV_SERIALIZE_CONTAINER_POD_AS_BLOB_N(varialble, val_name) \
   epee::serialization::selector<is_store>::serialize_stl_container_pod_val_as_blob(this_ref.varialble, stg, hparent_section, val_name);
 
+#define KV_SERIALIZE_CONTAINER_POD_AS_BLOB_OPT_N(varialble, val_name, default_value) \
+  do { \
+    if (is_store && this_ref.varialble == default_value) \
+      break; \
+    if (!epee::serialization::selector<is_store>::serialize_stl_container_pod_val_as_blob(this_ref.varialble, stg, hparent_section, val_name)) \
+      epee::serialize_default(this_ref.varialble, default_value); \
+  } while (0);
+
 #define END_KV_SERIALIZE_MAP() return true;}
 
 #define KV_SERIALIZE(varialble)                           KV_SERIALIZE_N(varialble, #varialble)
@@ -122,6 +130,7 @@ public: \
 #define KV_SERIALIZE_VAL_POD_AS_BLOB_OPT(varialble, def)  KV_SERIALIZE_VAL_POD_AS_BLOB_OPT_N(varialble, #varialble, def)
 #define KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(varialble)     KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE_N(varialble, #varialble) //skip is_trivially_copyable and is_standard_layout compile time check
 #define KV_SERIALIZE_CONTAINER_POD_AS_BLOB(varialble)     KV_SERIALIZE_CONTAINER_POD_AS_BLOB_N(varialble, #varialble)
+#define KV_SERIALIZE_CONTAINER_POD_AS_BLOB_OPT(varialble, def) KV_SERIALIZE_CONTAINER_POD_AS_BLOB_OPT_N(varialble, #varialble, def)
 #define KV_SERIALIZE_OPT(variable,default_value)          KV_SERIALIZE_OPT_N(variable, #variable, default_value)
 
 }

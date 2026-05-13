@@ -975,35 +975,43 @@ namespace cryptonote
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_REQUEST_TX_POOL_TXS (" << arg.t.size() << " txes)");
 
-    std::vector<blobdata> txs;
-
     if (arg.t.size() > max_n_txs_per_packet())
     {
       LOG_ERROR_CCONTEXT("Too many txs, cannot accept request to send " << arg.t.size() << " txs to " << context.m_connection_id);
       return 1;
     }
 
-    // Iterate over requested txin hashes
+    if (arg.t.empty())
+    {
+      LOG_ERROR_CCONTEXT("Empty request for pool txs");
+      return 1;
+    }
+
+    NOTIFY_NEW_TRANSACTIONS::request request = {};
+    request.txs.reserve(arg.t.size());
+    request.missed_txs.reserve(arg.t.size());
+
+    // Iterate over requested tx hashes
     for (const auto &tx_hash : arg.t)
     {
       // Attempt to get the transaction blob from the mempool;
       cryptonote::blobdata tx_blob;
       if (m_core.get_pool_transaction(tx_hash, tx_blob, cryptonote::relay_category::broadcasted))
       {
-        txs.push_back(std::move(tx_blob));
+        request.txs.push_back(std::move(tx_blob));
       }
-      // If tx is not in the pool, then ignore it (do not penalize peer)
+      else
+      {
+        // It's possible we kicked the tx from the pool because the pool is at capacity, or the tx entered the chain.
+        // Either way, we want to tell our peer we saw their request.
+        MDEBUG("Requested tx " << tx_hash << " doesn't appear to be in the pool");
+        request.missed_txs.push_back(tx_hash);
+      }
     }
 
-    // Send response if any txs found
-    if (!txs.empty())
-    {
-      NOTIFY_NEW_TRANSACTIONS::request request = {};
-      request.txs = std::move(txs);
-      request.dandelionpp_fluff = true;
-      pad_tx_request(request);
-      post_notify<NOTIFY_NEW_TRANSACTIONS>(request, context);
-    }
+    request.dandelionpp_fluff = true;
+    pad_tx_request(request);
+    post_notify<NOTIFY_NEW_TRANSACTIONS>(request, context);
 
     return 1;
   }
@@ -1096,6 +1104,10 @@ namespace cryptonote
           break;
       }
     }
+
+    // The peer indicated they don't have it, so remove the request from that peer only
+    for (const crypto::hash &missed_tx : arg.missed_txs)
+      m_request_manager.remove_request(missed_tx, context.m_connection_id);
 
     if (!stem_txs.empty())
     {
