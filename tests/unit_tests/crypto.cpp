@@ -365,7 +365,7 @@ TEST(Crypto, batch_inversion)
   for (std::size_t n_elems = 1; n_elems <= MAX_TEST_ELEMS; ++n_elems)
   {
     std::unique_ptr<fe[]> batch_inverted = std::make_unique<fe[]>(n_elems);
-    fe_batch_invert(batch_inverted.get(), init_elems.get(), n_elems);
+    ASSERT_EQ(fe_batch_invert(batch_inverted.get(), init_elems.get(), n_elems), 0);
     for (std::size_t i = 0; i < n_elems; ++i)
       ASSERT_EQ(fe_equals(batch_inverted[i], norm_inverted[i]), 1);
   }
@@ -393,6 +393,21 @@ TEST(Crypto, batch_inversion_touching)
     fe_invert(inv_simple, vals[i]);
     ASSERT_EQ(1, fe_equals(inv_simple, vals[2 + i]));
   }
+}
+
+TEST(Crypto, batch_invert_zero)
+{
+  const std::size_t TEST_ELEMS = 2;
+  std::unique_ptr<fe[]> init_elems = std::make_unique<fe[]>(TEST_ELEMS);
+
+  // Init test elems
+  const cryptonote::keypair kp = cryptonote::keypair::generate(hw::get_device("default"));
+  ASSERT_EQ(fe_frombytes_vartime(init_elems[0], (unsigned char*)kp.pub.data), 0);
+  fe_0(init_elems[1]);
+
+  // Do the batch inversion, should fail
+  std::unique_ptr<fe[]> batch_inverted = std::make_unique<fe[]>(TEST_ELEMS);
+  ASSERT_EQ(fe_batch_invert(batch_inverted.get(), init_elems.get(), TEST_ELEMS), -1);
 }
 
 TEST(Crypto, fe_equals)
