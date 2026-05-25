@@ -174,8 +174,10 @@ int fe_equals(const fe a, const fe b);
 
 Unlike other crypto functions, `out` and `in` memory sections CANNOT be aliased.
 If `out` and `in` overlap, it will cause undefined output.
+
+No 0 fe's are expected for `in`, otherwise fails.
 **/
-void fe_batch_invert(fe *out, const fe *in, const int n);
+int fe_batch_invert(fe *out, const fe *in, const int n);
 void fe_mul(fe out, const fe, const fe);
 void fe_neg(fe h, const fe f);
 void fe_sq(fe h, const fe f);

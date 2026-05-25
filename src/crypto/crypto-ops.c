@@ -331,11 +331,22 @@ int fe_equals(const fe a, const fe b) {
   return r;
 }
 
+/* From fe_isnonzero.c, modified */
+
+static int fe_isnonzero(const fe f) {
+  unsigned char s[32];
+  fe_tobytes(s, f);
+  return (((int) (s[0] | s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7] | s[8] |
+    s[9] | s[10] | s[11] | s[12] | s[13] | s[14] | s[15] | s[16] | s[17] |
+    s[18] | s[19] | s[20] | s[21] | s[22] | s[23] | s[24] | s[25] | s[26] |
+    s[27] | s[28] | s[29] | s[30] | s[31]) - 1) >> 8) + 1;
+}
+
 // Montgomery's trick
 // https://iacr.org/archive/pkc2004/29470042/29470042.pdf 2.2
-void fe_batch_invert(fe *out, const fe *in, const int n) {
+int fe_batch_invert(fe *out, const fe *in, const int n) {
   if (n == 0) {
-    return;
+    return 0;
   }
 
   assert(out);
@@ -356,6 +367,10 @@ void fe_batch_invert(fe *out, const fe *in, const int n) {
   }
 
   // Step 2: get the inverse of all elems multiplied together
+  if (!fe_isnonzero(out[n-1])) {
+    // Don't divide by 0
+    return -1;
+  }
   fe a;
   fe_invert(a, out[n-1]);
 
@@ -365,6 +380,8 @@ void fe_batch_invert(fe *out, const fe *in, const int n) {
     fe_mul(a, a, in[i-1]);
   }
   fe_copy(out[0], a);
+
+  return 0;
 }
 
 /* From fe_isnegative.c */
@@ -381,17 +398,6 @@ static int fe_isnegative(const fe f) {
   unsigned char s[32];
   fe_tobytes(s, f);
   return s[0] & 1;
-}
-
-/* From fe_isnonzero.c, modified */
-
-static int fe_isnonzero(const fe f) {
-  unsigned char s[32];
-  fe_tobytes(s, f);
-  return (((int) (s[0] | s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7] | s[8] |
-    s[9] | s[10] | s[11] | s[12] | s[13] | s[14] | s[15] | s[16] | s[17] |
-    s[18] | s[19] | s[20] | s[21] | s[22] | s[23] | s[24] | s[25] | s[26] |
-    s[27] | s[28] | s[29] | s[30] | s[31]) - 1) >> 8) + 1;
 }
 
 /* From fe_mul.c */
