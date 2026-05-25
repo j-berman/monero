@@ -312,16 +312,21 @@ void fe_invert(fe out, const fe z) {
   return;
 }
 
-// return 1 if a == b, else 0
+// return 0 iff a == b
 int fe_equals(const fe a, const fe b) {
   unsigned char a_bytes[32];
   unsigned char b_bytes[32];
   fe_tobytes(a_bytes, a);
   fe_tobytes(b_bytes, b);
 
-  int r = 1;
+  // Using openssl's technique for constant time comp (suggested by Trail of Bits)
+  // https://github.com/openssl/openssl/blob/012cc567d00ab6e899cf3dc7c2845ec4cd68c1ff/crypto/cpuid.c#L198-L209
+  const volatile unsigned char *a_const = a_bytes;
+  const volatile unsigned char *b_const = b_bytes;
+
+  unsigned char r = 0;
   for (int i = 0; i < 32; ++i) {
-    r &= a_bytes[i] == b_bytes[i];
+    r |= a_const[i] ^ b_const[i];
   }
   return r;
 }
