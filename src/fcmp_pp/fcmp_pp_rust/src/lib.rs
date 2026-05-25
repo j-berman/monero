@@ -2,7 +2,16 @@ use ciphersuite::Ciphersuite;
 
 use helioselene::{Field25519 as SeleneScalar, Selene};
 
-use std::os::raw::c_int;
+use std::{mem::size_of, os::raw::c_int};
+
+// Static assertions
+// WARNING: if any of these break, fcmp++.h needs to be modified also
+macro_rules! static_assert_size_eq {
+    ($T:ty, $N:expr) => {
+        const _: [(); $N] = [(); size_of::<$T>()];
+    };
+}
+static_assert_size_eq!(SeleneScalar, 32);
 
 macro_rules! ec_elem_from_bytes {
     ($fn_name:ident, $Type:ty, $Curve:ty, $from_bytes:ident) => {
