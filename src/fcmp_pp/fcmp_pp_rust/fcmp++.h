@@ -36,6 +36,7 @@
 #define FFI_STATIC_ASSERT _Static_assert
 #endif
 
+#include <stdalign.h>
 #include <stdint.h>
 
 
@@ -49,6 +50,7 @@ struct SeleneScalar {
   uintptr_t _0[32 / sizeof(uintptr_t)];
 };
 FFI_STATIC_ASSERT(sizeof(struct SeleneScalar) == 32, "SeleneScalar FFI type unexpected size");
+FFI_STATIC_ASSERT(alignof(struct SeleneScalar) == sizeof(uintptr_t), "SeleneScalar FFI type unexpected alignment");
 
 // ----- End deps C bindings -----
 
@@ -59,6 +61,7 @@ struct OutputTuple
   uint8_t C[32];
 };
 FFI_STATIC_ASSERT(sizeof(struct OutputTuple) == 32*3, "OutputTuple FFI type unexpected size");
+FFI_STATIC_ASSERT(alignof(struct OutputTuple) == 1, "OutputTuple FFI type unexpected alignment");
 
 #ifdef __cplusplus
 extern "C" {
