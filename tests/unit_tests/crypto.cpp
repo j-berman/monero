@@ -380,75 +380,61 @@ TEST(Crypto, torsion_check_pass_random)
   ASSERT_TRUE(rct::verPointsForTorsion(pts));
 }
 
-static const char *torsioned_point = "b10ba13e303cbe9abf7d5d44f1d417727abcc14903a74e071abd652ce1bf76dd";
-static constexpr const char *torsion_free_points[] = {
-    "785eda585dca4f3d27976106008ccfbca13146c8b21b8c7e4909032639a776e1",
-    "9a7b10563aa266032cd075f4e347f348a3841ae4f41572633351a97dd44066b4"
-  };
-
-TEST(Crypto, torsion_check_pass_hardcoded)
+TEST(Crypto, torsion_check_hardcoded)
 {
-  std::vector<rct::key> pts;
-  for (const auto point : torsion_free_points)
+  struct TorsionTestPoints { std::string point; bool torsion_free; };
+  static const std::vector<TorsionTestPoints> torsion_test_points = {
+      {"b10ba13e303cbe9abf7d5d44f1d417727abcc14903a74e071abd652ce1bf76dd", false},
+      {"9b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd088071", false}, // genesis (see config::GENESIS_TX)
+      {"785eda585dca4f3d27976106008ccfbca13146c8b21b8c7e4909032639a776e1", true},
+      {"9a7b10563aa266032cd075f4e347f348a3841ae4f41572633351a97dd44066b4", true},
+    };
+
+  std::vector<rct::key> all_pts, torsion_free_pts, torsioned_pts;
+  for (const auto &point : torsion_test_points)
   {
     rct::key k;
-    epee::string_tools::hex_to_pod(point, k);
+    epee::string_tools::hex_to_pod(point.point, k);
     ge_p3 x;
     ASSERT_EQ(ge_frombytes_vartime(&x, k.bytes), 0);
-    ASSERT_TRUE(rct::isInMainSubgroup(k));
+    ASSERT_EQ(rct::isInMainSubgroup(k), point.torsion_free);
     ASSERT_FALSE(fcmp_pp::mul8_is_identity(x));
     const crypto::ec_point cleared = fcmp_pp::clear_torsion(x);
-    ASSERT_EQ(rct::rct2pt(k), cleared);
+    if (point.torsion_free)
+    {
+      ASSERT_EQ(rct::rct2pt(k), cleared);
+      torsion_free_pts.push_back(k);
+    }
+    else
+    {
+      ASSERT_NE(rct::rct2pt(k), cleared);
+      torsioned_pts.push_back(k);
+    }
     CHECK_CLEARED(k, cleared);
-    pts.emplace_back(k);
+    all_pts.emplace_back(k);
   }
-  ASSERT_TRUE(rct::verPointsForTorsion(pts));
+
+  ASSERT_TRUE(rct::verPointsForTorsion(torsion_free_pts));
+  ASSERT_FALSE(rct::verPointsForTorsion(torsioned_pts));
+  ASSERT_FALSE(rct::verPointsForTorsion(all_pts));
 }
 
-TEST(Crypto, torsion_check_torsioned_point)
+TEST(Crypto, mul8_identity)
 {
-  rct::key k;
-  epee::string_tools::hex_to_pod(torsioned_point, k);
-  ge_p3 x;
-  ASSERT_EQ(ge_frombytes_vartime(&x, k.bytes), 0);
-  ASSERT_FALSE(rct::isInMainSubgroup(k));
-  ASSERT_FALSE(fcmp_pp::mul8_is_identity(x));
-  const crypto::ec_point cleared = fcmp_pp::clear_torsion(x);
-  ASSERT_NE(rct::rct2pt(k), cleared);
-  CHECK_CLEARED(k, cleared);
-  ASSERT_FALSE(rct::verPointsForTorsion({k}));
-}
+  static const std::vector<rct::key> mul8_identity_points = {
+      rct::I,
+      rct::Z
+    };
 
-TEST(Crypto, genesis_tx_output_torsion)
-{
-  rct::key k;
-  // see config::GENESIS_TX
-  epee::string_tools::hex_to_pod("9b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd088071", k);
-  ge_p3 x;
-  ASSERT_EQ(ge_frombytes_vartime(&x, k.bytes), 0);
-  EXPECT_FALSE(rct::isInMainSubgroup(k));
-  ASSERT_FALSE(fcmp_pp::mul8_is_identity(x));
-  const crypto::ec_point cleared = fcmp_pp::clear_torsion(x);
-  ASSERT_NE(rct::rct2pt(k), cleared);
-  CHECK_CLEARED(k, cleared);
-  ASSERT_FALSE(rct::verPointsForTorsion({k}));
-}
-
-TEST(Crypto, mixed_torsioned_and_not)
-{
-  std::vector<rct::key> pts;
-  for (const auto point : torsion_free_points)
+  for (const auto &point : mul8_identity_points)
   {
-    rct::key k;
-    epee::string_tools::hex_to_pod(point, k);
-    pts.push_back(k);
+    ge_p3 x;
+    ASSERT_EQ(ge_frombytes_vartime(&x, point.bytes), 0);
+    ASSERT_TRUE(fcmp_pp::mul8_is_identity(x));
+
+    crypto::ec_point _;
+    ASSERT_FALSE(fcmp_pp::get_valid_torsion_cleared_point(rct::rct2pt(point), _));
   }
-
-  rct::key torsioned;
-  epee::string_tools::hex_to_pod(torsioned_point, torsioned);
-  pts.push_back(torsioned);
-
-  ASSERT_FALSE(rct::verPointsForTorsion(pts));
 }
 
 TEST(Crypto, batch_inversion)
@@ -533,4 +519,33 @@ TEST(Crypto, fe_constants)
 
   ASSERT_TRUE(memcmp(fe_a_inv_3, a_inv_3,  sizeof(fe)) == 0);
   ASSERT_TRUE(memcmp(c_sq,       ma_sub_2, sizeof(fe)) == 0);
+
+  // Parity with spec
+  // https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.2 Page 19
+  unsigned char A_INV_3_PAPER[32] = {
+      0x2a, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+      0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+      0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+      0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xad, 0x24, 0x51
+    };
+
+  // https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.2 Pages 19-20
+  unsigned char FE_C_PAPER[32] = {
+      0x70, 0xd9, 0x12, 0x0b, 0x9f, 0x5f, 0xf9, 0x44,
+      0x2d, 0x84, 0xf7, 0x23, 0xfc, 0x03, 0xb0, 0x81,
+      0x3a, 0x5e, 0x2c, 0x2e, 0xb4, 0x82, 0xe5, 0x7d,
+      0x33, 0x91, 0xfb, 0x55, 0x00, 0xba, 0x81, 0xe7
+    };
+
+  // Reverse to have comparable endian order
+  unsigned char a_inv_3_bytes[32];
+  fe_tobytes(a_inv_3_bytes, fe_a_inv_3);
+  std::reverse(a_inv_3_bytes, a_inv_3_bytes + 32);
+
+  unsigned char fe_c_bytes[32];
+  fe_tobytes(fe_c_bytes, fe_c);
+  std::reverse(fe_c_bytes, fe_c_bytes + 32);
+
+  ASSERT_TRUE(memcmp(a_inv_3_bytes, A_INV_3_PAPER, 32) == 0);
+  ASSERT_TRUE(memcmp(fe_c_bytes,    FE_C_PAPER,    32) == 0);
 }
