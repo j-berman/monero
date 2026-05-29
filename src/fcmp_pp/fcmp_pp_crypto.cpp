@@ -66,12 +66,20 @@ bool get_valid_torsion_cleared_point(const crypto::ec_point &point, crypto::ec_p
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
-bool point_to_ed_derivatives(const crypto::ec_point &pub, EdDerivatives &ed_derivatives) {
-    if (pub == crypto::EC_I)
+bool point_to_ed_derivatives(const crypto::ec_point &torsion_free_point, EdDerivatives &ed_derivatives) {
+    // The point SHOULD not have torsion and should pass get_valid_torsion_cleared_point
+#if !defined(NDEBUG)
+    {
+        crypto::ec_point expected;
+        assert(get_valid_torsion_cleared_point(torsion_free_point, expected));
+        assert(torsion_free_point == expected);
+    }
+#endif
+    if (torsion_free_point == crypto::EC_I)
         return false;
     // fe y;
     ge_p3 p3;
-    if (ge_frombytes_vartime(&p3, to_bytes(pub)) != 0)
+    if (ge_frombytes_vartime(&p3, to_bytes(torsion_free_point)) != 0)
         return false;
     fe one;
     fe_1(one);
@@ -93,7 +101,8 @@ bool ed_derivatives_to_wei_x_y(const EdDerivatives &ed_derivatives, crypto::ec_c
     memcpy(&fe_batch[0], &ed_derivatives.one_minus_y, sizeof(fe));
     memcpy(&fe_batch[1], &ed_derivatives.one_minus_y_mul_x, sizeof(fe));
 
-    fe_batch_invert(inv_res.get(), fe_batch.get(), N_ELEMS);
+    if (fe_batch_invert(inv_res.get(), fe_batch.get(), N_ELEMS) != 0)
+        return false;
 
     fe_ed_derivatives_to_wei_x_y(
         to_bytes(wei_x),
@@ -105,9 +114,9 @@ bool ed_derivatives_to_wei_x_y(const EdDerivatives &ed_derivatives, crypto::ec_c
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
-bool point_to_wei_x_y(const crypto::ec_point &pub, crypto::ec_coord &wei_x, crypto::ec_coord &wei_y) {
+bool point_to_wei_x_y(const crypto::ec_point &torsion_free_point, crypto::ec_coord &wei_x, crypto::ec_coord &wei_y) {
     EdDerivatives ed_derivatives;
-    if (!point_to_ed_derivatives(pub, ed_derivatives))
+    if (!point_to_ed_derivatives(torsion_free_point, ed_derivatives))
         return false;
     return ed_derivatives_to_wei_x_y(ed_derivatives, wei_x, wei_y);
 }
