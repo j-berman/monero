@@ -277,6 +277,15 @@ int main(int argc, char *argv[]) {
       if (expected != actual) {
         goto error;
       }
+    } else if (cmd == "derive_key_image_generator") {
+      public_key point;
+      bool biased;
+      ec_point expected_result, actual_result;
+      get(input, point, biased, expected_result);
+      crypto::derive_key_image_generator(point, biased, actual_result);
+      if (expected_result != actual_result) {
+        goto error;
+      }
     } else {
       throw ios_base::failure("Unknown function: " + cmd);
     }
