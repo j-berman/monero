@@ -266,7 +266,8 @@ void CurveTrees<C1, C2>::outputs_to_leaves(std::vector<UnifiedOutput> &&new_outp
     TIME_MEASURE_START(batch_invert);
     // Step 3. Get batch inverse of all valid (1-y)'s and ((1-y)*x)'s
     // - Batch inversion is significantly faster than inverting 1 at a time
-    fe_batch_invert(batch_inv_res.get(), fe_batch.get(), n_valid_leaf_points * 2);
+    CHECK_AND_ASSERT_THROW_MES(fe_batch_invert(batch_inv_res.get(), fe_batch.get(), n_valid_leaf_points * 2) == 0,
+        "Failed to batch invert");
     TIME_MEASURE_FINISH(batch_invert);
 
     TIME_MEASURE_START(get_selene_scalars);
