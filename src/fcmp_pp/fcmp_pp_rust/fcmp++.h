@@ -28,15 +28,29 @@
 
 #pragma once
 
+// static assertions
+#if defined(__cplusplus) || (__STDC_VERSION__ >= 202311L)
+#define FFI_STATIC_ASSERT static_assert
+#else
+#include <assert.h>
+#define FFI_STATIC_ASSERT _Static_assert
+#endif
+
+#include <stdalign.h>
 #include <stdint.h>
 
 
 // ----- deps C bindings -----
 
 /// A constant-time implementation of the Ed25519 field.
+/// This type is expected to be opaque to the C/C++ side, meaning only the Rust side should read/write
+/// its internal represenation. We're using a modified crypto-bigint crate for this type so that we
+/// can work with points and scalars across the FFI without tons of byte repr conversions.
 struct SeleneScalar {
   uintptr_t _0[32 / sizeof(uintptr_t)];
 };
+FFI_STATIC_ASSERT(sizeof(struct SeleneScalar) == 32, "SeleneScalar FFI type unexpected size");
+FFI_STATIC_ASSERT(alignof(struct SeleneScalar) == sizeof(uintptr_t), "SeleneScalar FFI type unexpected alignment");
 
 // ----- End deps C bindings -----
 
@@ -46,6 +60,8 @@ struct OutputTuple
   uint8_t I[32];
   uint8_t C[32];
 };
+FFI_STATIC_ASSERT(sizeof(struct OutputTuple) == 32*3, "OutputTuple FFI type unexpected size");
+FFI_STATIC_ASSERT(alignof(struct OutputTuple) == 1, "OutputTuple FFI type unexpected alignment");
 
 #ifdef __cplusplus
 extern "C" {
