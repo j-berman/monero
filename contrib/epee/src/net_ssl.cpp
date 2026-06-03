@@ -304,11 +304,14 @@ ssl_options_t::ssl_options_t(std::vector<std::vector<std::uint8_t>> fingerprints
 
 boost::asio::ssl::context ssl_options_t::create_context() const
 {
+  MDEBUG("Calling create_context()");
   // note: this enables a lot of old and insecure protocols, which we
   // promptly disable below - if the result is actually used
   boost::asio::ssl::context ssl_context{boost::asio::ssl::context::sslv23};
   if (!bool(*this))
     return ssl_context;
+
+  MDEBUG("Calling create_context2()");
 
   // only allow tls v1.2 and up
   ssl_context.set_options(boost::asio::ssl::context::default_workarounds);
@@ -395,18 +398,25 @@ boost::asio::ssl::context ssl_options_t::create_context() const
 #endif
 
     CHECK_AND_ASSERT_THROW_MES(create_rsa_ssl_certificate(pkey, cert), "Failed to create certificate");
+    MDEBUG("Done create_rsa_ssl_certificate()");
     CHECK_AND_ASSERT_THROW_MES(SSL_CTX_use_certificate(ctx, cert), "Failed to use generated certificate");
+    MDEBUG("Done SSL_CTX_use_certificate()");
     if (!SSL_CTX_use_PrivateKey(ctx, pkey))
       MERROR("Failed to use generated RSA private key for RSA");
     else
       ok = true;
+    MDEBUG("Done SSL_CTX_use_PrivateKey()");
     X509_free(cert);
+    MDEBUG("Done X509_free()");
     EVP_PKEY_free(pkey);
+    MDEBUG("Done EVP_PKEY_free()");
 
     CHECK_AND_ASSERT_THROW_MES(ok, "Failed to use any generated certificate");
   }
   else
     auth.use_ssl_certificate(ssl_context);
+
+  MDEBUG("Finished create_context()");
 
   return ssl_context;
 }

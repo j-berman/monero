@@ -122,12 +122,15 @@ namespace net_utils
 
 			void set_server(std::string host, std::string port, boost::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect) override
 			{
+				MDEBUG("Calling set_server");
 				CRITICAL_REGION_LOCAL(m_lock);
 				disconnect();
 				m_host_buff = std::move(host);
 				m_port = std::move(port);
 				m_auth = user ? http_client_auth{std::move(*user)} : http_client_auth{};
+				MDEBUG("Calling set_ssl");
 				m_net_client.set_ssl(std::move(ssl_options));
+				MDEBUG("Finished set_server");
 			}
 
 			void set_auto_connect(bool auto_connect) override
