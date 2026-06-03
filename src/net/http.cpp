@@ -41,6 +41,7 @@ bool client::set_proxy(const std::string &address)
 {
   if (address.empty())
   {
+    MDEBUG("Using direct connect");
     set_connector(epee::net_utils::direct_connect{});
   }
   else
@@ -48,11 +49,13 @@ bool client::set_proxy(const std::string &address)
     auto endpoint = socks::endpoint::get(address);
     if (!endpoint)
     {
+      MDEBUG("Using always_fail");
       auto always_fail = net::socks::connector{};
       set_connector(always_fail);
     }
     else
     {
+      MDEBUG("Using socks connector");
       set_connector(
         net::socks::connector{std::make_shared<socks::endpoint>(std::move(*endpoint))}
       );
