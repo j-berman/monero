@@ -144,8 +144,10 @@ namespace net_utils
     inline
 			try_connect_result_t try_connect(const std::string& addr, const std::string& port, std::chrono::milliseconds timeout)
 		{
+				MDEBUG("try_connect 1");
 				m_deadline.expires_after(timeout);
 				boost::unique_future<boost::asio::ip::tcp::socket> connection = m_connector(addr, port, m_deadline);
+				MDEBUG("try_connect 2");
 				for (;;)
 				{
 					m_io_service.restart();
@@ -155,22 +157,31 @@ namespace net_utils
 						break;
 				}
 
+				MDEBUG("try_connect 3");
+
 				m_ssl_socket->next_layer() = connection.get();
+
+				MDEBUG("try_connect 4");
 				m_deadline.cancel();
 				if (m_ssl_socket->next_layer().is_open())
 				{
+					MDEBUG("try_connect 5");
 					m_connected = true;
 					m_deadline.expires_at(std::chrono::steady_clock::time_point::max());
 					// SSL Options
 					if (m_ssl_options.support == epee::net_utils::ssl_support_t::e_ssl_support_enabled || m_ssl_options.support == epee::net_utils::ssl_support_t::e_ssl_support_autodetect)
 					{
+						MDEBUG("try_connect 6");
 						if (!m_ssl_options.handshake(m_io_service, *m_ssl_socket, boost::asio::ssl::stream_base::client, {}, addr, timeout))
 						{
+							MDEBUG("try_connect 7");
 							if (m_ssl_options.support == epee::net_utils::ssl_support_t::e_ssl_support_autodetect)
 							{
+								MDEBUG("try_connect 8");
 								boost::system::error_code ignored_ec;
 								m_ssl_socket->next_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored_ec);
 								m_ssl_socket->next_layer().close();
+								MDEBUG("try_connect 9");
 								m_connected = false;
 								return CONNECT_NO_SSL;
 							}
@@ -182,6 +193,7 @@ namespace net_utils
 							}
 						}
 					}
+					MDEBUG("try_connect SUCCESS");
 					return CONNECT_SUCCESS;
 				}else
 				{
@@ -194,22 +206,32 @@ namespace net_utils
     inline
 			bool connect(const std::string& addr, const std::string& port, std::chrono::milliseconds timeout)
 		{
+			MDEBUG("Connect 1");
 			m_connected = false;
 			try
 			{
 				m_ssl_socket->next_layer().close();
+				MDEBUG("Connect 2");
 
 				// Set SSL options
 				// disable sslv2
 				m_ssl_socket.reset(new boost::asio::ssl::stream<boost::asio::ip::tcp::socket>(m_io_service, m_ctx));
 
+				MDEBUG("Connect 3");
+
 				// Get a list of endpoints corresponding to the server name.
 
 				try_connect_result_t try_connect_result = try_connect(addr, port, timeout);
+				MDEBUG("Connect 4");
 				if (try_connect_result == CONNECT_FAILURE)
+				{
+					MDEBUG("Connect 5");
 					return false;
+				}
+				MDEBUG("Connect 6");
 				if (m_ssl_options.support == epee::net_utils::ssl_support_t::e_ssl_support_autodetect)
 				{
+					MDEBUG("Connect 7");
 					if (try_connect_result == CONNECT_NO_SSL)
 					{
 						MERROR("SSL handshake failed on an autodetect connection, reconnecting without SSL");

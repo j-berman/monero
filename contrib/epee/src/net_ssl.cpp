@@ -570,7 +570,9 @@ bool ssl_options_t::handshake(
   const std::string& host,
   std::chrono::milliseconds timeout) const
 {
+  MDEBUG("SSL handshake 1");
   configure(socket, type, host);
+  MDEBUG("SSL handshake 2");
 
   auto start_handshake = [&]{
     using ec_t = boost::system::error_code;
@@ -578,10 +580,13 @@ bool ssl_options_t::handshake(
     using strand_t = boost::asio::io_context::strand;
     using socket_t = boost::asio::ip::tcp::socket;
 
+    MDEBUG("SSL handshake 3");
     if (io_context.stopped())
       io_context.restart();
     strand_t strand(io_context);
     timer_t deadline(io_context, timeout);
+
+    MDEBUG("SSL handshake 4");
 
     struct state_t {
       std::mutex lock;
@@ -596,26 +601,32 @@ bool ssl_options_t::handshake(
 
     state.wait_timer = true;
     auto on_timer = [&](const ec_t &ec){
+      MDEBUG("SSL handshake 5");
       std::lock_guard<std::mutex> guard(state.lock);
       state.wait_timer = false;
       state.condition.notify_all();
       if (!state.cancel_timer) {
+        MDEBUG("SSL handshake 6");
         state.cancel_handshake = true;
         ec_t ec;
         socket.next_layer().cancel(ec);
       }
+      MDEBUG("SSL handshake 6.1");
     };
 
     state.wait_handshake = true;
     auto on_handshake = [&](const ec_t &ec, size_t bytes_transferred){
+      MDEBUG("SSL handshake 7");
       std::lock_guard<std::mutex> guard(state.lock);
       state.wait_handshake = false;
       state.condition.notify_all();
       state.result = ec;
       if (!state.cancel_handshake) {
+        MDEBUG("SSL handshake 8");
         state.cancel_timer = true;
         deadline.cancel();
       }
+      MDEBUG("SSL handshake 9");
     };
 
     deadline.async_wait(on_timer);
@@ -630,8 +641,10 @@ bool ssl_options_t::handshake(
       }
     );
 
+    MDEBUG("SSL handshake 10");
     while (!io_context.stopped())
     {
+      MDEBUG("SSL handshake 11");
       io_context.poll_one();
       std::lock_guard<std::mutex> guard(state.lock);
       state.condition.wait_for(
@@ -645,10 +658,12 @@ bool ssl_options_t::handshake(
         break;
     }
     if (state.result.value()) {
+      MDEBUG("SSL handshake 12");
       ec_t ec;
       socket.next_layer().shutdown(socket_t::shutdown_both, ec);
       socket.next_layer().close(ec);
     }
+    MDEBUG("SSL handshake 13");
     return state.result;
   };
   const auto ec = start_handshake();

@@ -95,6 +95,8 @@ namespace net_utils
 			{
 				MDEBUG("Direct connect8.2");
 				if (error)
+					MDEBUG("Direct connect error");
+				if (error)
 					shared->result_.set_exception(boost::system::system_error{error});
 				else
 					shared->result_.set_value(std::move(shared->socket_));
