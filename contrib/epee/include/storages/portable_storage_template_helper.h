@@ -45,11 +45,16 @@ namespace epee
     bool load_t_from_json(t_struct& out, const std::string& json_buff)
     {
       portable_storage ps;
+      MDEBUG("Here.... it's definitely about to fail here loading this json buff");
+      MDEBUG("json buff: " << json_buff);
       bool rs = ps.load_from_json(json_buff);
+      MDEBUG("Here.... it's definitely about to fail here2");
       if(!rs)
         return false;
 
-      return out.load(ps);
+      rs = out.load(ps);
+      MDEBUG("Here.... it's definitely about to fail here3");
+      return rs;
     }
     //-----------------------------------------------------------------------------------------------------------
     template<class t_struct>

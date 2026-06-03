@@ -1055,9 +1055,12 @@ uint64_t WalletImpl::daemonBlockChainTargetHeight() const
 
 bool WalletImpl::daemonSynced() const
 {   
+    MDEBUG("Fetching daemon block height");
     if(connected() == Wallet::ConnectionStatus_Disconnected)
         return false;
+    MDEBUG("Fetching daemon block height2");
     uint64_t blockChainHeight = daemonBlockChainHeight();
+    MDEBUG("Fetching daemon block height3");
     return (blockChainHeight >= daemonBlockChainTargetHeight() && blockChainHeight > 1);
 }
 
@@ -2301,7 +2304,9 @@ bool WalletImpl::verifyMessageWithPublicKey(const std::string &message, const st
 
 bool WalletImpl::connectToDaemon()
 {
+    MDEBUG("Connecting to daemon...");
     bool result = m_wallet->check_connection(NULL, NULL, DEFAULT_CONNECTION_TIMEOUT_MILLIS);
+    MDEBUG("Connecting to daemon2...");
     if (!result) {
         setStatusError("Error connecting to daemon at " + m_wallet->get_daemon_address());
     } else {
@@ -2314,8 +2319,10 @@ bool WalletImpl::connectToDaemon()
 Wallet::ConnectionStatus WalletImpl::connected() const
 {
     uint32_t version = 0;
+    MDEBUG("Connected1...");
     bool wallet_is_outdated = false, daemon_is_outdated = false;
     m_is_connected = m_wallet->check_connection(&version, NULL, DEFAULT_CONNECTION_TIMEOUT_MILLIS, &wallet_is_outdated, &daemon_is_outdated);
+    MDEBUG("Connected2...");
     if (!m_is_connected)
     {
         if (wallet_is_outdated || daemon_is_outdated)
@@ -2520,8 +2527,11 @@ bool WalletImpl::doInit(const string &daemon_address, const std::string &proxy_a
     if (isNewWallet() && daemonSynced()) {
         LOG_PRINT_L2(__FUNCTION__ << ":New Wallet - fast refresh until " << daemonBlockChainHeight());
         m_wallet->set_refresh_from_block_height(daemonBlockChainHeight());
+        MDEBUG("Rewriting ...");
         m_wallet->rewrite(m_wallet->get_wallet_file(), m_password);
     }
+
+    MDEBUG("Finished isNewWallet() && daemonSynced()");
 
     if (m_rebuildWalletCache)
       LOG_PRINT_L2(__FUNCTION__ << ": Rebuilding wallet cache, fast refresh until block " << m_wallet->get_refresh_from_block_height());
@@ -2533,6 +2543,8 @@ bool WalletImpl::doInit(const string &daemon_address, const std::string &proxy_a
         this->setTrustedDaemon(false);
         m_refreshIntervalMillis = DEFAULT_REMOTE_NODE_REFRESH_INTERVAL_MILLIS;
     }
+
+    MDEBUG("Finished doInit()");
     return true;
 }
 

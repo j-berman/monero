@@ -186,6 +186,7 @@ namespace net_utils
 			inline bool invoke(const boost::string_ref uri, const boost::string_ref method, const boost::string_ref body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
 			{
 				CRITICAL_REGION_LOCAL(m_lock);
+				MDEBUG("doing invoke1");
 				if(!is_connected())
 				{
 					if (!m_auto_connect)
@@ -200,6 +201,7 @@ namespace net_utils
 						return false;
 					}
 				}
+				MDEBUG("doing invoke2");
 
 				std::string req_buff{};
 				req_buff.reserve(2048);
@@ -221,16 +223,20 @@ namespace net_utils
 					req_buff += "\r\n";
 					//--
 
+					MDEBUG("doing invoke3");
 					bool res = m_net_client.send(req_buff, timeout);
 					CHECK_AND_ASSERT_MES(res, false, "HTTP_CLIENT: Failed to SEND");
+					MDEBUG("doing invoke4");
 					if(body.size())
 						res = m_net_client.send(body, timeout);
+					MDEBUG("doing invoke5");
 					CHECK_AND_ASSERT_MES(res, false, "HTTP_CLIENT: Failed to SEND");
 
 					m_response_info.clear();
 					m_state = reciev_machine_state_header;
 					if (!handle_reciev(timeout))
 						return false;
+					MDEBUG("doing invoke6");
 					if (m_response_info.m_response_code != 401)
 					{
 						if(ppresponse_info)

@@ -6663,8 +6663,10 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout, b
     {
       m_rpc_version = 0;
       m_node_rpc_proxy.invalidate();
+      MDEBUG("Attempting to connect");
       if (!m_http_client->connect(std::chrono::milliseconds(timeout)))
         return false;
+      MDEBUG("Connected...");
       if(!m_http_client->is_connected(ssl))
         return false;
     }

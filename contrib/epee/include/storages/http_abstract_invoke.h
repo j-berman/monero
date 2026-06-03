@@ -39,18 +39,23 @@ namespace epee
     bool invoke_http_json(const boost::string_ref uri, const t_request& out_struct, t_response& result_struct, t_transport& transport, std::chrono::milliseconds timeout = std::chrono::seconds(15), const boost::string_ref method = "POST")
     {
       std::string req_param;
+      MDEBUG("Storing to json in invoke_http_json");
       if(!serialization::store_t_to_json(out_struct, req_param))
         return false;
+      MDEBUG("Stored to json in invoke_http_json");
 
       http::fields_list additional_params;
       additional_params.push_back(std::make_pair("Content-Type","application/json; charset=utf-8"));
 
       const http::http_response_info* pri = NULL;
+      MDEBUG("Invoking req");
       if(!transport.invoke(uri, method, req_param, timeout, std::addressof(pri), std::move(additional_params)))
       {
         LOG_PRINT_L1("Failed to invoke http request to  " << uri);
         return false;
       }
+
+      MDEBUG("Finished invoking req");
 
       if(!pri)
       {
@@ -64,6 +69,7 @@ namespace epee
         return false;
       }
 
+      MDEBUG("Loading result from json");
       return serialization::load_t_from_json(result_struct, pri->m_body);
     }
 
@@ -112,11 +118,13 @@ namespace epee
       req_t.method = std::move(method_name);
       req_t.params = out_struct;
       epee::json_rpc::response<t_response, epee::json_rpc::error> resp_t = AUTO_VAL_INIT(resp_t);
+      MDEBUG("invoking invoke_http_json1");
       if(!epee::net_utils::invoke_http_json(uri, req_t, resp_t, transport, timeout, http_method))
       {
         error_struct = {};
         return false;
       }
+      MDEBUG("invoking invoke_http_json2");
       if(resp_t.error.code || resp_t.error.message.size())
       {
         error_struct = resp_t.error;
