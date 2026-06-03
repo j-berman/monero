@@ -473,6 +473,7 @@ bool ssl_options_t::has_strong_verification(boost::string_ref host) const noexce
 
 bool ssl_options_t::has_fingerprint(boost::asio::ssl::verify_context &ctx) const
 {
+    MDEBUG("has_fingerprint1");
   // can we check the certificate against a list of fingerprints?
   if (!fingerprints_.empty()) {
     X509_STORE_CTX *sctx = ctx.native_handle();
@@ -482,6 +483,7 @@ bool ssl_options_t::has_fingerprint(boost::asio::ssl::verify_context &ctx) const
       return false;
     }
 
+    MDEBUG("has_fingerprint2");
     X509* cert = nullptr;
     const STACK_OF(X509)* chain = X509_STORE_CTX_get_chain(sctx);
     if (!chain || sk_X509_num(chain) < 1 || !(cert = sk_X509_value(chain, 0)))
@@ -489,6 +491,8 @@ bool ssl_options_t::has_fingerprint(boost::asio::ssl::verify_context &ctx) const
       MERROR("No certificate found in verify_context");
       return false;
     }
+
+    MDEBUG("has_fingerprint3");
 
     // buffer for the certificate digest and the size of the result
     std::vector<uint8_t> digest(EVP_MAX_MD_SIZE);
@@ -500,11 +504,17 @@ bool ssl_options_t::has_fingerprint(boost::asio::ssl::verify_context &ctx) const
       return false;
     }
 
+    MDEBUG("has_fingerprint4");
+
     // strip unnecessary bytes from the digest
     digest.resize(size);
 
+    MDEBUG("has_fingerprint5");
+
     return std::binary_search(fingerprints_.begin(), fingerprints_.end(), digest);
   }
+
+  MDEBUG("has_fingerprintEND");
 
   return false;
 }
@@ -514,12 +524,16 @@ void ssl_options_t::configure(
   boost::asio::ssl::stream_base::handshake_type type,
   const std::string& host) const
 {
+  MDEBUG("ssl configure1");
   socket.next_layer().set_option(boost::asio::ip::tcp::no_delay(true));
+  MDEBUG("ssl configure2");
   {
     // in case server is doing "virtual" domains, set hostname
     SSL* const ssl_ctx = socket.native_handle();
+    MDEBUG("ssl configure3");
     if (type == boost::asio::ssl::stream_base::client && !host.empty() && ssl_ctx)
       SSL_set_tlsext_host_name(ssl_ctx, host.c_str());
+    MDEBUG("ssl configure4");
   }
 
 
@@ -527,25 +541,41 @@ void ssl_options_t::configure(
      no expected hostname for server to verify against. If server doesn't have
      specific whitelisted certificates for client, don't require client to
      send certificate at all. */
+  MDEBUG("ssl configure5");
   const bool no_verification = verification == ssl_verification_t::none ||
     (type == boost::asio::ssl::stream_base::server && fingerprints_.empty() && ca_path.empty());
+  MDEBUG("ssl configure6");
 
   /* According to OpenSSL documentation (and SSL specifications), server must
      always send certificate unless "anonymous" cipher mode is used which are
      disabled by default. Either way, the certificate is never inspected. */
-  if (no_verification)
+  if (no_verification) {
+    MDEBUG("ssl configure7");
     socket.set_verify_mode(boost::asio::ssl::verify_none);
+  }
   else
   {
+    MDEBUG("ssl configure7a");
     socket.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert);
 
-    
+    MDEBUG("ssl configure8");
+
     socket.set_verify_callback([&](const bool preverified, boost::asio::ssl::verify_context &ctx)
     {
       // preverified means it passed system or user CA check. System CA is never loaded
       // when fingerprints are whitelisted.
+      MDEBUG("ssl configure9");
+
+#if BOOST_VERSION >= 107300
+      MDEBUG("ssl configure with higher boost version");
+#else
+      MDEBUG("ssl configure with lower boost version");
+#endif
+
       const bool verified = preverified &&
         (verification != ssl_verification_t::system_ca || host.empty() || MONERO_HOSTNAME_VERIFY(host)(preverified, ctx));
+
+      MDEBUG("ssl configure10");
 
       if (!verified && !has_fingerprint(ctx))
       {
@@ -560,6 +590,8 @@ void ssl_options_t::configure(
       return true;
     });
   }
+
+  MDEBUG("ssl configureEND");
 }
 
 bool ssl_options_t::handshake(
