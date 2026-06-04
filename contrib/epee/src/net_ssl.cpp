@@ -554,8 +554,8 @@ void ssl_options_t::configure(
       MDEBUG("ssl configure with boost version: " << BOOST_VERSION);
 #endif
 
-#ifdef OPENSSL_VERSION
-      MDEBUG("ssl configure with open ssl version: " << OPENSSL_VERSION);
+#ifdef OPENSSL_VERSION_NUMBER
+      MDEBUG("ssl configure with open ssl version: " << OPENSSL_VERSION_NUMBER);
 #endif
 
   // if (no_verification) {

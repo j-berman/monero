@@ -248,6 +248,14 @@ bool t_daemon::run(bool interactive)
   });
   tools::signal_handler::install([&stop, &shutdown](int){ stop = shutdown = true; });
 
+#ifdef BOOST_VERSION
+    MDEBUG("monerod boost version: " << BOOST_VERSION);
+#endif
+
+#ifdef OPENSSL_VERSION_NUMBER
+    MDEBUG("monerod open ssl version: " << OPENSSL_VERSION_NUMBER);
+#endif
+
   try
   {
     if (!mp_internals->core.run())
