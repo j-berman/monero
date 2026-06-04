@@ -549,47 +549,51 @@ void ssl_options_t::configure(
   /* According to OpenSSL documentation (and SSL specifications), server must
      always send certificate unless "anonymous" cipher mode is used which are
      disabled by default. Either way, the certificate is never inspected. */
-  if (no_verification) {
-    MDEBUG("ssl configure7");
-    socket.set_verify_mode(boost::asio::ssl::verify_none);
-  }
-  else
-  {
-    MDEBUG("ssl configure7a");
-    socket.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert);
 
-    MDEBUG("ssl configure8");
-
-    socket.set_verify_callback([&](const bool preverified, boost::asio::ssl::verify_context &ctx)
-    {
-      // preverified means it passed system or user CA check. System CA is never loaded
-      // when fingerprints are whitelisted.
-      MDEBUG("ssl configure9");
-
-#if BOOST_VERSION >= 107300
-      MDEBUG("ssl configure with higher boost version");
-#else
-      MDEBUG("ssl configure with lower boost version");
+#ifdef BOOST_VERSION
+      MDEBUG("ssl configure with boost version: " << BOOST_VERSION);
 #endif
 
-      const bool verified = preverified &&
-        (verification != ssl_verification_t::system_ca || host.empty() || MONERO_HOSTNAME_VERIFY(host)(preverified, ctx));
+#ifdef OPENSSL_VERSION
+      MDEBUG("ssl configure with open ssl version: " << OPENSSL_VERSION);
+#endif
 
-      MDEBUG("ssl configure10");
+  // if (no_verification) {
+    MDEBUG("ssl configure7");
+    socket.set_verify_mode(boost::asio::ssl::verify_none);
+  // }
+  // else
+  // {
+  //   MDEBUG("ssl configure7a");
+  //   socket.set_verify_mode(boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert);
 
-      if (!verified && !has_fingerprint(ctx))
-      {
-        // autodetect will reconnect without SSL - warn and keep connection encrypted
-        if (support != ssl_support_t::e_ssl_support_autodetect)
-        {
-          MERROR("SSL certificate is not in the allowed list, connection dropped");
-          return false;
-        }
-        MWARNING("SSL peer has not been verified");
-      }
-      return true;
-    });
-  }
+  //   MDEBUG("ssl configure8");
+
+  //   socket.set_verify_callback([&](const bool preverified, boost::asio::ssl::verify_context &ctx)
+  //   {
+  //     // preverified means it passed system or user CA check. System CA is never loaded
+  //     // when fingerprints are whitelisted.
+  //     MDEBUG("ssl configure9");
+
+
+  //     const bool verified = preverified &&
+  //       (verification != ssl_verification_t::system_ca || host.empty() || MONERO_HOSTNAME_VERIFY(host)(preverified, ctx));
+
+  //     MDEBUG("ssl configure10");
+
+  //     if (!verified && !has_fingerprint(ctx))
+  //     {
+  //       // autodetect will reconnect without SSL - warn and keep connection encrypted
+  //       if (support != ssl_support_t::e_ssl_support_autodetect)
+  //       {
+  //         MERROR("SSL certificate is not in the allowed list, connection dropped");
+  //         return false;
+  //       }
+  //       MWARNING("SSL peer has not been verified");
+  //     }
+  //     return true;
+  //   });
+  // }
 
   MDEBUG("ssl configureEND");
 }
