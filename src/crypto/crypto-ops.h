@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* From fe.h */
@@ -174,7 +175,7 @@ If `out` and `in` overlap, it will cause undefined output.
 
 No 0 fe's are expected for `in`, otherwise fails.
 **/
-int fe_batch_invert(fe *out, const fe *in, const int n);
+int fe_batch_invert(fe *out, const fe *in, const size_t n);
 void fe_mul(fe out, const fe, const fe);
 void fe_0(fe h);
 
