@@ -344,7 +344,7 @@ static int fe_isnonzero(const fe f) {
 
 // Montgomery's trick
 // https://iacr.org/archive/pkc2004/29470042/29470042.pdf 2.2
-int fe_batch_invert(fe *out, const fe *in, const int n) {
+int fe_batch_invert(fe *out, const fe *in, const size_t n) {
   if (n == 0) {
     return 0;
   }
@@ -362,7 +362,7 @@ int fe_batch_invert(fe *out, const fe *in, const int n) {
 
   // Step 1: collect initial muls
   fe_copy(out[0], in[0]);
-  for (int i = 1; i < n; ++i) {
+  for (size_t i = 1; i < n; ++i) {
     fe_mul(out[i], out[i-1], in[i]);
   }
 
@@ -375,7 +375,7 @@ int fe_batch_invert(fe *out, const fe *in, const int n) {
   fe_invert(a, out[n-1]);
 
   // Step 3: get each inverse
-  for (int i = n; i > 1; --i) {
+  for (size_t i = n; i > 1; --i) {
     fe_mul(out[i-1], a, out[i-2]);
     fe_mul(a, a, in[i-1]);
   }
