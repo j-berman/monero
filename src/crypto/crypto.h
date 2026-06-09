@@ -335,7 +335,7 @@ namespace crypto {
 
   static const ec_point EC_I = {1};
 
-  static const ec_point EC_INV_EIGHT = {{
+  static const ec_scalar EC_INV_EIGHT = {{
       static_cast<char>(0x79), static_cast<char>(0x2f), static_cast<char>(0xdc), static_cast<char>(0xe2),
       static_cast<char>(0x29), static_cast<char>(0xe5), static_cast<char>(0x06), static_cast<char>(0x61),
       static_cast<char>(0xd0), static_cast<char>(0xda), static_cast<char>(0x1c), static_cast<char>(0x7d),

@@ -31,7 +31,7 @@
 namespace fcmp_pp
 {
 //----------------------------------------------------------------------------------------------------------------------
-bool mul8_is_identity(const ge_p3 &point) {
+bool mul8_is_identity_vartime(const ge_p3 &point) {
     ge_p2 point_ge_p2;
     ge_p3_to_p2(&point_ge_p2, &point);
     ge_p1p1 point_mul8;
@@ -41,7 +41,7 @@ bool mul8_is_identity(const ge_p3 &point) {
     return ge_p3_is_point_at_infinity_vartime(&point_mul8_p3);
 }
 //----------------------------------------------------------------------------------------------------------------------
-crypto::ec_point clear_torsion(const ge_p3 &point) {
+crypto::ec_point clear_torsion_vartime(const ge_p3 &point) {
     // mul by inv 8, then mul by 8
     ge_p2 point_inv_8;
     ge_scalarmult(&point_inv_8, to_bytes(crypto::EC_INV_EIGHT), &point);
@@ -54,11 +54,11 @@ crypto::ec_point clear_torsion(const ge_p3 &point) {
     return k_out;
 }
 //----------------------------------------------------------------------------------------------------------------------
-bool get_valid_torsion_cleared_point(const crypto::ec_point &point, crypto::ec_point &torsion_cleared_out) {
+bool get_valid_torsion_cleared_point_vartime(const crypto::ec_point &point, crypto::ec_point &torsion_cleared_out) {
     ge_p3 p3;
     if (ge_frombytes_vartime(&p3, to_bytes(point)) != 0)
         return false;
-    torsion_cleared_out = fcmp_pp::clear_torsion(p3);
+    torsion_cleared_out = fcmp_pp::clear_torsion_vartime(p3);
     if (torsion_cleared_out == crypto::EC_I)
         return false;
     return true;

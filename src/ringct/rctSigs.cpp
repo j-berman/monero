@@ -1628,7 +1628,7 @@ namespace rct {
           {
             const crypto::ec_point &point = rct::rct2pt(pts[i]);
             crypto::ec_point torsion_cleared_point;
-            if (!fcmp_pp::get_valid_torsion_cleared_point(point, torsion_cleared_point))
+            if (!fcmp_pp::get_valid_torsion_cleared_point_vartime(point, torsion_cleared_point))
             {
               torsion_free[i] = false;
               return;

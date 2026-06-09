@@ -38,9 +38,9 @@ namespace fcmp_pp
 {
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
-bool mul8_is_identity(const ge_p3 &point);
-crypto::ec_point clear_torsion(const ge_p3 &point);
-bool get_valid_torsion_cleared_point(const crypto::ec_point &point, crypto::ec_point &torsion_cleared_out);
+bool mul8_is_identity_vartime(const ge_p3 &point);
+crypto::ec_point clear_torsion_vartime(const ge_p3 &point);
+bool get_valid_torsion_cleared_point_vartime(const crypto::ec_point &point, crypto::ec_point &torsion_cleared_out);
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 }//namespace fcmp_pp
