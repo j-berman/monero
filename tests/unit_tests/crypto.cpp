@@ -371,6 +371,21 @@ TEST(Crypto, batch_inversion)
   }
 }
 
+TEST(Crypto, batch_invert_zero)
+{
+  const std::size_t TEST_ELEMS = 2;
+  std::unique_ptr<fe[]> init_elems = std::make_unique<fe[]>(TEST_ELEMS);
+
+  // Init test elems
+  const cryptonote::keypair kp = cryptonote::keypair::generate(hw::get_device("default"));
+  ASSERT_EQ(fe_frombytes_vartime(init_elems[0], (unsigned char*)kp.pub.data), 0);
+  fe_0(init_elems[1]);
+
+  // Do the batch inversion, should fail
+  std::unique_ptr<fe[]> batch_inverted = std::make_unique<fe[]>(TEST_ELEMS);
+  ASSERT_EQ(fe_batch_invert(batch_inverted.get(), init_elems.get(), TEST_ELEMS), -1);
+}
+
 TEST(Crypto, fe_equals)
 {
   // Test equality
