@@ -29,6 +29,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <assert.h>
+#include <sodium/crypto_verify_32.h>
 #include <stdint.h>
 
 #include "warnings.h"
@@ -318,17 +319,7 @@ int fe_equals(const fe a, const fe b) {
   unsigned char b_bytes[32];
   fe_tobytes(a_bytes, a);
   fe_tobytes(b_bytes, b);
-
-  // Using openssl's technique for constant time comp (suggested by Trail of Bits)
-  // https://github.com/openssl/openssl/blob/012cc567d00ab6e899cf3dc7c2845ec4cd68c1ff/crypto/cpuid.c#L198-L209
-  const volatile unsigned char *a_const = a_bytes;
-  const volatile unsigned char *b_const = b_bytes;
-
-  unsigned char r = 0;
-  for (int i = 0; i < 32; ++i) {
-    r |= a_const[i] ^ b_const[i];
-  }
-  return !r;
+  return crypto_verify_32(a_bytes, b_bytes) == 0;
 }
 
 /* From fe_isnonzero.c, modified */
