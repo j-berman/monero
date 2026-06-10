@@ -472,19 +472,19 @@ TEST(Crypto, batch_inversion)
     std::unique_ptr<fe[]> batch_inverted = std::make_unique<fe[]>(n_elems);
     ASSERT_EQ(fe_batch_invert(batch_inverted.get(), init_elems.get(), n_elems), 0);
     for (std::size_t i = 0; i < n_elems; ++i)
-      ASSERT_EQ(fe_equals(batch_inverted[i], norm_inverted[i]), 0);
+      ASSERT_EQ(fe_equals(batch_inverted[i], norm_inverted[i]), 1);
   }
 }
 
 TEST(Crypto, fe_equals)
 {
   // Test equality
-  ASSERT_EQ(fe_equals(fe_d, fe_d), 0);
+  ASSERT_EQ(fe_equals(fe_d, fe_d), 1);
 
   // Test inequality
   fe fe_d2;
   fe_add(fe_d2, fe_d, fe_d);
-  ASSERT_NE(fe_equals(fe_d2, fe_d), 0);
+  ASSERT_EQ(fe_equals(fe_d2, fe_d), 0);
 
   // Test different fe reprs that are actually equal
   unsigned char fe_d2_bytes[32];
@@ -493,7 +493,7 @@ TEST(Crypto, fe_equals)
   fe_frombytes_vartime(fe_d2_reduced, fe_d2_bytes);
   // We expect distinct fe_d2_reduced and fe_d2 reprs, since fe_add produces fe repr elems in a larger subdomain.
   ASSERT_NE(memcmp(fe_d2_reduced, fe_d2, sizeof(fe)), 0);
-  ASSERT_EQ(fe_equals(fe_d2_reduced, fe_d2), 0);
+  ASSERT_EQ(fe_equals(fe_d2_reduced, fe_d2), 1);
 }
 
 TEST(Crypto, fe_constants)
