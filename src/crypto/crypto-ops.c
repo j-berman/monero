@@ -29,6 +29,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <assert.h>
+#include <sodium/crypto_verify_32.h>
 #include <stdint.h>
 
 #include "warnings.h"
@@ -318,19 +319,25 @@ int fe_equals(const fe a, const fe b) {
   unsigned char b_bytes[32];
   fe_tobytes(a_bytes, a);
   fe_tobytes(b_bytes, b);
+  return crypto_verify_32(a_bytes, b_bytes) == 0;
+}
 
-  int r = 1;
-  for (int i = 0; i < 32; ++i) {
-    r &= a_bytes[i] == b_bytes[i];
-  }
-  return r;
+/* From fe_isnonzero.c, modified */
+
+static int fe_isnonzero(const fe f) {
+  unsigned char s[32];
+  fe_tobytes(s, f);
+  return (((int) (s[0] | s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7] | s[8] |
+    s[9] | s[10] | s[11] | s[12] | s[13] | s[14] | s[15] | s[16] | s[17] |
+    s[18] | s[19] | s[20] | s[21] | s[22] | s[23] | s[24] | s[25] | s[26] |
+    s[27] | s[28] | s[29] | s[30] | s[31]) - 1) >> 8) + 1;
 }
 
 // Montgomery's trick
 // https://iacr.org/archive/pkc2004/29470042/29470042.pdf 2.2
-void fe_batch_invert(fe *out, const fe *in, const int n) {
+int fe_batch_invert(fe *out, const fe *in, const unsigned int n) {
   if (n == 0) {
-    return;
+    return 0;
   }
 
   assert(out);
@@ -346,20 +353,26 @@ void fe_batch_invert(fe *out, const fe *in, const int n) {
 
   // Step 1: collect initial muls
   fe_copy(out[0], in[0]);
-  for (int i = 1; i < n; ++i) {
+  for (unsigned int i = 1; i < n; ++i) {
     fe_mul(out[i], out[i-1], in[i]);
   }
 
   // Step 2: get the inverse of all elems multiplied together
+  if (!fe_isnonzero(out[n-1])) {
+    // Don't divide by 0
+    return -1;
+  }
   fe a;
   fe_invert(a, out[n-1]);
 
   // Step 3: get each inverse
-  for (int i = n; i > 1; --i) {
+  for (unsigned int i = n; i > 1; --i) {
     fe_mul(out[i-1], a, out[i-2]);
     fe_mul(a, a, in[i-1]);
   }
   fe_copy(out[0], a);
+
+  return 0;
 }
 
 /* From fe_isnegative.c */
@@ -376,17 +389,6 @@ static int fe_isnegative(const fe f) {
   unsigned char s[32];
   fe_tobytes(s, f);
   return s[0] & 1;
-}
-
-/* From fe_isnonzero.c, modified */
-
-static int fe_isnonzero(const fe f) {
-  unsigned char s[32];
-  fe_tobytes(s, f);
-  return (((int) (s[0] | s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7] | s[8] |
-    s[9] | s[10] | s[11] | s[12] | s[13] | s[14] | s[15] | s[16] | s[17] |
-    s[18] | s[19] | s[20] | s[21] | s[22] | s[23] | s[24] | s[25] | s[26] |
-    s[27] | s[28] | s[29] | s[30] | s[31]) - 1) >> 8) + 1;
 }
 
 /* From fe_mul.c */
