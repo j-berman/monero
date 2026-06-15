@@ -1298,7 +1298,7 @@ void ge_double_scalarmult_base_vartime_p3(ge_p3 *r3, const unsigned char *a, con
 
   ge_p2_0(&r);
 
-  for (i = 255; i >= 0; --i) {
+  for (i = 255; i >= 1; --i) {
     if (aslide[i] || bslide[i]) break;
   }
 
@@ -2260,7 +2260,7 @@ void ge_double_scalarmult_precomp_vartime2_p3(ge_p3 *r3, const unsigned char *a,
 
   ge_p2_0(&r);
 
-  for (i = 255; i >= 0; --i) {
+  for (i = 255; i >= 1; --i) {
     if (aslide[i] || bslide[i]) break;
   }
 
