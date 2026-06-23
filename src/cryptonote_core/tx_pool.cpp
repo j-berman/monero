@@ -1890,8 +1890,8 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   void tx_memory_pool::add_tx_to_transient_lists(const crypto::hash& txid, double fee, time_t receive_time, bool sensitive)
   {
-    MINFO("Adding tx to transient lists " << txid << " at time " << receive_time << " , sensitive? " << sensitive);
     time_t now = time(NULL);
+    MINFO("Adding tx to transient lists " << txid << " at time " << now << " , with receive_time for other container: " << receive_time << " , sensitive? " << sensitive);
     const std::unordered_map<crypto::hash, added_tx_info>::iterator it = m_added_txs_by_id.find(txid);
     if (it == m_added_txs_by_id.end())
     {
@@ -1909,7 +1909,7 @@ namespace cryptonote
       auto sorted_it = find_tx_in_sorted_container(txid);
       if (sorted_it == m_txs_by_fee_and_receive_time.end())
       {
-        MDEBUG("Re-adding tx " << txid << " to tx pool, but it was not found in the sorted txs container");
+        MERROR("Re-adding tx " << txid << " to tx pool, but it was not found in the sorted txs container");
       }
       else
       {
@@ -1959,7 +1959,7 @@ namespace cryptonote
   {
     time_t now = time(NULL);
     m_removed_txs_by_time.insert(std::make_pair(now, removed_tx_info{txid, sensitive}));
-    MINFO("Transaction removed from pool: txid " << txid << ", total entries in removed list now " << m_removed_txs_by_time.size());
+    MINFO("Transaction removed from pool: txid " << txid << " at time " << now << " , total entries in removed list now " << m_removed_txs_by_time.size());
     if (m_removed_txs_start_time == (time_t)0)
     {
       m_removed_txs_start_time = now;

@@ -921,6 +921,8 @@ namespace cryptonote
         res.pool_info_extent = incremental
           ? COMMAND_RPC_GET_BLOCKS_FAST::INCREMENTAL
           : COMMAND_RPC_GET_BLOCKS_FAST::FULL;
+
+        MINFO("Daemon time set for future get_pool reqs: " << res.daemon_time << " currently returning: " << static_cast<uint64_t>(res.pool_info_extent)  << " , since: " << req.pool_info_since);
       }
     }
 
