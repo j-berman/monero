@@ -1058,7 +1058,9 @@ namespace cryptonote
     removed_txs.clear();
 
     if (!incremental)
-      LOG_PRINT_L2("Giving back the whole pool");
+      MINFO("Giving back the whole pool");
+    else
+      MINFO("Returning all newly added txs since " << start_time);
 
     // If incremental, handle removed TXIDs first since it's important that txs are removed
     // from synchronizers' pools, and we need need to estimate how much space we have left to
@@ -1888,7 +1890,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   void tx_memory_pool::add_tx_to_transient_lists(const crypto::hash& txid, double fee, time_t receive_time, bool sensitive)
   {
-
+    MINFO("Adding tx to transient lists " << txid << " at time " << receive_time << " , sensitive? " << sensitive);
     time_t now = time(NULL);
     const std::unordered_map<crypto::hash, added_tx_info>::iterator it = m_added_txs_by_id.find(txid);
     if (it == m_added_txs_by_id.end())
@@ -1957,7 +1959,7 @@ namespace cryptonote
   {
     time_t now = time(NULL);
     m_removed_txs_by_time.insert(std::make_pair(now, removed_tx_info{txid, sensitive}));
-    MDEBUG("Transaction removed from pool: txid " << txid << ", total entries in removed list now " << m_removed_txs_by_time.size());
+    MINFO("Transaction removed from pool: txid " << txid << ", total entries in removed list now " << m_removed_txs_by_time.size());
     if (m_removed_txs_start_time == (time_t)0)
     {
       m_removed_txs_start_time = now;

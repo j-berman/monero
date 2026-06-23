@@ -326,6 +326,8 @@ namespace levin
       //! \pre Called within `zone_->channels[destionation_].strand`.
       void operator()()
       {
+        MINFO("Queing for covert notify inner");
+
         if (!zone_)
           return;
 
@@ -337,6 +339,8 @@ namespace levin
         else if (destination_ == 0 && zone_->connection_count == 0)
           MWARNING("Unable to send transaction(s) to " << epee::net_utils::zone_to_string(zone_->nzone) <<
 			" - no available outbound connections");
+
+        MINFO("Finished queing for covert notify inner");
       }
     };
 
@@ -574,11 +578,15 @@ namespace levin
       //! \pre Called in `zone_->strand`
       void operator()()
       {
+        MINFO("Strand is executing Dandelion++ notify for " << txs_.size() << " txs");
+
         if (!zone_ || !core_ || txs_.empty())
           return;
 
         if (!zone_->fluffing || tx_relay == relay_method::local)
         {
+          MINFO("Attempting to stem " << txs_.size() << " txs");
+
           core_->on_transactions_relayed(epee::to_span(txs_), relay_method::stem);
           for (int tries = 2; 0 < tries; tries--)
           {
@@ -587,7 +595,7 @@ namespace levin
             {
               /* Source is intentionally omitted in debug log for privacy - a
                  nil uuid indicates source is that node. */
-              MDEBUG("Sent " << txs_.size() << " transaction(s) to " << destination << " using Dandelion++ stem");
+              MINFO("Sent " << txs_.size() << " transaction(s) to " << destination << " using Dandelion++ stem");
               return;
             }
 
@@ -598,6 +606,7 @@ namespace levin
           MERROR("Unable to send transaction(s) via Dandelion++ stem");
         }
 
+        MINFO("Straight fluffing the tx(s)");
         core_->on_transactions_relayed(epee::to_span(txs_), relay_method::fluff);
         fluff_notify::run(std::move(zone_), epee::to_span(txs_), epee::to_span(tx_hashes_), source_);
       }
@@ -843,6 +852,8 @@ namespace levin
 
   bool notify::send_txs(std::vector<blobdata> txs, std::vector<crypto::hash> &&tx_hashes, const boost::uuids::uuid& source, relay_method tx_relay)
   {
+    MINFO("Attempting to send " << txs.size());
+
     if (txs.empty())
       return true;
 
@@ -850,6 +861,8 @@ namespace levin
       return false;
 
     CHECK_AND_ASSERT_MES(txs.size() == tx_hashes.size(), false, "Mismatch size of txs <> tx_hashes in send_txs");
+
+    MINFO("First tx we're sending is " << tx_hashes.at(0));
 
     /* If noise is enabled in a zone, it always takes precedence. The technique
        provides good protection against ISP adversaries, but not sybil
@@ -875,6 +888,7 @@ namespace levin
         tx_relay = relay_method::local; // do not put into stempool embargo (hopefully not there already!).
       }
 
+      MINFO("Queing for covert notify");
       core_->on_transactions_relayed(epee::to_span(txs), tx_relay);
 
       // Padding is not useful when using noise mode. Send as stem so receiver
@@ -903,12 +917,14 @@ namespace levin
         default:
         case relay_method::none:
         case relay_method::block:
+          MINFO("Not relaying... " << static_cast<uint64_t>(tx_relay));
           return false;
         case relay_method::stem:
         case relay_method::forward:
         case relay_method::local:
           if (zone_->nzone == epee::net_utils::zone::public_)
           {
+            MINFO("Dispatching Dandelion++ notify");
             // this will change a local/forward tx to stem or fluff ...
             boost::asio::dispatch(
               zone_->strand,
@@ -923,6 +939,7 @@ namespace levin
              routine. A "fluff" over i2p/tor is not the same as a "fluff" over
              ipv4/6. Marking it as "fluff" here will make the tx immediately
              visible externally from this node, which is not desired. */
+          MINFO("Dispatching fluff notify");
           core_->on_transactions_relayed(epee::to_span(txs), tx_relay);
           boost::asio::dispatch(zone_->strand, fluff_notify{zone_, std::move(txs), std::move(tx_hashes), source});
           break;

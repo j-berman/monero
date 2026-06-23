@@ -1187,16 +1187,19 @@ namespace cryptonote
           case relay_method::local:
             private_req.txs.push_back(std::move(std::get<1>(tx)));
             private_tx_hashes.push_back(std::move(std::get<0>(tx)));
+            MINFO("Going to re-relay local tx " << private_tx_hashes.back());
             break;
           case relay_method::forward:
             stem_req.txs.push_back(std::move(std::get<1>(tx)));
             stem_tx_hashes.push_back(std::move(std::get<0>(tx)));
+            MINFO("Going to re-relay forward tx " << stem_tx_hashes.back());
             break;
           case relay_method::block:
           case relay_method::fluff:
           case relay_method::stem:
             public_req.txs.push_back(std::move(std::get<1>(tx)));
             public_tx_hashes.push_back(std::move(std::get<0>(tx)));
+            MINFO("Going to re-relay block/fluff/stem tx " << public_tx_hashes.back());
             break;
         }
       }

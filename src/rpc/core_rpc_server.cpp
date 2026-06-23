@@ -1540,6 +1540,8 @@ namespace cryptonote
   {
     RPC_TRACKER(send_raw_tx);
 
+    MINFO("Received on_send_raw_tx");
+
     {
       bool ok;
       use_bootstrap_daemon_if_necessary<COMMAND_RPC_SEND_RAW_TX>(invoke_http_mode::JON, "/sendrawtransaction", req, res, ok);
@@ -1645,9 +1647,17 @@ namespace cryptonote
       }
     }
 
+    MINFO("Now relaying tx " << txid);
     NOTIFY_NEW_TRANSACTIONS::request r;
     r.txs.push_back(std::move(tx_blob));
-    m_core.get_protocol()->relay_transactions(r, {txid}, boost::uuids::nil_uuid(), epee::net_utils::zone::invalid, relay_method::local);
+    if (!m_core.get_protocol()->relay_transactions(r, {txid}, boost::uuids::nil_uuid(), epee::net_utils::zone::invalid, relay_method::local))
+    {
+      MERROR("Failed to relay tx " << txid);
+    }
+    else
+    {
+      MINFO("Finished handling relay for " << txid);
+    }
     //TODO: make sure that tx has reached other nodes here, probably wait to receive reflections from other nodes
     res.status = CORE_RPC_STATUS_OK;
     return true;
