@@ -362,6 +362,8 @@ namespace levin
 
       void operator()(const boost::system::error_code error)
       {
+        MINFO("Flushing fluff queue");
+
         if (!zone_ || !zone_->flush_callbacks || --zone_->flush_callbacks || !zone_->p2p)
           return;
 
@@ -423,6 +425,8 @@ namespace levin
           make_payload_send_txs(*zone_->p2p, std::move(connection.first), connection.second, zone_->pad_txs, true);
         }
 
+        MINFO("Just finished fluffing...");
+
         if (next_flush != std::chrono::steady_clock::time_point::max())
           fluff_flush::queue(std::move(zone_), next_flush);
       }
@@ -446,6 +450,8 @@ namespace levin
 
       static void run(std::shared_ptr<detail::zone> zone, epee::span<const blobdata> txs, epee::span<const crypto::hash> tx_hashes, const boost::uuids::uuid& source)
       {
+        MINFO("Attempting to fluff " << txs.size() << " txs");
+
         if (!zone || !zone->p2p || txs.empty())
           return;
 
@@ -457,8 +463,8 @@ namespace levin
         crypto::random_poisson_subseconds in_duration(fluff_average_in);
         crypto::random_poisson_subseconds out_duration(fluff_average_out);
 
-
-        MDEBUG("Queueing " << txs.size() << " transaction(s) for Dandelion++ fluffing");
+        MINFO("Queueing " << txs.size() << " transaction(s) for Dandelion++ fluffing");
+        MINFO("First fluff tx: " << tx_hashes[0]);
         for (auto &e: zone->contexts)
         {
           auto &id = e.first;
@@ -481,7 +487,7 @@ namespace levin
         }
 
         if (next_flush == std::chrono::steady_clock::time_point::max())
-          MWARNING("Unable to send transaction(s), no available connections");
+          MERROR("Unable to send transaction(s), no available connections");
         else if (!zone->flush_callbacks || next_flush < zone->flush_txs.expiry())
           fluff_flush::queue(std::move(zone), next_flush);
       }

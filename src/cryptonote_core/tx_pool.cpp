@@ -1619,7 +1619,7 @@ namespace cryptonote
           }
           if (!meta.double_spend_seen)
           {
-            MDEBUG("Marking " << txid << " as double spending " << itk.k_image);
+            MINFO("Marking " << txid << " as double spending " << itk.k_image);
             meta.double_spend_seen = true;
             changed = true;
             try
