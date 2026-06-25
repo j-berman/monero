@@ -392,7 +392,7 @@ namespace cryptonote
 
     ++m_cookie;
 
-    MINFO("Transaction added to pool: txid " << id << " weight: " << tx_weight << " fee/byte: " << (fee / (double)(tx_weight ? tx_weight : 1)) << ", count: " << m_added_txs_by_id.size() << ", pool total weight: " << m_txpool_weight);
+    MINFO("Transaction added to pool: txid " << id << " weight: " << tx_weight << " fee/byte: " << (fee / (double)(tx_weight ? tx_weight : 1)) << ", count: " << m_added_txs_by_id.size() << ", pool total weight: " << m_txpool_weight << ", relay method: " << static_cast<uint64_t>(meta.get_relay_method()) << ", last relayed time: " << meta.last_relayed_time);
 
     prune(m_txpool_max_weight);
 
@@ -966,6 +966,8 @@ namespace cryptonote
           }
           else
             meta.last_relayed_time = std::chrono::system_clock::to_time_t(now);
+
+          MINFO("Pool tx " << hash << " setting relay method " << static_cast<uint64_t>(method) << " , last relayed time: " << meta.last_relayed_time);
 
           m_blockchain.update_txpool_tx(hash, meta);
           // wait until db update succeeds to ensure tx is visible in the pool
@@ -2028,6 +2030,7 @@ namespace cryptonote
           MFATAL("Failed to insert key images from txpool tx");
           return false;
         }
+        MINFO("Initializing pool tx " << txid << " , last relayed time: " << meta.last_relayed_time << " , relay method: " << static_cast<uint64_t>(meta.get_relay_method()));
         add_tx_to_transient_lists(txid, meta.fee / (double)meta.weight, meta.receive_time, !meta.matches(relay_category::broadcasted));
         m_txpool_weight += meta.weight;
         return true;

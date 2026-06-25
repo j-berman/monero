@@ -589,9 +589,11 @@ namespace levin
         if (!zone_ || !core_ || txs_.empty())
           return;
 
+        CHECK_AND_ASSERT_MES(txs_.size() == tx_hashes_.size(),,"UNEXPECTED txs <> tx_hashes");
+
         if (!zone_->fluffing || tx_relay == relay_method::local)
         {
-          MINFO("Attempting to stem " << txs_.size() << " txs");
+          MINFO("Attempting to stem " << txs_.size() << " txs, first hash: " << tx_hashes_.at(0));
 
           core_->on_transactions_relayed(epee::to_span(txs_), relay_method::stem);
           for (int tries = 2; 0 < tries; tries--)
@@ -601,7 +603,7 @@ namespace levin
             {
               /* Source is intentionally omitted in debug log for privacy - a
                  nil uuid indicates source is that node. */
-              MINFO("Sent " << txs_.size() << " transaction(s) to " << destination << " using Dandelion++ stem");
+              MINFO("Sent " << txs_.size() << " transaction(s) to " << destination << " using Dandelion++ stem, first hash: " << tx_hashes_.at(0));
               return;
             }
 
@@ -609,10 +611,10 @@ namespace levin
             update_channels::run(zone_, get_out_connections(*zone_->p2p, core_));
           }
 
-          MERROR("Unable to send transaction(s) via Dandelion++ stem");
+          MERROR("Unable to send transaction(s) via Dandelion++ stem, first hash: " << tx_hashes_.at(0));
         }
 
-        MINFO("Straight fluffing the tx(s)");
+        MINFO("Straight fluffing the tx(s), first hash: " << tx_hashes_.at(0));
         core_->on_transactions_relayed(epee::to_span(txs_), relay_method::fluff);
         fluff_notify::run(std::move(zone_), epee::to_span(txs_), epee::to_span(tx_hashes_), source_);
       }
