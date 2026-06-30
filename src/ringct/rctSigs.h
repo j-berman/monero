@@ -39,6 +39,7 @@
 #include <vector>
 #include <tuple>
 
+#include "common/threadpool.h"
 #include "crypto/generic-ops.h"
 
 extern "C" {
@@ -138,7 +139,7 @@ namespace rct {
     key get_pre_mlsag_hash(const rctSig &rv, hw::device &hwdev);
 
     // Make sure points are valid points, don't have torsion, and are not equal to identity
-    bool verPointsForTorsion(const std::vector<key> & pts);
+    bool verPointsForTorsion(const std::vector<key> & pts, std::size_t batch_size = 1, tools::threadpool &tpool = tools::threadpool::getInstanceForCompute());
 }
 #endif  /* RCTSIGS_H */
 

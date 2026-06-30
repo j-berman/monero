@@ -66,6 +66,7 @@
 #include "multiexp.h"
 #include "sig_mlsag.h"
 #include "sig_clsag.h"
+#include "torsion_check.h"
 
 namespace po = boost::program_options;
 
@@ -73,7 +74,7 @@ int main(int argc, char** argv)
 {
   TRY_ENTRY();
   tools::on_startup();
-  set_process_affinity(1);
+  // set_process_affinity(1);
   set_thread_high_priority();
 
   mlog_configure(mlog_get_default_log_path("performance_tests.log"), true);
@@ -309,6 +310,10 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_isInMainSubgroup);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_zeroCommitUncached);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_zeroCommitCached);
+
+  TEST_PERFORMANCE2(filter, p, test_torsion_check, true/*multithreaded*/,  true/*batched*/);
+  TEST_PERFORMANCE2(filter, p, test_torsion_check, true/*multithreaded*/,  false/*batched*/);
+  TEST_PERFORMANCE2(filter, p, test_torsion_check, false/*multithreaded*/, false/*batched*/);
 
   TEST_PERFORMANCE2(filter, p, test_multiexp, multiexp_bos_coster, 2);
   TEST_PERFORMANCE2(filter, p, test_multiexp, multiexp_bos_coster, 4);

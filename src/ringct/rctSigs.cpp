@@ -30,10 +30,11 @@
 
 #include "rctSigs.h"
 
+#include <atomic>
+
 #include "misc_log_ex.h"
 #include "misc_language.h"
 #include "common/perf_timer.h"
-#include "common/threadpool.h"
 #include "common/util.h"
 #include "bulletproofs.h"
 #include "bulletproofs_plus.h"
@@ -1576,40 +1577,41 @@ namespace rct {
       return decodeRct(rv, sk, i, mask, hwdev);
     }
 
-    bool verPointsForTorsion(const std::vector<key> & pts) {
+    bool verPointsForTorsion(const std::vector<key> & pts, const std::size_t batch_size, tools::threadpool &tpool) {
       if (pts.empty())
         return true;
 
-      tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
       tools::threadpool::waiter waiter(tpool);
 
-      std::deque<bool> torsion_free;
-
-      torsion_free.resize(pts.size());
-      for (size_t i = 0; i < pts.size(); i++) {
-        tpool.submit(&waiter, [&pts, &torsion_free, i]
+      std::atomic<bool> invalid_found{false};
+      for (std::size_t i = 0; i < pts.size(); i += batch_size)
+      {
+        const std::size_t end = std::min(i + batch_size, pts.size());
+        tpool.submit(&waiter, [&pts, &invalid_found, i, end]
           {
-            const crypto::ec_point &point = rct::rct2pt(pts[i]);
-            crypto::ec_point torsion_cleared_point;
-            if (!fcmp_pp::get_valid_torsion_cleared_point_vartime(point, torsion_cleared_point))
+            for (std::size_t j = i; j < end; ++j)
             {
-              torsion_free[i] = false;
-              return;
+              const crypto::ec_point &point = rct::rct2pt(pts[j]);
+              crypto::ec_point torsion_cleared_point;
+              bool expected = false;
+              if (!fcmp_pp::get_valid_torsion_cleared_point_vartime(point, torsion_cleared_point))
+              {
+                invalid_found.compare_exchange_strong(expected, true);
+                return;
+              }
+              // Point has torsion if after clearing torsion, it's not equal to original
+              const bool has_torsion = point != torsion_cleared_point;
+              if (has_torsion)
+              {
+                invalid_found.compare_exchange_strong(expected, true);
+                return;
+              }
             }
-            // Point is torsion free if after clearing torsion, it's equal to itself
-            torsion_free[i] = point == torsion_cleared_point;
           });
       }
 
-      if (!waiter.wait())
-        return false;
-      for (size_t i = 0; i < torsion_free.size(); ++i) {
-        if (!torsion_free[i]) {
-          LOG_PRINT_L1("Torsion check failed for point " << i);
-          return false;
-        }
-      }
-
+      CHECK_AND_ASSERT_MES(waiter.wait(), false, "threadpool waiter failed in torsion check");
+      CHECK_AND_ASSERT_MES(!invalid_found.load(), false, "Torsion check failed");
       return true;
     }
 }
