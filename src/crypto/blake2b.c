@@ -560,4 +560,47 @@ fail:
 }
 /* Argon2 Team - End Code */
 
+int blake2b_monero(void *out, size_t outlen, const void *in, size_t inlen) {
+	static const uint8_t PERSONAL[BLAKE2B_PERSONALBYTES] = {'M', 'o', 'n', 'e', 'r', 'o'};
+
+	blake2b_param P;
+	blake2b_state S;
+	int ret = -1;
+
+	/* Verify parameters */
+	if (NULL == in && inlen > 0) {
+		goto fail;
+	}
+
+	if (NULL == out || outlen == 0 || outlen > BLAKE2B_OUTBYTES) {
+		goto fail;
+	}
+
+	/* Setup Parameter Block for unkeyed BLAKE2 */
+	P.digest_length = (uint8_t)outlen;
+	P.key_length = 0;
+	P.fanout = 1;
+	P.depth = 1;
+	P.leaf_length = 0;
+	P.node_offset = 0;
+	P.node_depth = 0;
+	P.inner_length = 0;
+	memset(P.reserved, 0, sizeof(P.reserved));
+	memset(P.salt, 0, sizeof(P.salt));
+	memcpy(P.personal, PERSONAL, sizeof(PERSONAL));
+
+	if (blake2b_init_param(&S, &P) < 0) {
+		goto fail;
+	}
+
+	if (blake2b_update(&S, in, inlen) < 0) {
+		goto fail;
+	}
+	ret = blake2b_final(&S, out, outlen);
+
+fail:
+	clear_internal_memory(&S, sizeof(S));
+	return ret;
+}
+
 /// END: blake2b.c

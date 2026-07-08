@@ -111,6 +111,8 @@ extern "C" {
 	int blake2b_long(void *out, size_t outlen, const void *in, size_t inlen);
 	/* Argon2 Team - End Code */
 
+	int blake2b_monero(void *out, size_t outlen, const void *in, size_t inlen);
+
 #if defined(__cplusplus)
 }
 #endif

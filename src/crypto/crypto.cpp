@@ -621,7 +621,8 @@ namespace crypto {
 
   void crypto_ops::unbiased_hash_to_ec(const unsigned char *preimage, const std::size_t length, ec_point &res) {
     uint8_t hash[64];
-    blake2b(std::addressof(hash), 64, preimage, length, NULL, 0);
+    int r = blake2b_monero(std::addressof(hash), 64, preimage, length);
+    assert(r == 0);
 
     ge_p2 first;
     ge_fromfe_frombytes_vartime(&first, reinterpret_cast<const unsigned char *>(&hash));
