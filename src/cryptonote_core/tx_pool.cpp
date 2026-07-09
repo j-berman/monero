@@ -342,19 +342,14 @@ namespace cryptonote
         if (meta.upgrade_relay_method(tx_relay) || !existing_tx) // synchronize with embargo timer or stem/fluff out-of-order messages
         {
           using clock = std::chrono::system_clock;
-          uint64_t last_relayed_time{0};
-          if (tx_relay == relay_method::forward)
+          auto last_relayed_time = std::numeric_limits<decltype(meta.last_relayed_time)>::max();
+          if (tx_relay == relay_method::forward || tx_relay == relay_method::stem)
           {
-            last_relayed_time = clock::to_time_t(clock::now() + crypto::random_poisson_seconds{forward_delay_average}());
+            const auto delay = tx_relay == relay_method::forward ? forward_delay_average : dandelionpp_embargo_average;
+            last_relayed_time = clock::to_time_t(clock::now() + crypto::random_poisson_seconds{delay}());
+            set_if_less(m_next_check, time_t(last_relayed_time));
           }
-          else
-          {
-            // the `set_relayed` function will adjust the time accordingly later
-            // but if the server stops before it relays the tx, we want to make
-            // sure the tx will still eventually get relayed
-            last_relayed_time = clock::to_time_t(clock::now() + crypto::random_poisson_seconds{dandelionpp_embargo_average}());
-          }
-          set_if_less(m_next_check, time_t(last_relayed_time));
+          // else the `set_relayed` function will adjust the time accordingly later
 
           //update transactions container
           meta.last_relayed_time = last_relayed_time;
@@ -881,14 +876,6 @@ namespace cryptonote
       if(!meta.pruned && meta.fee > 0 && !meta.do_not_relay)
       {
         const relay_method tx_relay = meta.get_relay_method();
-        if (tx_relay == relay_method::none)
-          return true; // continue to next tx
-        if (meta.last_relayed_time > now)
-        {
-          next_check = std::min(next_check, meta.last_relayed_time);
-          return true; // continue to next tx
-        }
-
         switch (tx_relay)
         {
           case relay_method::stem:
@@ -901,6 +888,8 @@ namespace cryptonote
           case relay_method::local:
           case relay_method::fluff:
           case relay_method::block:
+            if (!meta.relayed)
+              break; // if it hasn't been relayed yet, relay it
             if (now - meta.last_relayed_time <= get_relay_delay(meta.last_relayed_time, meta.receive_time))
               return true; // continue to next tx
             break;
