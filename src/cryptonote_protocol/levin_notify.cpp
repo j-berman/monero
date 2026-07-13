@@ -1027,7 +1027,7 @@ namespace levin
           {
             if (!tx_queue_->enqueue(tx_relay, txs, tx_hashes))
             {
-              MINFO("Tx(s) already in the notify queue");
+              MINFO("Tx(s) already in the notify queue, first tx: " << tx_hashes.at(0));
               return true;
             }
             MINFO("Dispatching Dandelion++ notify");
