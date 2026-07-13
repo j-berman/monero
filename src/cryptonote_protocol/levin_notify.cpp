@@ -33,6 +33,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <stdexcept>
@@ -576,17 +577,18 @@ namespace levin
     {
       std::shared_ptr<detail::zone> zone_;
       i_core_events* core_;
+      std::shared_ptr<notify_tx_queue> tx_queue_;
       std::vector<blobdata> txs_;
       std::vector<crypto::hash> tx_hashes_;
       boost::uuids::uuid source_;
-      relay_method tx_relay;
+      const relay_method tx_relay;
 
       //! \pre Called in `zone_->strand`
       void operator()()
       {
         MINFO("Strand is executing Dandelion++ notify for " << txs_.size() << " txs");
 
-        if (!zone_ || !core_ || txs_.empty())
+        if (!zone_ || !core_ || !tx_queue_ || txs_.empty())
           return;
 
         CHECK_AND_ASSERT_MES(txs_.size() == tx_hashes_.size(),,"UNEXPECTED txs <> tx_hashes");
@@ -604,6 +606,8 @@ namespace levin
               /* Source is intentionally omitted in debug log for privacy - a
                  nil uuid indicates source is that node. */
               MINFO("Sent " << txs_.size() << " transaction(s) to " << destination << " using Dandelion++ stem, first hash: " << tx_hashes_.at(0));
+              if (!tx_queue_->dequeue(tx_hashes_, tx_relay))
+                MWARNING("Some expected tx(s) weren't in the notify queue");
               return;
             }
 
@@ -616,6 +620,8 @@ namespace levin
 
         MINFO("Straight fluffing the tx(s), first hash: " << tx_hashes_.at(0));
         core_->on_transactions_relayed(epee::to_span(txs_), relay_method::fluff);
+        if (!tx_queue_->dequeue(tx_hashes_, tx_relay))
+          MWARNING("Some expected tx(s) weren't in the notify queue");
         fluff_notify::run(std::move(zone_), epee::to_span(txs_), epee::to_span(tx_hashes_), source_);
       }
     };
@@ -758,9 +764,94 @@ namespace levin
     };
   } // anonymous
 
+  bool notify_tx_queue::enqueue(const relay_method tx_relay, std::vector<blobdata> &txs, std::vector<crypto::hash> &tx_hashes)
+  {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+    CHECK_AND_ASSERT_MES(txs.size() == tx_hashes.size(), false, "Expected txs == tx_hashes");
+    if (txs.empty())
+      return false;
+
+    std::vector<blobdata> notify_txs;
+    std::vector<crypto::hash> notify_tx_hashes;
+    notify_txs.reserve(txs.size());
+    notify_tx_hashes.reserve(tx_hashes.size());
+
+    auto it_txs = txs.begin();
+    auto it_hashes = tx_hashes.begin();
+    while (it_txs != txs.end() && it_hashes != tx_hashes.end())
+    {
+      if (this->enqueue(*it_hashes, tx_relay))
+      {
+        notify_txs.emplace_back(std::move(*it_txs));
+        notify_tx_hashes.emplace_back(std::move(*it_hashes));
+      }
+      ++it_txs;
+      ++it_hashes;
+    }
+
+    txs = std::move(notify_txs);
+    tx_hashes = std::move(notify_tx_hashes);
+    return txs.size() > 0;
+  }
+
+  bool notify_tx_queue::dequeue(const std::vector<crypto::hash> &tx_hashes, const relay_method tx_relay)
+  {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    if (tx_hashes.empty())
+      return true;
+
+    bool all_dequeued = true;
+    for (auto it = tx_hashes.begin(); it != tx_hashes.end(); ++it)
+      all_dequeued = this->dequeue(*it, tx_relay) && all_dequeued;
+    return all_dequeued;
+  }
+
+  bool notify_tx_queue::enqueue(const crypto::hash &tx, const relay_method tx_relay)
+  {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+    auto it = m_queue.find(tx);
+    if (it == m_queue.end())
+    {
+      m_queue.emplace(tx, std::vector<relay_method>{tx_relay});
+      return true;
+    }
+
+    const auto vec_it = std::find(it->second.begin(), it->second.end(), tx_relay);
+    if (vec_it == it->second.end())
+    {
+      it->second.push_back(tx_relay);
+      return true;
+    }
+
+    // Tx is already in the queue
+    return false;
+  }
+
+  bool notify_tx_queue::dequeue(const crypto::hash &tx, const relay_method tx_relay)
+  {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+    auto it = m_queue.find(tx);
+    if (it == m_queue.end())
+      return false;
+
+    const auto vec_it = std::find(it->second.begin(), it->second.end(), tx_relay);
+    if (vec_it == it->second.end())
+      return false;
+
+    it->second.erase(vec_it);
+    if (it->second.empty())
+      m_queue.erase(it);
+
+    return true;
+  }
+
   notify::notify(boost::asio::io_context& service, std::shared_ptr<connections> p2p, epee::byte_slice noise, epee::net_utils::zone zone, const bool pad_txs, i_core_events& core)
     : zone_(std::make_shared<detail::zone>(service, std::move(p2p), std::move(noise), zone, pad_txs))
     , core_(std::addressof(core))
+    , tx_queue_(std::make_shared<notify_tx_queue>())
   {
     if (!zone_->p2p)
       throw std::logic_error{"cryptonote::levin::notify cannot have nullptr p2p argument"};
@@ -867,6 +958,8 @@ namespace levin
 
     if (!zone_)
       return false;
+    if (!tx_queue_)
+      return false;
 
     CHECK_AND_ASSERT_MES(txs.size() == tx_hashes.size(), false, "Mismatch size of txs <> tx_hashes in send_txs");
 
@@ -932,11 +1025,16 @@ namespace levin
         case relay_method::local:
           if (zone_->nzone == epee::net_utils::zone::public_)
           {
+            if (!tx_queue_->enqueue(tx_relay, txs, tx_hashes))
+            {
+              MINFO("Tx(s) already in the notify queue");
+              return true;
+            }
             MINFO("Dispatching Dandelion++ notify");
             // this will change a local/forward tx to stem or fluff ...
             boost::asio::dispatch(
               zone_->strand,
-              dandelionpp_notify{zone_, core_, std::move(txs), std::move(tx_hashes), source, tx_relay}
+              dandelionpp_notify{zone_, core_, tx_queue_, std::move(txs), std::move(tx_hashes), source, tx_relay}
             );
             break;
           }

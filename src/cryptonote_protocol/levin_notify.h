@@ -31,6 +31,8 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <memory>
+#include <shared_mutex>
+#include <unordered_map>
 #include <vector>
 
 #include "byte_slice.h"
@@ -66,6 +68,28 @@ namespace levin
 
   using connections = epee::levin::async_protocol_handler_config<detail::p2p_context>;
 
+  //! Prevents unnecessary duplicate tx notifies
+  class notify_tx_queue
+  {
+  public:
+    // Enqueues txs not already in the queue. Returns true iff any tx(s) were added to the queue.
+    // Note: this modifies the passed in txs and tx_hashes, removing any txs from those containers
+    // that are already in the queue. Any remaining txs should be relayed.
+    bool enqueue(const relay_method tx_relay, std::vector<blobdata> &txs, std::vector<crypto::hash> &tx_hashes);
+
+    // Dequeues txs from the queue. Returns true if all given txs were already in the queue.
+    bool dequeue(const std::vector<crypto::hash> &tx_hashes, const relay_method tx_relay);
+  private:
+    // Returns true if the tx is added to the queue, false if it was already in the queue.
+    bool enqueue(const crypto::hash &tx, const relay_method tx_relay);
+
+    // Returns true if the tx was already in the in queue and gets removed.
+    bool dequeue(const crypto::hash &tx, const relay_method tx_relay);
+  private:
+    std::unordered_map<crypto::hash, std::vector<relay_method>> m_queue;
+    std::recursive_mutex m_mutex;
+  };
+
   //! Provides tx notification privacy
   class notify
   {
@@ -84,6 +108,7 @@ namespace levin
     notify() noexcept
       : zone_(nullptr)
       , core_(nullptr)
+      , tx_queue_(nullptr)
     {}
 
     //! Construct an instance with available notification `zones`.
@@ -132,6 +157,9 @@ namespace levin
 
       \return True iff the notification is queued for sending. */
     bool send_txs(std::vector<blobdata> txs, std::vector<crypto::hash> &&tx_hashes, const boost::uuids::uuid& source, relay_method tx_relay);
+
+  private:
+    std::shared_ptr<notify_tx_queue> tx_queue_;
   };
 } // levin
 } // net
