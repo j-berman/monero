@@ -853,6 +853,7 @@ namespace net_utils
         return true;
 
       if (m_connection_type == e_connection_type_P2P) {
+        MWARNING("Connection " << m_conn_context.m_connection_id << " tripped write limit, terminating");
         terminate_async();
         return false;
       }
