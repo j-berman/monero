@@ -1654,6 +1654,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::on_idle()
   {
+    MINFO("core on_idle");
     if(!m_starter_message_showed)
     {
       std::string main_message;
@@ -1681,6 +1682,8 @@ namespace cryptonote
     m_diff_recalc_interval.do_call(boost::bind(&core::recalculate_difficulties, this));
     m_miner.on_idle();
     m_mempool.on_idle();
+
+    MINFO("Finished core on_idle");
     return true;
   }
   //-----------------------------------------------------------------------------------------------

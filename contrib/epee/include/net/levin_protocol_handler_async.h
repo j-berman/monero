@@ -659,8 +659,8 @@ public:
       `message_writer::finalize_notify`. See additional instructions for
       `make_fragmented_notify`.
 
-      \return 1 on success */
-  int send(byte_slice message)
+      \return true on success */
+  bool send(byte_slice message)
   {
     const misc_utils::auto_scope_leave_caller scope_exit_handler = misc_utils::create_scope_leave_handler(
       boost::bind(&async_protocol_handler::finish_outer_call, this)
@@ -669,9 +669,9 @@ public:
     if (!send_message(std::move(message)))
     {
       LOG_ERROR_CC(m_connection_context, "Failed to send message, dropping it");
-      return -1;
+      return false;
     }
-    return 1;
+    return true;
   }
   //------------------------------------------------------------------------------------------
   boost::uuids::uuid get_connection_id() {return m_connection_context.m_connection_id;}

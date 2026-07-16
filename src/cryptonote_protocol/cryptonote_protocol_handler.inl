@@ -1018,7 +1018,7 @@ namespace cryptonote
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_TRANSACTIONS (" << arg.txs.size() << " txes)");
 
-    std::lock_guard<std::mutex> m_check_lock(m_check_tx_request_queue_mutex);
+    std::lock_guard<std::timed_mutex> check_lock(m_check_tx_request_queue_mutex);
 
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
@@ -1836,10 +1836,12 @@ skip:
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::on_idle()
   {
+    MINFO("Executing protocol handler on_idle");
     m_idle_peer_kicker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::kick_idle_peers, this));
     m_standby_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::check_standby_peers, this));
     m_sync_search_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::update_sync_search, this));
     m_peer_tx_request_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::check_tx_request_queue, this));
+    MINFO("Done with inner protocol handler on_idle");
     return m_core.on_idle();
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -1963,7 +1965,16 @@ skip:
     // Synchronize with handling incoming txs, because that function can take a long time to execute and may be in
     // the process of verifying large txs that we requested. We don't want to count request misses that are actually
     // good and just take a long time to verify.
-    std::lock_guard<std::mutex> m_check_lock(m_check_tx_request_queue_mutex);
+    std::unique_lock<std::timed_mutex> check_lock(m_check_tx_request_queue_mutex, std::chrono::seconds{1});
+    if (!check_lock.owns_lock())
+    {
+      MINFO("Deferring checking tx request queue");
+      return true;
+    }
+    else
+    {
+      MINFO("Checking tx request queue");
+    }
 
     // We drop connections that exceed the threshold for allowed missed txs
     const auto drop_peers = m_request_manager.remove_stale_requests();

@@ -857,10 +857,14 @@ namespace cryptonote
   bool tx_memory_pool::get_relayable_transactions(std::vector<std::tuple<crypto::hash, cryptonote::blobdata, relay_method>> &txs)
   {
     using clock = std::chrono::system_clock;
+    MINFO("Getting relayable transactions");
 
     const uint64_t now = time(NULL);
     if (uint64_t{std::numeric_limits<time_t>::max()} < now || time_t(now) < m_next_check)
+    {
+      MINFO("Getting relayable transactions - waiting until " << m_next_check << " , cur time: " << time_t(now));
       return false;
+    }
 
     uint64_t next_check = clock::to_time_t(clock::from_time_t(time_t(now)) + max_relayable_check);
     std::vector<std::pair<crypto::hash, txpool_tx_meta_t>> change_timestamps;
