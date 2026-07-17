@@ -149,6 +149,7 @@ namespace cryptonote
   uint64_t get_pruned_transaction_weight(const transaction &tx);
   uint64_t get_transaction_blob_size(const transaction& tx);
 
+  size_t get_max_tx_size();
   bool check_money_overflow(const transaction& tx);
   bool check_outs_overflow(const transaction& tx);
   bool check_inputs_overflow(const transaction& tx);

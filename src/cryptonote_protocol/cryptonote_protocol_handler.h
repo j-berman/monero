@@ -182,8 +182,8 @@ namespace cryptonote
     bool check_standby_peers();
     bool update_sync_search();
     void send_txs_request(cryptonote_connection_context &context, std::vector<crypto::hash> &&tx_hashes);
-    std::timed_mutex m_check_tx_request_queue_mutex;
     bool check_tx_request_queue();
+    void fly_available_requests_in_queue(const std::unordered_set<boost::uuids::uuid> &ignore_peers = {});
     int try_add_next_blocks(cryptonote_connection_context &context);
     void notify_new_stripe(cryptonote_connection_context &context, uint32_t stripe);
     size_t skip_unneeded_hashes(cryptonote_connection_context& context, bool check_block_queue) const;

@@ -59,7 +59,7 @@ std::unordered_set<boost::uuids::uuid> request_manager::remove_stale_requests() 
   for (auto it = m_requested_txs.begin(); it != m_requested_txs.end();) {
     // Stale means it's been in flight for longer than the allowed timeout
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->last_action_timestamp);
-    if (!it->in_flight || elapsed.count() < m_request_timeout) {
+    if (it->processing || !it->in_flight || elapsed.count() < m_request_timeout) {
       ++it;
       continue;
     }
@@ -161,6 +161,16 @@ bool request_manager::remove_request(const crypto::hash &tx_hash) {
     }
     it = by_tx_hash.erase(it);
   }
+  return true;
+}
+
+bool request_manager::processing_tx(const crypto::hash &tx_hash, const boost::uuids::uuid &peer_id) {
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  auto& by_peer_and_tx = get_requests_by_peer_and_tx(m_requested_txs);
+  auto it = by_peer_and_tx.find(boost::make_tuple(peer_id, tx_hash));
+  if (it == by_peer_and_tx.end())
+    return false;
+  it->start_processing();
   return true;
 }
 

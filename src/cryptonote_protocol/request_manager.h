@@ -93,6 +93,9 @@ public:
   // true: found, false: not found or none in-flight
   bool remove_request(const crypto::hash &tx_hash);
 
+  // Processing received tx from peer
+  bool processing_tx(const crypto::hash &tx_hash, const boost::uuids::uuid &peer_id);
+
   // Returns the vector of tx hashes to request
   std::vector<crypto::hash> fly_available_requests(const boost::uuids::uuid &peer_id);
 

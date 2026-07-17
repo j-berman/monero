@@ -256,6 +256,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool parse_and_validate_tx_from_blob(const blobdata_ref& tx_blob, transaction& tx)
   {
+    CHECK_AND_ASSERT_MES(tx_blob.size() <= get_max_tx_size(), false, "Tx blob too big");
     binary_archive<false> ba{epee::strspan<std::uint8_t>(tx_blob)};
     bool r = ::serialization::serialize(ba, tx);
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse transaction from blob");
@@ -267,6 +268,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool parse_and_validate_tx_base_from_blob(const blobdata_ref& tx_blob, transaction& tx)
   {
+    CHECK_AND_ASSERT_MES(tx_blob.size() <= get_max_tx_size(), false, "Tx blob too big");
     binary_archive<false> ba{epee::strspan<std::uint8_t>(tx_blob)};
     bool r = tx.serialize_base(ba);
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse transaction from blob");
@@ -277,6 +279,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool parse_and_validate_tx_prefix_from_blob(const blobdata_ref& tx_blob, transaction_prefix& tx)
   {
+    CHECK_AND_ASSERT_MES(tx_blob.size() <= get_max_tx_size(), false, "Tx blob too big");
     binary_archive<false> ba{epee::strspan<std::uint8_t>(tx_blob)};
     bool r = ::serialization::serialize_noeof(ba, tx);
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse transaction prefix from blob");
@@ -285,6 +288,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool parse_and_validate_tx_from_blob(const blobdata_ref& tx_blob, transaction& tx, crypto::hash& tx_hash)
   {
+    CHECK_AND_ASSERT_MES(tx_blob.size() <= get_max_tx_size(), false, "Tx blob too big");
     binary_archive<false> ba{epee::strspan<std::uint8_t>(tx_blob)};
     bool r = ::serialization::serialize(ba, tx);
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse transaction from blob");
@@ -1043,6 +1047,11 @@ namespace cryptonote
         return false;
     }
     return true;
+  }
+  //-----------------------------------------------------------------------------------------------
+  size_t get_max_tx_size()
+  {
+    return CRYPTONOTE_MAX_TX_SIZE;
   }
   //-----------------------------------------------------------------------------------------------
   bool check_money_overflow(const transaction& tx)

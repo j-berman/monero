@@ -57,6 +57,7 @@ struct tx_request
     crypto::hash tx_hash;
     mutable std::chrono::steady_clock::time_point last_action_timestamp;
     mutable bool in_flight = false;
+    mutable bool processing = false;
 
     tx_request(const boost::uuids::uuid& _peer_id,
         const crypto::hash& _tx_hash,
@@ -69,6 +70,7 @@ struct tx_request
 
 public:
     void fly() const { in_flight = true; last_action_timestamp = std::chrono::steady_clock::now(); };
+    void start_processing() const { processing = true; last_action_timestamp = std::chrono::steady_clock::now(); }
 };
 
 using boost::multi_index::hashed_non_unique;

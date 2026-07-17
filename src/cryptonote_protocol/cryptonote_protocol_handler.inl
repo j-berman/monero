@@ -780,6 +780,7 @@ namespace cryptonote
       relay_block(arg, context);
       for (const auto &tx_hash : new_block.tx_hashes)
         m_request_manager.remove_request(tx_hash);
+      this->fly_available_requests_in_queue();
     }
     else if( bvc.m_marked_as_orphaned )
     {
@@ -967,6 +968,7 @@ namespace cryptonote
     }
 
     this->send_txs_request(context, std::move(missing_tx_hashes));
+    this->fly_available_requests_in_queue();
 
     return 1;
   }
@@ -1018,8 +1020,6 @@ namespace cryptonote
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_TRANSACTIONS (" << arg.txs.size() << " txes)");
 
-    std::lock_guard<std::timed_mutex> check_lock(m_check_tx_request_queue_mutex);
-
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
 
@@ -1033,16 +1033,27 @@ namespace cryptonote
     }
 
     std::unordered_set<blobdata> seen;
-    for (const auto &blob: arg.txs)
+    std::vector<cryptonote::transaction> parsed_txs;
+    std::vector<crypto::hash> tx_hashes;
+    parsed_txs.reserve(arg.txs.size());
+    tx_hashes.reserve(arg.txs.size());
+    for (auto& tx_blob : arg.txs)
     {
-      MLOGIF_P2P_MESSAGE(cryptonote::transaction tx; crypto::hash hash; bool ret = cryptonote::parse_and_validate_tx_from_blob(blob, tx, hash);, ret, "Including transaction " << hash);
-      if (seen.find(blob) != seen.end())
+      const bool already_seen = seen.find(tx_blob) != seen.end();
+      const bool parse_failed = already_seen || cryptonote::parse_and_validate_tx_from_blob(tx_blob, parsed_txs.emplace_back(), tx_hashes.emplace_back());
+      if (already_seen || parse_failed)
       {
-        LOG_PRINT_CCONTEXT_L1("Duplicate transaction in notification, dropping connection");
+        if (already_seen)
+          LOG_PRINT_CCONTEXT_L1("Duplicate transaction in notification, dropping connection");
+        else if (parse_failed)
+          LOG_PRINT_CCONTEXT_L1("Failed to parse incoming tx, dropping connection");
         drop_connection(context, false, false);
         return 1;
       }
-      seen.insert(blob);
+      seen.insert(tx_blob);
+      // Indicate we're processing the tx so we won't think it's a stale request from the peer, in case processing takes a while
+      m_request_manager.processing_tx(tx_hashes.back(), context.m_connection_id);
+      MLOG_P2P_MESSAGE("Including tx " << tx_hashes.back());
     }
 
     /* If the txes were received over i2p/tor, the default is to "forward"
@@ -1070,19 +1081,21 @@ namespace cryptonote
     else
       stem_txs.reserve(arg.txs.size());
 
-    for (auto& tx_blob : arg.txs)
+    for (std::size_t i = 0; i < arg.txs.size(); ++i)
     {
+      const auto &tx_blob = arg.txs.at(i);
+      auto tx = std::move(parsed_txs.at(i));
+      auto tx_hash = std::move(tx_hashes.at(i));
+
       tx_verification_context tvc{};
-      crypto::hash tx_hash{};
-      if (!m_core.handle_incoming_tx(tx_blob, tvc, tx_relay, true, tx_hash) && !tvc.m_no_drop_offense)
+      if (!m_core.handle_incoming_tx(tx_blob, tx, tx_hash, tvc, tx_relay, true) && !tvc.m_no_drop_offense)
       {
         LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
         drop_connection(context, false, false);
         return 1;
       }
 
-      if (tx_hash != crypto::hash{})
-        m_request_manager.remove_request(tx_hash);
+      m_request_manager.remove_request(tx_hash);
 
       switch (tvc.m_relay)
       {
@@ -1117,6 +1130,8 @@ namespace cryptonote
       arg.txs = std::move(fluff_txs);
       relay_transactions(arg, std::move(fluff_hashes), context.m_connection_id, context.m_remote_address.get_zone(), relay_method::fluff);
     }
+
+    this->fly_available_requests_in_queue();
     return 1;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -1724,6 +1739,7 @@ namespace cryptonote
               {
                 for (const auto &h : *tx_hashes_ptr)
                   m_request_manager.remove_request(h);
+                this->fly_available_requests_in_queue();
               }
             }
 
@@ -1932,10 +1948,7 @@ skip:
   void t_cryptonote_protocol_handler<t_core>::send_txs_request(cryptonote_connection_context& context, std::vector<crypto::hash> &&tx_hashes)
   {
     if (tx_hashes.empty())
-    {
-      MLOG_P2P_MESSAGE("Not sending a request for txs");
       return;
-    }
 
     // We *never* expect to call this with more txs than can be sent in a packet
     CHECK_AND_ASSERT_MES(tx_hashes.size() <= max_n_txs_per_packet(),, "Too many txs in NOTIFY_REQUEST_TX_POOL_TXS");
@@ -1949,9 +1962,6 @@ skip:
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::check_tx_request_queue()
   {
-    // We want to check this frequently, so we keep making sure tx requests that aren't in flight get placed in flight.
-    // At time of writing, I set this to run every 5s, and the default timeout for stale requests is 30s.
-
     // If we're not synchronized, we shouldn't be requesting any txs. Syncing might end up removing many tx requests
     // because the txs enter the chain.
     if (!is_synchronized())
@@ -1962,20 +1972,6 @@ skip:
 
     MCTRACE("net.p2p.msg", "on_idle :: check_tx_request_queue, starting ...");
 
-    // Synchronize with handling incoming txs, because that function can take a long time to execute and may be in
-    // the process of verifying large txs that we requested. We don't want to count request misses that are actually
-    // good and just take a long time to verify.
-    std::unique_lock<std::timed_mutex> check_lock(m_check_tx_request_queue_mutex, std::chrono::seconds{1});
-    if (!check_lock.owns_lock())
-    {
-      MINFO("Deferring checking tx request queue");
-      return true;
-    }
-    else
-    {
-      MINFO("Checking tx request queue");
-    }
-
     // We drop connections that exceed the threshold for allowed missed txs
     const auto drop_peers = m_request_manager.remove_stale_requests();
     for (const auto &peer_id : drop_peers)
@@ -1984,12 +1980,18 @@ skip:
       drop_connection(peer_id);
     }
 
-    // Let fly any queued tx requests that our connections can handle. This is the section that benefits from calling
-    // check_tx_request_queue more frequently than the timeout. Since connections can become able to handle new
-    // requests frequently as we process incoming txs.
+    this->fly_available_requests_in_queue(drop_peers);
+    return true;
+  }
+  //-----------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::fly_available_requests_in_queue(const std::unordered_set<boost::uuids::uuid> &ignore_peers)
+  {
+    // Let fly any queued tx requests that our connections can handle. This is good to call after removing requests from
+    // the request manager, since a connection might have become available to handle more requests.
     m_p2p->for_each_connection([&](cryptonote_connection_context& context, nodetool::peerid_type _unused, uint32_t _unused2)->bool
     {
-      if (drop_peers.count(context.m_connection_id))
+      if (ignore_peers.count(context.m_connection_id))
       {
         MDEBUG(context << "connection is set to be dropped, not sending more tx requests");
         return true;
@@ -2007,8 +2009,6 @@ skip:
 
       return true;
     });
-
-    return true;
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
