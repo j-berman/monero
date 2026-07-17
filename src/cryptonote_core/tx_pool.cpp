@@ -864,6 +864,10 @@ namespace cryptonote
       MINFO("Getting relayable transactions - waiting until " << m_next_check << " , cur time: " << time_t(now));
       return false;
     }
+    else
+    {
+      MINFO("Getting relayable transactions");
+    }
 
     uint64_t next_check = clock::to_time_t(clock::from_time_t(time_t(now)) + max_relayable_check);
     std::vector<std::pair<crypto::hash, txpool_tx_meta_t>> change_timestamps;

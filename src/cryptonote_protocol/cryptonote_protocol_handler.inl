@@ -1852,12 +1852,10 @@ skip:
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::on_idle()
   {
-    MINFO("Executing protocol handler on_idle");
     m_idle_peer_kicker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::kick_idle_peers, this));
     m_standby_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::check_standby_peers, this));
     m_sync_search_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::update_sync_search, this));
     m_peer_tx_request_checker.do_call(boost::bind(&t_cryptonote_protocol_handler<t_core>::check_tx_request_queue, this));
-    MINFO("Done with inner protocol handler on_idle");
     return m_core.on_idle();
   }
   //------------------------------------------------------------------------------------------------------------------------
