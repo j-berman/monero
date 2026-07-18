@@ -1032,28 +1032,42 @@ namespace cryptonote
       return 1;
     }
 
-    std::unordered_set<blobdata> seen;
+    // Parse the txs and check for duplicates
     std::vector<cryptonote::transaction> parsed_txs;
     std::vector<crypto::hash> tx_hashes;
     parsed_txs.reserve(arg.txs.size());
     tx_hashes.reserve(arg.txs.size());
-    for (auto& tx_blob : arg.txs)
     {
-      const bool already_seen = seen.find(tx_blob) != seen.end();
-      const bool parse_failed = already_seen || cryptonote::parse_and_validate_tx_from_blob(tx_blob, parsed_txs.emplace_back(), tx_hashes.emplace_back());
-      if (already_seen || parse_failed)
+      std::unordered_set<blobdata> seen;
+      bool duplicate = false;
+      bool parse_failed = false;
+      for (auto& tx_blob : arg.txs)
       {
-        if (already_seen)
+        if (seen.find(tx_blob) != seen.end())
+        {
+          duplicate = true;
+          break;
+        }
+        if (!cryptonote::parse_and_validate_tx_from_blob(tx_blob, parsed_txs.emplace_back(), tx_hashes.emplace_back()))
+        {
+          parse_failed = true;
+          break;
+        }
+        seen.insert(tx_blob);
+        // Indicate we're processing the tx so we won't think it's a stale request from the peer, in case processing takes a while
+        m_request_manager.processing_tx(tx_hashes.back(), context.m_connection_id);
+        MLOG_P2P_MESSAGE("Including tx " << tx_hashes.back());
+      }
+
+      if (duplicate || parse_failed)
+      {
+        if (duplicate)
           LOG_PRINT_CCONTEXT_L1("Duplicate transaction in notification, dropping connection");
         else if (parse_failed)
           LOG_PRINT_CCONTEXT_L1("Failed to parse incoming tx, dropping connection");
         drop_connection(context, false, false);
         return 1;
       }
-      seen.insert(tx_blob);
-      // Indicate we're processing the tx so we won't think it's a stale request from the peer, in case processing takes a while
-      m_request_manager.processing_tx(tx_hashes.back(), context.m_connection_id);
-      MLOG_P2P_MESSAGE("Including tx " << tx_hashes.back());
     }
 
     /* If the txes were received over i2p/tor, the default is to "forward"
