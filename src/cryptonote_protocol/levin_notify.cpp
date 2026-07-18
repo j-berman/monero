@@ -1025,7 +1025,7 @@ namespace levin
         case relay_method::local:
           if (zone_->nzone == epee::net_utils::zone::public_)
           {
-            const auto &first_hash = tx_hashes.at(0);
+            const auto first_hash = tx_hashes.at(0);
             if (!tx_queue_->enqueue(tx_relay, txs, tx_hashes))
             {
               MINFO("Tx(s) already in the notify queue, first tx: " << first_hash);
