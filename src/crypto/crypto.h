@@ -146,6 +146,8 @@ namespace crypto {
       const public_key *const *, std::size_t, const signature *);
     static void derive_view_tag(const key_derivation &, std::size_t, view_tag &);
     friend void derive_view_tag(const key_derivation &, std::size_t, view_tag &);
+    static void unbiased_hash_to_ec(const unsigned char *, const size_t, ec_point &);
+    friend void unbiased_hash_to_ec(const unsigned char *, const size_t, ec_point &);
   };
 
   void generate_random_bytes_thread_safe(size_t N, uint8_t *bytes);
@@ -313,6 +315,19 @@ namespace crypto {
   inline bool operator>(const public_key &p1, const public_key &p2) { return p2 < p1; }
   inline bool operator<(const key_image &p1, const key_image &p2) { return memcmp(&p1, &p2, sizeof(key_image)) < 0; }
   inline bool operator>(const key_image &p1, const key_image &p2) { return p2 < p1; }
+
+  static const ec_point EC_I = {1};
+
+  static const ec_point EC_INV_EIGHT = {{
+      static_cast<char>(0x79), static_cast<char>(0x2f), static_cast<char>(0xdc), static_cast<char>(0xe2),
+      static_cast<char>(0x29), static_cast<char>(0xe5), static_cast<char>(0x06), static_cast<char>(0x61),
+      static_cast<char>(0xd0), static_cast<char>(0xda), static_cast<char>(0x1c), static_cast<char>(0x7d),
+      static_cast<char>(0xb3), static_cast<char>(0x9d), static_cast<char>(0xd3), static_cast<char>(0x07),
+      static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00),
+      static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00),
+      static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00),
+      static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x06)
+    }};
 }
 
 // type conversions for easier calls to sc_add(), sc_sub(), hash functions
