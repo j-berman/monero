@@ -364,6 +364,85 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  static bool set_init_tree_sync_data(const uint64_t init_block_idx, const crypto::hash &init_hash, const core &m_core, COMMAND_RPC_GET_BLOCKS_FAST::init_tree_sync_data_t &init_tree_sync_data)
+  {
+    db_rtxn_guard txn_guard(&m_core.get_blockchain_storage().get_db());
+
+    CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().get_db().height() > init_block_idx, false,
+      "set_init_tree_sync_data: init_block_idx expected less than current chain height");
+    CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().get_db().get_block_hash_from_height(init_block_idx) == init_hash, false,
+      "set_init_tree_sync_data: mismatched init_hash to init_block_idx");
+
+    init_tree_sync_data = COMMAND_RPC_GET_BLOCKS_FAST::init_tree_sync_data_t{};
+    init_tree_sync_data.init_block_idx = init_block_idx;
+    init_tree_sync_data.init_block_hash = init_hash;
+
+    // 1. Custom timelocked outputs created before sync_start_idx with last locked block >= sync_start_idx
+    const uint64_t sync_start_idx = init_block_idx + 1;
+    auto custom_outs_by_last_locked_block = m_core.get_blockchain_storage().get_db().get_custom_timelocked_outputs(sync_start_idx);
+
+    // 2a. Coinbase unified outputs created between blocks [init_block_idx - 60, init_block_idx] inclusive
+    // 2b. Normal unified outputs created between blocks [init_block_idx - 10, init_block_idx] inclusive
+    auto outs_by_last_locked_block = m_core.get_blockchain_storage().get_recent_locked_outputs(init_block_idx);
+
+    // 3. Combine all locked outputs into vec
+    auto &locked_outputs = init_tree_sync_data.locked_outputs;
+    locked_outputs.reserve(custom_outs_by_last_locked_block.size() + outs_by_last_locked_block.size());
+
+    // 3a. Iterate over all custom locked outs and check if last locked block is present in other outs. If so, combine.
+    for (auto &o : custom_outs_by_last_locked_block)
+    {
+      const uint64_t last_locked_block = o.first;
+
+      auto outs_it = outs_by_last_locked_block.find(last_locked_block);
+      if (outs_it == outs_by_last_locked_block.end())
+      {
+        locked_outputs.push_back({ last_locked_block, std::move(o.second) });
+        continue;
+      }
+
+      // Merge custom locked with other outs
+      const auto is_less = [](const fcmp_pp::UnifiedOutput &a, const fcmp_pp::UnifiedOutput &b)
+          { return a.unified_id < b.unified_id; };
+      std::vector<fcmp_pp::UnifiedOutput> sorted_outs;
+      if (!tools::merge_sorted_vectors(o.second, outs_it->second, is_less, sorted_outs))
+      {
+        LOG_ERROR("Failed to merge locked outs");
+        return false;
+      }
+
+      locked_outputs.push_back({ last_locked_block, std::move(sorted_outs) });
+    }
+
+    // 3b. Get the remaining locked outs
+    for (auto &o : outs_by_last_locked_block)
+    {
+      const uint64_t last_locked_block = o.first;
+
+      auto custom_outs_it = custom_outs_by_last_locked_block.find(last_locked_block);
+      if (custom_outs_it != custom_outs_by_last_locked_block.end())
+      {
+        // We've already added it in 3a above
+        continue;
+      }
+
+      locked_outputs.push_back({ last_locked_block, std::move(o.second) });
+    }
+
+    // 3c. Sort locked outputs by last locked block
+    std::sort(locked_outputs.begin(), locked_outputs.end(),
+        [](const COMMAND_RPC_GET_BLOCKS_FAST::locked_outputs_t &a, const COMMAND_RPC_GET_BLOCKS_FAST::locked_outputs_t &b)
+            { return a.last_locked_block < b.last_locked_block; });
+
+    // 4. N leaf tuples and last chunk at each layer of the tree when init_block_idx was the last block in the chain
+    auto last_path = m_core.get_blockchain_storage().get_db().get_last_path(init_block_idx);
+    init_tree_sync_data.n_leaf_tuples = last_path.first;
+    init_tree_sync_data.last_path = std::move(last_path.second);
+
+    MDEBUG("Set init tree sync data, blk " << init_tree_sync_data.init_block_idx << " , hash " << init_tree_sync_data.init_block_hash);
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::handle_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST::request& req, COMMAND_RPC_GET_BLOCKS_FAST::response& res, const connection_context *ctx)
   {
     // quick check for noop
@@ -444,85 +523,6 @@ namespace cryptonote
     }
     MDEBUG("on_get_blocks: " << bs.size() << " blocks, " << ntxes << " txes, size " << cumul_block_data_size);
 
-    return true;
-  }
-  //------------------------------------------------------------------------------------------------------------------------------
-  static bool set_init_tree_sync_data(const uint64_t init_block_idx, const crypto::hash &init_hash, const core &m_core, COMMAND_RPC_GET_BLOCKS_FAST::init_tree_sync_data_t &init_tree_sync_data)
-  {
-    db_rtxn_guard txn_guard(&m_core.get_blockchain_storage().get_db());
-
-    CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().get_db().height() > init_block_idx, false,
-      "set_init_tree_sync_data: init_block_idx expected less than current chain height");
-    CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().get_db().get_block_hash_from_height(init_block_idx) == init_hash, false,
-      "set_init_tree_sync_data: mismatched init_hash to init_block_idx");
-
-    init_tree_sync_data = COMMAND_RPC_GET_BLOCKS_FAST::init_tree_sync_data_t{};
-    init_tree_sync_data.init_block_idx = init_block_idx;
-    init_tree_sync_data.init_block_hash = init_hash;
-
-    // 1. Custom timelocked outputs created before sync_start_idx with last locked block >= sync_start_idx
-    const uint64_t sync_start_idx = init_block_idx + 1;
-    auto custom_outs_by_last_locked_block = m_core.get_blockchain_storage().get_db().get_custom_timelocked_outputs(sync_start_idx);
-
-    // 2a. Coinbase unified outputs created between blocks [init_block_idx - 60, init_block_idx] inclusive
-    // 2b. Normal unified outputs created between blocks [init_block_idx - 10, init_block_idx] inclusive
-    auto outs_by_last_locked_block = m_core.get_blockchain_storage().get_recent_locked_outputs(init_block_idx);
-
-    // 3. Combine all locked outputs into vec
-    auto &locked_outputs = init_tree_sync_data.locked_outputs;
-    locked_outputs.reserve(custom_outs_by_last_locked_block.size() + outs_by_last_locked_block.size());
-
-    // 3a. Iterate over all custom locked outs and check if last locked block is present in other outs. If so, combine.
-    for (auto &o : custom_outs_by_last_locked_block)
-    {
-      const uint64_t last_locked_block = o.first;
-
-      auto outs_it = outs_by_last_locked_block.find(last_locked_block);
-      if (outs_it == outs_by_last_locked_block.end())
-      {
-        locked_outputs.push_back({ last_locked_block, std::move(o.second) });
-        continue;
-      }
-
-      // Merge custom locked with other outs
-      const auto is_less = [](const fcmp_pp::UnifiedOutput &a, const fcmp_pp::UnifiedOutput &b)
-          { return a.unified_id < b.unified_id; };
-      std::vector<fcmp_pp::UnifiedOutput> sorted_outs;
-      if (!tools::merge_sorted_vectors(o.second, outs_it->second, is_less, sorted_outs))
-      {
-        LOG_ERROR("Failed to merge locked outs");
-        return false;
-      }
-
-      locked_outputs.push_back({ last_locked_block, std::move(sorted_outs) });
-    }
-
-    // 3b. Get the remaining locked outs
-    for (auto &o : outs_by_last_locked_block)
-    {
-      const uint64_t last_locked_block = o.first;
-
-      auto custom_outs_it = custom_outs_by_last_locked_block.find(last_locked_block);
-      if (custom_outs_it != custom_outs_by_last_locked_block.end())
-      {
-        // We've already added it in 3a above
-        continue;
-      }
-
-      locked_outputs.push_back({ last_locked_block, std::move(o.second) });
-    }
-
-    // 3c. Sort locked outputs by last locked block
-    std::sort(locked_outputs.begin(), locked_outputs.end(),
-        [](const COMMAND_RPC_GET_BLOCKS_FAST::locked_outputs_t &a, const COMMAND_RPC_GET_BLOCKS_FAST::locked_outputs_t &b)
-            { return a.last_locked_block < b.last_locked_block; });
-
-    // 4. N leaf tuples and last chunk at each layer of the tree when init_block_idx was the last block in the chain
-    auto last_path = m_core.get_blockchain_storage().get_db().get_last_path(init_block_idx);
-    init_tree_sync_data.n_leaf_tuples = last_path.first;
-    init_tree_sync_data.last_path = std::move(last_path.second);
-
-    MDEBUG("Set init tree sync data, blk " << init_tree_sync_data.init_block_idx << " , hash " << init_tree_sync_data.init_block_hash);
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -806,11 +806,6 @@ namespace cryptonote
   bool core_rpc_server::on_get_path_by_unified_id_bin(const COMMAND_RPC_GET_PATH_BY_UNIFIED_ID_BIN::request& req, COMMAND_RPC_GET_PATH_BY_UNIFIED_ID_BIN::response& res, const connection_context *ctx)
   {
     RPC_TRACKER(get_outs);
-    bool r;
-    if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_PATH_BY_UNIFIED_ID_BIN>(invoke_http_mode::BIN, "/get_path_by_unified_id.bin", req, res, r))
-      return r;
-
-    res.status = "Failed";
 
     const bool restricted = m_restricted && ctx;
     if (restricted)

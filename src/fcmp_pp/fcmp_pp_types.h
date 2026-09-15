@@ -30,6 +30,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <type_traits>
 #include <unordered_map>

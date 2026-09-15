@@ -44,6 +44,7 @@ extern "C"
 //third party headers
 
 //standard headers
+#include <cassert>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "carrot_impl.address_device_hierarchies"

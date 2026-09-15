@@ -41,7 +41,7 @@ extern "C"
 //third party headers
 
 //standard headers
-
+#include <cassert>
 
 namespace carrot
 {

@@ -213,7 +213,7 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
       CHECK_AND_ASSERT_MES(r, false, "Failed to generate key derivation");
       crypto::secret_key amount_key;
       crypto::derivation_to_scalar(derivation, o, amount_key);
-      rct::decodeRctSimple(bpp_tx.rct_signatures, rct::sk2rct(amount_key), o, bpp_tx_masks[o], hw::get_device("default"));
+      rct::decodeRct(bpp_tx.rct_signatures, rct::sk2rct(amount_key), o, bpp_tx_masks[o], hw::get_device("default"));
     }
 
     // Mine the tx
@@ -258,7 +258,7 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
     {
       input_tx = blocks[0].miner_tx;
       CHECK_AND_ASSERT_MES(input_tx.version == 1, false, "expected tx version 1");
-      CHECK_AND_ASSERT_MES(cryptonote::is_coinbase(input_tx), false, "expected coinbase");
+      CHECK_AND_ASSERT_MES(input_tx.is_coinbase(), false, "expected coinbase");
 
       internal_o_idx = blocks[0].miner_tx.vout.size() - 1;
       global_o_idx = internal_o_idx;
@@ -271,7 +271,7 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
     {
       input_tx = pre_rct_tx;
       CHECK_AND_ASSERT_MES(input_tx.version == 1, false, "expected tx version 1");
-      CHECK_AND_ASSERT_MES(!cryptonote::is_coinbase(input_tx), false, "expected regular (non-coinbase) tx");
+      CHECK_AND_ASSERT_MES(!input_tx.is_coinbase(), false, "expected regular (non-coinbase) tx");
 
       internal_o_idx = 0;
       global_o_idx = 0; // ok to be incorrect
@@ -303,7 +303,7 @@ bool gen_fcmp_pp_tx_validation_base::generate_with(std::vector<test_event_entry>
   TreeCacheV1 tree_cache(fcmp_pp::curve_trees::curve_trees_v1());
   const auto &spending_out = input_tx.vout.at(internal_o_idx);
   const auto &output_pubkey = boost::get<txout_to_key>(spending_out.target).key;
-  const rct::key C = (input_tx.version >= 2 && !cryptonote::is_coinbase(input_tx))
+  const rct::key C = (input_tx.version >= 2 && !input_tx.is_coinbase())
     ? input_tx.rct_signatures.outPk.at(internal_o_idx).mask
     : rct::zeroCommitVartime(spending_out.amount);
   CHECK_AND_ASSERT_MES(C == rct::commit(spend_amount, mask), false, "commitment mismatch");

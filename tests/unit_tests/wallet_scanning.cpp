@@ -433,7 +433,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             dests,
             fee,
             /*hf_version=*/1);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(1, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeNull, curr_tx.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_key), curr_tx.vout.at(0).target.type());
@@ -473,7 +473,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             dests,
             fee,
             HF_VERSION_DYNAMIC_FEE);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(2, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeFull, curr_tx.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_key), curr_tx.vout.at(0).target.type());
@@ -496,7 +496,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             dests,
             fee,
             HF_VERSION_SMALLER_BP);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(2, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeBulletproof2, curr_tx.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_key), curr_tx.vout.at(0).target.type());
@@ -538,7 +538,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             fee,
             HF_VERSION_VIEW_TAGS,
             /*sweep_unmixable_override=*/true);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(1, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeNull, curr_tx.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_tagged_key), curr_tx.vout.at(0).target.type());
@@ -561,7 +561,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             dests,
             fee,
             HF_VERSION_VIEW_TAGS);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(2, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeBulletproofPlus, curr_tx.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_tagged_key), curr_tx.vout.at(0).target.type());
@@ -601,7 +601,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             {carrot::mock::convert_normal_payment_proposal_v1(dests.front())},
             /*selfsend_payment_proposals=*/{},
             acc_keys);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(2, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeFcmpPlusPlus, curr_tx.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_carrot_v1), curr_tx.vout.at(0).target.type());
@@ -623,7 +623,7 @@ TEST(wallet_scanning, positive_smallout_main_addr_all_types_outputs)
             /*normal_payment_proposals=*/{},
             {selfsend_core_to_verifiable_v1(carrot::mock::convert_selfsend_payment_proposal_v1(dests.front()), {})},
             acc_keys);
-        ASSERT_FALSE(cryptonote::is_coinbase(curr_tx));
+        ASSERT_FALSE(curr_tx.is_coinbase());
         ASSERT_EQ(2, curr_tx.version);
         ASSERT_EQ(rct::RCTTypeFcmpPlusPlus, curr_tx.rct_signatures.type);
         ASSERT_EQ(2, curr_tx.vout.size());
@@ -673,7 +673,7 @@ TEST(wallet_scanning, burned_zombie)
             dests,
             fee,
             /*hf_version=*/1);
-        ASSERT_FALSE(cryptonote::is_coinbase(incoming_tx_a));
+        ASSERT_FALSE(incoming_tx_a.is_coinbase());
         ASSERT_EQ(1, incoming_tx_a.version);
         ASSERT_EQ(rct::RCTTypeNull, incoming_tx_a.rct_signatures.type);
         ASSERT_EQ(typeid(cryptonote::txout_to_key), incoming_tx_a.vout.at(0).target.type());
@@ -743,7 +743,7 @@ TEST(wallet_scanning, burned_zombie)
             /*hf_version=*/1,
             main_tx_privkey,
             additional_tx_privkeys);
-        ASSERT_FALSE(cryptonote::is_coinbase(outgoing_tx));
+        ASSERT_FALSE(outgoing_tx.is_coinbase());
         ASSERT_EQ(1, outgoing_tx.version);
         ASSERT_EQ(1, outgoing_tx.vin.size());
         ASSERT_EQ(1, outgoing_tx.vout.size());

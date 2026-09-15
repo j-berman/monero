@@ -555,12 +555,12 @@ std::vector<std::reference_wrapper<const transaction>> collect_transparent_amoun
 }
 
 void collect_transparent_amount_commitments(
-    const std::unordered_map<crypto::hash, std::pair<transaction, blobdata>> &txs_by_txid,
+    const pool_supplement &ps,
     std::unordered_map<uint64_t, rct::key> &transparent_amount_commitments_inout)
 {
     std::vector<std::reference_wrapper<const transaction>> tx_refs;
-    tx_refs.reserve(txs_by_txid.size());
-    for (const auto &tx_pair : txs_by_txid)
+    tx_refs.reserve(ps.size());
+    for (const auto &tx_pair : ps)
       tx_refs.push_back(std::cref(tx_pair.second.first));
     collect_transparent_amount_commitments(tx_refs, transparent_amount_commitments_inout);
 }
@@ -859,7 +859,7 @@ bool batch_ver_fcmp_pp_consensus
 )
 {
     valid_input_verification_id_by_txid_out.clear();
-    if (ps.txs_by_txid.empty())
+    if (!ps.size())
     {
         return true;
     }
@@ -867,13 +867,13 @@ bool batch_ver_fcmp_pp_consensus
     // Collect unverified FCMP++ txs for batch verification
     std::unordered_map<uint64_t, fcmp_pp::TreeRootShared> decompressed_tree_roots_by_block_index;
     std::vector<fcmp_pp::FcmpPpVerifyInput> fcmp_pp_verify_inputs;
-    fcmp_pp_verify_inputs.reserve(ps.txs_by_txid.size());
+    fcmp_pp_verify_inputs.reserve(ps.size());
 
     // Prepare input verification ID's for FCMP++'s we are verifying
     std::unordered_map<crypto::hash, crypto::hash> input_verification_id_by_txid;
-    input_verification_id_by_txid.reserve(ps.txs_by_txid.size());
+    input_verification_id_by_txid.reserve(ps.size());
 
-    for (auto &tx_entry : ps.txs_by_txid)
+    for (auto &tx_entry : ps)
     {
         const crypto::hash &txid = tx_entry.first;
         cryptonote::transaction &tx = tx_entry.second.first;
@@ -929,7 +929,7 @@ bool ver_non_input_consensus(const transaction& tx, tx_verification_context& tvc
     return ver_non_input_consensus_templated(&tx, &tx + 1, transparent_amount_commitments, tvc, hf_version);
 }
 
-bool ver_non_input_consensus(const pool_supplement& ps,
+bool ver_non_input_consensus(pool_supplement& ps,
     const std::unordered_map<uint64_t, rct::key>& transparent_amount_commitments,
     tx_verification_context& tvc,
     const std::uint8_t hf_version)

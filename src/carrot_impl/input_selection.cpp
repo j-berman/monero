@@ -38,6 +38,7 @@
 
 //third party headers
 #include <boost/iterator/transform_iterator.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 
 //standard headers
 #include <algorithm>

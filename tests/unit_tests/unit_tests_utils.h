@@ -36,6 +36,7 @@
 #include "blockchain_db/lmdb/db_lmdb.h"
 #include "fcmp_pp/curve_trees.h"
 #include "misc_log_ex.h"
+#include "scope_guard.h"
 
 #include <atomic>
 #include <boost/filesystem.hpp>
@@ -169,7 +170,7 @@ namespace unit_test
     test_db.init_new_db(curve_trees); \
   auto hardfork = cryptonote::HardFork(*test_db.m_db, 1, 0); \
   test_db.init_hardfork(&hardfork); \
-  auto scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){ \
+  const epee::scope_guard scope_exit_handler([&](){ \
     ASSERT_NO_THROW(test_db.m_db->close()); \
     delete test_db.m_db; \
     test_db.m_db = nullptr; \

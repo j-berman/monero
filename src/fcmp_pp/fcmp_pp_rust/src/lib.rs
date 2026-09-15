@@ -260,14 +260,6 @@ pub unsafe extern "C" fn helios_tree_root(
 
 destroy_fn!(destroy_tree_root, TreeRoot::<Selene, Helios>);
 
-#[allow(non_snake_case)]
-#[repr(C)]
-pub struct OutputTuple {
-    O: [u8; 32],
-    I: [u8; 32],
-    C: [u8; 32],
-}
-
 #[repr(C)]
 pub struct Slice<T> {
     buf: *const T,

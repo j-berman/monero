@@ -35,6 +35,8 @@
 #include "carrot_impl/subaddress_map_legacy.h"
 #include "common/container_helpers.h"
 #include "common/threadpool.h"
+#include "crypto/crypto.h"
+#include "crypto/generators.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/verification_context.h"
 #include "cryptonote_core/tx_verification_utils.h"
@@ -50,9 +52,6 @@
 #include "unit_tests_utils.h"
 #include "string_tools.h"
 #include "wallet/tx_builder.h"
-
-#include "crypto/crypto.h"
-#include "crypto/generators.h"
 
 #include <utility>
 #include <vector>
@@ -376,7 +375,7 @@ TEST(fcmp_pp, prove)
 
     // Create proofs with n inputs {1, 2, 2 < random value < 128, 128}
     static_assert(FCMP_PLUS_PLUS_MAX_INPUTS > 2, "Expected max inputs > 2");
-    const std::size_t rand_n_inputs = crypto::rand_range(3, FCMP_PLUS_PLUS_MAX_INPUTS-1);
+    const std::size_t rand_n_inputs = crypto::rand_range(size_t(3), size_t(FCMP_PLUS_PLUS_MAX_INPUTS-1));
     const std::vector<std::size_t> n_inputs_test_vec{1, 2, rand_n_inputs, FCMP_PLUS_PLUS_MAX_INPUTS};
 
     const crypto::hash signable_tx_hash{};
@@ -555,7 +554,7 @@ TEST(fcmp_pp, verify)
 
     // Create proofs with n inputs {1, 2, 2 < random value < 128, 128}
     static_assert(FCMP_PLUS_PLUS_MAX_INPUTS > 2, "Expected max inputs > 2");
-    const std::size_t rand_n_inputs = crypto::rand_range(3, FCMP_PLUS_PLUS_MAX_INPUTS-1);
+    const std::size_t rand_n_inputs = crypto::rand_range(size_t(3), size_t(FCMP_PLUS_PLUS_MAX_INPUTS-1));
     const std::vector<std::size_t> n_inputs_test_vec{1, 2, rand_n_inputs, FCMP_PLUS_PLUS_MAX_INPUTS};
 
     // Create proofs with random leaf idxs for each n_inputs

@@ -70,11 +70,11 @@ public:
   {
     if (!check)
     {
-      fcmp_pp::clear_torsion(m_point);
+      fcmp_pp::clear_torsion_vartime(m_point);
       return true;
     }
 
-    return !fcmp_pp::mul8_is_identity(m_point) && fcmp_pp::torsion_check_vartime(m_point);
+    return !fcmp_pp::mul8_is_identity_vartime(m_point) && fcmp_pp::torsion_check_vartime(m_point);
   }
 
 private:

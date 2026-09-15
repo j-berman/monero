@@ -38,6 +38,7 @@
 #include "misc_log_ex.h"
 
 //third party headers
+#include <boost/numeric/conversion/cast.hpp>
 
 //standard headers
 #include "optional"

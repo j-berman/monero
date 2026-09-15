@@ -2102,7 +2102,7 @@ TEST_F(levin_notify, stem_mappings)
     for (unsigned i = 0; i < contexts_.size() * 2; i += 2)
     {
         auto& incoming = contexts_[i % contexts_.size()];
-        EXPECT_TRUE(notifier.send_txs(txs, mock_tx_hashes(txs.size()), incoming.get_id(), cryptonote::relay_method::stem));
+        EXPECT_TRUE(notifier.send_txs(txs, mock_tx_hashes(txs.size()), incoming->get_id(), cryptonote::relay_method::stem));
 
         io_service_.restart();
         ASSERT_LT(0u, io_service_.poll());
@@ -2224,7 +2224,7 @@ TEST_F(levin_notify, fluff_multiple)
     for (unsigned i = 0; i < contexts_.size() * 2; i += 2)
     {
         auto& incoming = contexts_[i % contexts_.size()];
-        EXPECT_TRUE(notifier.send_txs(txs, mock_tx_hashes(txs.size()), incoming.get_id(), cryptonote::relay_method::stem));
+        EXPECT_TRUE(notifier.send_txs(txs, mock_tx_hashes(txs.size()), incoming->get_id(), cryptonote::relay_method::stem));
 
         io_service_.restart();
         ASSERT_LT(0u, io_service_.poll());
@@ -2283,8 +2283,8 @@ TEST_F(levin_notify, fluff_with_duplicate)
 
     ASSERT_EQ(10u, contexts_.size());
     {
-        auto context = boost::make_indirect_iterator(contexts_.begin());
-        EXPECT_TRUE(notifier.send_txs(txs, mock_tx_hashes(9), context->get_id(), cryptonote::relay_method::fluff));
+        auto context = contexts_.begin();
+        EXPECT_TRUE(notifier.send_txs(txs, mock_tx_hashes(9), (*context)->get_id(), cryptonote::relay_method::fluff));
 
         io_service_.restart();
         ASSERT_LT(0u, io_service_.poll());

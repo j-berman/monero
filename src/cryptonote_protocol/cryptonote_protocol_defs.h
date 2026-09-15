@@ -31,6 +31,7 @@
 #pragma once
 
 #include "byte_slice.h"
+#include "common/varint.h"
 #include "crypto/hash.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "misc_language.h"

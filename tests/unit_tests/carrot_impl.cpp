@@ -29,6 +29,7 @@
 #include "gtest/gtest.h"
 
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 
 #include "carrot_core/exceptions.h"
 #include "carrot_core/payment_proposal.h"

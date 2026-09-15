@@ -39,6 +39,9 @@
 #include "crypto/generators.h"
 #include "wallet/scanning_tools.h"
 
+//third party headers
+#include <boost/numeric/conversion/cast.hpp>
+
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "unit_tests.tx_construction_helpers"
 

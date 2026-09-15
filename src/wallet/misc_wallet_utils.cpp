@@ -31,6 +31,7 @@
 
 //local headers
 #include "crypto/chacha.h"
+#include "scope_guard.h"
 #include "wallet_errors.h"
 
 //third party headers
@@ -97,7 +98,7 @@ epee::wipeable_string decrypt_with_ec_key(const char * const ciphertext,
         error::wallet_internal_error, "Failed to authenticate ciphertext");
     }
     std::unique_ptr<char[]> buffer{new char[ciphertext_len - prefix_size]};
-    auto wiper = epee::misc_utils::create_scope_leave_handler([&]() {
+    const epee::scope_guard scope_exit_handler([&](){
         memwipe(buffer.get(), ciphertext_len - prefix_size); });
     crypto::chacha20(ciphertext + sizeof(iv), ciphertext_len - prefix_size, key, iv, buffer.get());
     return epee::wipeable_string(buffer.get(), ciphertext_len - prefix_size);

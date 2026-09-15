@@ -154,6 +154,20 @@ OutputTuple output_to_tuple(const OutputPair &output_pair, bool use_fast_check)
     return output_tuple_from_bytes(O, I, C);
 }
 //----------------------------------------------------------------------------------------------------------------------
+std::shared_ptr<CurveTreesV1> curve_trees_v1(const std::size_t selene_chunk_width, const std::size_t helios_chunk_width)
+{
+    std::unique_ptr<Selene> selene(new Selene());
+    std::unique_ptr<Helios> helios(new Helios());
+    return std::shared_ptr<CurveTreesV1>(
+            new CurveTreesV1(
+                std::move(selene),
+                std::move(helios),
+                selene_chunk_width,
+                helios_chunk_width
+            )
+        );
+};
+//----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 // Static functions
 //----------------------------------------------------------------------------------------------------------------------
@@ -250,6 +264,423 @@ static typename C_PARENT::Point get_chunk_hash(const std::unique_ptr<C_CHILD> &c
 
     ++c_idx_inout;
     return hash;
+}
+//----------------------------------------------------------------------------------------------------------------------
+// After hashing a layer of children points, convert those children x-coordinates into their respective cycle
+// scalars, and prepare them to be hashed for the next layer
+template<typename C_CHILD, typename C_PARENT>
+static std::vector<typename C_PARENT::Scalar> next_child_scalars_from_children(const std::unique_ptr<C_CHILD> &c_child,
+    const typename C_CHILD::Point *last_root,
+    const LayerExtension<C_CHILD> &children)
+{
+    std::vector<typename C_PARENT::Scalar> child_scalars_out;
+    child_scalars_out.reserve(1 + children.hashes.size());
+
+    // If we're creating a *new* root at the existing root layer, we may need to include the *existing* root when
+    // hashing the *existing* root layer
+    if (last_root != nullptr)
+    {
+        // If the children don't already include the existing root, then we need to include it to be hashed
+        // - the children would include the existing root already if the existing root was updated in the child
+        // layer (the start_idx would be 0)
+        if (children.start_idx > 0)
+        {
+            MTRACE("Updating root layer and including the existing root in next children");
+            child_scalars_out.emplace_back(c_child->point_to_cycle_scalar(*last_root));
+        }
+    }
+
+    // Convert child points to scalars
+    tower_cycle::extend_scalars_from_cycle_points<C_CHILD, C_PARENT>(c_child, children.hashes, child_scalars_out);
+
+    return child_scalars_out;
+};
+//----------------------------------------------------------------------------------------------------------------------
+template<typename C>
+static void hash_first_chunk(const std::unique_ptr<C> &curve,
+    const typename C::Scalar *old_last_child,
+    const typename C::Point *old_last_parent,
+    const std::size_t start_offset,
+    const std::vector<typename C::Scalar> &new_child_scalars,
+    const std::size_t chunk_size,
+    typename C::Point &hash_out)
+{
+    // Prepare to hash
+    const auto &existing_hash = old_last_parent != nullptr
+        ? *old_last_parent
+        : curve->hash_init_point();
+
+    const auto &prior_child_after_offset = old_last_child != nullptr
+        ? *old_last_child
+        : curve->zero_scalar();
+
+    const auto chunk_start = new_child_scalars.data();
+    const typename C::Chunk chunk{chunk_start, chunk_size};
+
+    MTRACE("First chunk existing_hash: " << curve->to_string(existing_hash) << " , start_offset: " << start_offset
+        << " , prior_child_after_offset: " << curve->to_string(prior_child_after_offset));
+
+    for (std::size_t i = 0; i < chunk_size; ++i)
+        MTRACE("Hashing child in first chunk " << curve->to_string(chunk_start[i]));
+
+    // Do the hash
+    auto chunk_hash = curve->hash_grow(
+            existing_hash,
+            start_offset,
+            prior_child_after_offset,
+            chunk
+        );
+
+    MTRACE("First chunk result: " << curve->to_string(chunk_hash) << " , chunk_size: " << chunk_size);
+
+    // We've got our hash
+    hash_out = std::move(chunk_hash);
+}
+//----------------------------------------------------------------------------------------------------------------------
+template<typename C>
+static void hash_next_chunk(const std::unique_ptr<C> &curve,
+    const std::size_t chunk_start_idx,
+    const std::vector<typename C::Scalar> &new_child_scalars,
+    const std::size_t chunk_size,
+    typename C::Point &hash_out)
+{
+    const auto chunk_start = new_child_scalars.data() + chunk_start_idx;
+    const typename C::Chunk chunk{chunk_start, chunk_size};
+
+    for (std::size_t i = 0; i < chunk_size; ++i)
+        MTRACE("Child chunk_start_idx " << chunk_start_idx << " hashing child " << curve->to_string(chunk_start[i]));
+
+    auto chunk_hash = get_new_parent(curve, chunk);
+
+    MTRACE("Child chunk_start_idx " << chunk_start_idx << " result: " << curve->to_string(chunk_hash)
+        << " , chunk_size: " << chunk_size);
+
+    // We've got our hash
+    hash_out = std::move(chunk_hash);
+}
+//----------------------------------------------------------------------------------------------------------------------
+// Hash chunks of a layer of new children, outputting the next layer's parents
+template<typename C>
+static LayerExtension<C> hash_children_chunks(const std::unique_ptr<C> &curve,
+    const typename C::Scalar *old_last_child,
+    const typename C::Point *old_last_parent,
+    const std::size_t start_offset,
+    const uint64_t next_parent_start_index,
+    const std::vector<typename C::Scalar> &new_child_scalars,
+    const std::size_t chunk_width)
+{
+    LayerExtension<C> parents_out;
+    parents_out.start_idx                 = next_parent_start_index;
+    parents_out.update_existing_last_hash = old_last_parent != nullptr;
+
+    CHECK_AND_ASSERT_THROW_MES(!new_child_scalars.empty(), "empty child scalars");
+    CHECK_AND_ASSERT_THROW_MES(chunk_width > start_offset, "start_offset must be smaller than chunk_width");
+
+    // See how many children we need to fill up the existing last chunk
+    const std::size_t first_chunk_size = std::min(new_child_scalars.size(), chunk_width - start_offset);
+
+    CHECK_AND_ASSERT_THROW_MES(new_child_scalars.size() >= first_chunk_size, "unexpected first chunk size");
+
+    const std::size_t n_chunks = 1 // first chunk
+        + (new_child_scalars.size() - first_chunk_size) / chunk_width // middle chunks
+        + (((new_child_scalars.size() - first_chunk_size) % chunk_width > 0) ? 1 : 0); // final chunk
+
+    parents_out.hashes.resize(n_chunks);
+
+    MTRACE("First chunk_size: "          << first_chunk_size
+        << " , num new child scalars: "  << new_child_scalars.size()
+        << " , start_offset: "           << start_offset
+        << " , parent layer start idx: " << parents_out.start_idx
+        << " , n chunks: "               << n_chunks);
+
+    // Hash batches of chunks in parallel
+    tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
+    tools::threadpool::waiter waiter(tpool);
+    const std::size_t n_threads = std::max<std::size_t>(1, tpool.get_max_concurrency());
+
+    const std::size_t HASH_BATCH_SIZE = std::max<std::size_t>(1, (n_chunks / n_threads));
+    for (std::size_t i = 0; i < n_chunks; i += HASH_BATCH_SIZE)
+    {
+        const std::size_t end = std::min(i + HASH_BATCH_SIZE, n_chunks);
+        tpool.submit(&waiter,
+                [
+                    &curve,
+                    &old_last_child,
+                    &old_last_parent,
+                    &new_child_scalars,
+                    &parents_out,
+                    start_offset,
+                    first_chunk_size,
+                    chunk_width,
+                    i,
+                    end
+                ]()
+                {
+                    for (std::size_t j = i; j < end; ++j)
+                    {
+                        auto &hash_out = parents_out.hashes[j];
+
+                        // Hash the first chunk
+                        if (j == 0)
+                        {
+                            hash_first_chunk(curve,
+                                old_last_child,
+                                old_last_parent,
+                                start_offset,
+                                new_child_scalars,
+                                first_chunk_size,
+                                hash_out);
+                            continue;
+                        }
+
+                        const std::size_t chunk_start = j * chunk_width;
+
+                        CHECK_AND_ASSERT_THROW_MES(chunk_start > start_offset, "unexpected small chunk_start");
+                        const std::size_t chunk_start_idx = chunk_start - start_offset;
+
+                        const std::size_t chunk_end_idx = std::min(chunk_start_idx + chunk_width, new_child_scalars.size());
+
+                        CHECK_AND_ASSERT_THROW_MES(chunk_end_idx > chunk_start_idx, "unexpected large chunk_start_idx");
+                        const std::size_t chunk_size = chunk_end_idx - chunk_start_idx;
+
+                        hash_next_chunk(curve, chunk_start_idx, new_child_scalars, chunk_size, hash_out);
+                    }
+                },
+                true
+            );
+    }
+
+    CHECK_AND_ASSERT_THROW_MES(waiter.wait(), "failed to hash chunks");
+
+    return parents_out;
+};
+//----------------------------------------------------------------------------------------------------------------------
+static GrowLayerInstructions get_grow_layer_instructions(const uint64_t old_total_children,
+    const uint64_t new_total_children,
+    const std::size_t parent_chunk_width,
+    const bool last_child_will_change)
+{
+    // 1. Check pre-conditions on total number of children
+    // - If there's only 1 old child, it must be the old root, and we must be setting a new parent layer after old root
+    const bool setting_next_layer_after_old_root = old_total_children == 1;
+    if (setting_next_layer_after_old_root)
+    {
+        CHECK_AND_ASSERT_THROW_MES(new_total_children > old_total_children,
+            "new_total_children must be > old_total_children when setting next layer after old root");
+    }
+    else
+    {
+        CHECK_AND_ASSERT_THROW_MES(new_total_children >= old_total_children,
+            "new_total_children must be >= old_total_children");
+    }
+
+    // 2. Calculate old and new total number of parents using totals for children
+    // If there's only 1 child, then it must be the old root and thus it would have no old parents
+    const uint64_t old_total_parents = old_total_children > 1
+        ? (1 + ((old_total_children - 1) / parent_chunk_width))
+        : 0;
+    const uint64_t new_total_parents = 1 + ((new_total_children - 1) / parent_chunk_width);
+
+    // 3. Check pre-conditions on total number of parents
+    CHECK_AND_ASSERT_THROW_MES(new_total_parents >= old_total_parents,
+        "new_total_parents must be >= old_total_parents");
+    CHECK_AND_ASSERT_THROW_MES(new_total_parents < new_total_children,
+        "new_total_parents must be < new_total_children");
+
+    if (setting_next_layer_after_old_root)
+    {
+        CHECK_AND_ASSERT_THROW_MES(old_total_parents == 0,
+            "old_total_parents expected to be 0 when setting next layer after old root");
+    }
+
+    // 4. Set the current offset in the last chunk
+    // - Note: this value starts at the last child in the last chunk, but it might need to be decremented by 1 if we're
+    //   changing that last child
+    std::size_t offset = old_total_parents > 0
+        ? (old_total_children % parent_chunk_width)
+        : 0;
+
+    // 5. Check if the last chunk is full (keep in mind it's also possible it's empty)
+    const bool last_chunk_is_full = offset == 0;
+
+    // 6. When the last child changes, we'll need to use its old value to update the parent
+    // - We only care if the child has a parent, otherwise we won't need the child's old value to update the parent
+    //   (since there is no parent to update)
+    const bool need_old_last_child = old_total_parents > 0 && last_child_will_change;
+
+    // 7. If we're changing the last child, we need to subtract the offset by 1 to account for that child
+    if (need_old_last_child)
+    {
+        CHECK_AND_ASSERT_THROW_MES(old_total_children > 0, "no old children but last child is supposed to change");
+
+        // If the chunk is full, must subtract the chunk width by 1
+        offset = offset == 0 ? (parent_chunk_width - 1) : (offset - 1);
+    }
+
+    // 8. When the last parent changes, we'll need to use its old value to update itself
+    const bool adding_members_to_existing_last_chunk = old_total_parents > 0 && !last_chunk_is_full
+        && new_total_children > old_total_children;
+    const bool need_old_last_parent                  = need_old_last_child || adding_members_to_existing_last_chunk;
+
+    // 9. Set the next parent's start index
+    uint64_t next_parent_start_index = old_total_parents;
+    if (need_old_last_parent)
+    {
+        // If we're updating the last parent, we need to bring the starting parent index back 1
+        CHECK_AND_ASSERT_THROW_MES(old_total_parents > 0, "no old parents but last parent is supposed to change1");
+        --next_parent_start_index;
+    }
+
+    // Done
+    MTRACE("parent_chunk_width: "                   << parent_chunk_width
+        << " , old_total_children: "                << old_total_children
+        << " , new_total_children: "                << new_total_children
+        << " , old_total_parents: "                 << old_total_parents
+        << " , new_total_parents: "                 << new_total_parents
+        << " , setting_next_layer_after_old_root: " << setting_next_layer_after_old_root
+        << " , need_old_last_child: "               << need_old_last_child
+        << " , need_old_last_parent: "              << need_old_last_parent
+        << " , start_offset: "                      << offset
+        << " , next_parent_start_index: "           << next_parent_start_index);
+
+    return GrowLayerInstructions{
+            .parent_chunk_width                = parent_chunk_width,
+            .old_total_parents                 = old_total_parents,
+            .new_total_parents                 = new_total_parents,
+            .setting_next_layer_after_old_root = setting_next_layer_after_old_root,
+            .need_old_last_child               = need_old_last_child,
+            .need_old_last_parent              = need_old_last_parent,
+            .start_offset                      = offset,
+            .next_parent_start_index           = next_parent_start_index,
+        };
+
+};
+//----------------------------------------------------------------------------------------------------------------------
+static GrowLayerInstructions get_leaf_layer_grow_instructions(const uint64_t old_n_leaf_tuples,
+    const uint64_t new_n_leaf_tuples,
+    const std::size_t leaf_tuple_size,
+    const std::size_t leaf_layer_chunk_width)
+{
+    // The leaf layer can never be the root layer
+    const bool setting_next_layer_after_old_root = false;
+
+    const uint64_t old_total_children = old_n_leaf_tuples * leaf_tuple_size;
+    const uint64_t new_total_children = (old_n_leaf_tuples + new_n_leaf_tuples) * leaf_tuple_size;
+
+    const uint64_t old_total_parents = old_total_children > 0
+        ? (1 + ((old_total_children - 1) / leaf_layer_chunk_width))
+        : 0;
+    const uint64_t new_total_parents = 1 + ((new_total_children - 1) / leaf_layer_chunk_width);
+
+    CHECK_AND_ASSERT_THROW_MES(new_total_children >= old_total_children,
+        "new_total_children must be >= old_total_children");
+    CHECK_AND_ASSERT_THROW_MES(new_total_parents >= old_total_parents,
+        "new_total_parents must be >= old_total_parents");
+
+    // Since leaf layer is append-only, no leaf can ever change and we'll never need an old leaf
+    const bool need_old_last_child = false;
+
+    const std::size_t offset = old_total_children % leaf_layer_chunk_width;
+
+    const bool last_chunk_is_full                    = offset == 0;
+    const bool adding_members_to_existing_last_chunk = old_total_parents > 0 && !last_chunk_is_full
+        && new_total_children > old_total_children;
+    const bool need_old_last_parent                  = adding_members_to_existing_last_chunk;
+
+    uint64_t next_parent_start_index = old_total_parents;
+    if (need_old_last_parent)
+    {
+        // If we're updating the last parent, we need to bring the starting parent index back 1
+        CHECK_AND_ASSERT_THROW_MES(old_total_parents > 0, "no old parents but last parent is supposed to change2");
+        --next_parent_start_index;
+    }
+
+    MTRACE("parent_chunk_width: "                   << leaf_layer_chunk_width
+        << " , old_total_children: "                << old_total_children
+        << " , new_total_children: "                << new_total_children
+        << " , old_total_parents: "                 << old_total_parents
+        << " , new_total_parents: "                 << new_total_parents
+        << " , setting_next_layer_after_old_root: " << setting_next_layer_after_old_root
+        << " , need_old_last_child: "               << need_old_last_child
+        << " , need_old_last_parent: "              << need_old_last_parent
+        << " , start_offset: "                      << offset
+        << " , next_parent_start_index: "           << next_parent_start_index);
+
+    return GrowLayerInstructions{
+            .parent_chunk_width                = leaf_layer_chunk_width,
+            .old_total_parents                 = old_total_parents,
+            .new_total_parents                 = new_total_parents,
+            .setting_next_layer_after_old_root = setting_next_layer_after_old_root,
+            .need_old_last_child               = need_old_last_child,
+            .need_old_last_parent              = need_old_last_parent,
+            .start_offset                      = offset,
+            .next_parent_start_index           = next_parent_start_index,
+        };
+};
+//----------------------------------------------------------------------------------------------------------------------
+// Helper function used to get the next layer extension used to grow the next layer in the tree
+// - for example, if we just grew the parent layer after the leaf layer, the "next layer" would be the grandparent
+//   layer of the leaf layer
+template<typename C_CHILD, typename C_PARENT>
+static LayerExtension<C_PARENT> get_next_layer_extension(const std::unique_ptr<C_CHILD> &c_child,
+    const std::unique_ptr<C_PARENT> &c_parent,
+    const GrowLayerInstructions &grow_layer_instructions,
+    const std::vector<typename C_CHILD::Point> &child_last_hashes,
+    const std::vector<typename C_PARENT::Point> &parent_last_hashes,
+    const std::vector<LayerExtension<C_CHILD>> child_layer_extensions,
+    const std::size_t last_updated_child_idx,
+    const std::size_t last_updated_parent_idx)
+{
+    // TODO: comments
+    const auto *child_last_hash = (last_updated_child_idx >= child_last_hashes.size())
+        ? nullptr
+        : &child_last_hashes[last_updated_child_idx];
+
+    const auto *parent_last_hash = (last_updated_parent_idx >= parent_last_hashes.size())
+        ? nullptr
+        : &parent_last_hashes[last_updated_parent_idx];
+
+    // Pre-conditions
+    CHECK_AND_ASSERT_THROW_MES(last_updated_child_idx < child_layer_extensions.size(), "missing child layer");
+    const auto &child_extension = child_layer_extensions[last_updated_child_idx];
+
+    if (grow_layer_instructions.setting_next_layer_after_old_root)
+    {
+        CHECK_AND_ASSERT_THROW_MES((last_updated_child_idx + 1) == child_last_hashes.size(),
+            "unexpected last updated child idx");
+        CHECK_AND_ASSERT_THROW_MES(child_last_hash != nullptr, "missing last child when setting layer after old root");
+    }
+
+    const auto child_scalars = next_child_scalars_from_children<C_CHILD, C_PARENT>(c_child,
+        grow_layer_instructions.setting_next_layer_after_old_root ? child_last_hash : nullptr,
+        child_extension);
+
+    if (grow_layer_instructions.need_old_last_parent)
+        CHECK_AND_ASSERT_THROW_MES(parent_last_hash != nullptr, "missing last parent");
+
+    typename C_PARENT::Scalar last_child_scalar;
+    if (grow_layer_instructions.need_old_last_child)
+    {
+        CHECK_AND_ASSERT_THROW_MES(child_last_hash != nullptr, "missing last child");
+        last_child_scalar = c_child->point_to_cycle_scalar(*child_last_hash);
+    }
+
+    // Do the hashing
+    LayerExtension<C_PARENT> layer_extension = hash_children_chunks(
+            c_parent,
+            grow_layer_instructions.need_old_last_child ? &last_child_scalar : nullptr,
+            grow_layer_instructions.need_old_last_parent ? parent_last_hash : nullptr,
+            grow_layer_instructions.start_offset,
+            grow_layer_instructions.next_parent_start_index,
+            child_scalars,
+            grow_layer_instructions.parent_chunk_width
+        );
+
+    CHECK_AND_ASSERT_THROW_MES((layer_extension.start_idx + layer_extension.hashes.size()) ==
+        grow_layer_instructions.new_total_parents,
+        "unexpected num parents extended");
+
+    return layer_extension;
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
@@ -1176,7 +1607,7 @@ void CurveTrees<C1, C2>::outputs_to_leaves(std::vector<UnifiedOutput> &&new_outp
                         const auto &output_pair = new_outputs.at(j).output_pair;
                         try
                         {
-                            pre_leaves.at(j) = output_to_pre_leaf_tuple(output_pair);
+                            pre_leaves.at(j) = output_to_pre_leaf_tuple(output_pair, use_fast_torsion_check);
                         }
                         catch(...)
                         {

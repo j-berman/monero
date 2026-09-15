@@ -167,7 +167,8 @@ public:
                         , const cryptonote::difficulty_type& cumulative_difficulty
                         , const uint64_t& coins_generated
                         , const std::vector<std::pair<cryptonote::transaction, cryptonote::blobdata>>& txs
-                        ) override { return cryptonote::BlockchainDB::add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs); }
+                        , const std::unordered_map<uint64_t, rct::key>& transparent_amount_commitments
+                        ) override { return cryptonote::BlockchainDB::add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs, transparent_amount_commitments); }
   virtual void add_block( const cryptonote::block& blk
                         , size_t block_weight
                         , uint64_t long_term_block_weight

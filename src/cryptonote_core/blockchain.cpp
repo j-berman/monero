@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <boost/asio/dispatch.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/format.hpp>
 
@@ -65,8 +66,6 @@
 #define FIND_BLOCKCHAIN_SUPPLEMENT_MAX_SIZE (100*1024*1024) // 100 MB
 
 using namespace crypto;
-
-static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeFcmpPlusPlus;
 
 //#include "serialization/json_archive.h"
 
@@ -2153,7 +2152,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
 
     // Collect transparent amount commitments
     std::unordered_map<uint64_t, rct::key> transparent_amount_commitments;
-    collect_transparent_amount_commitments(extra_block_txs.txs_by_txid, transparent_amount_commitments);
+    collect_transparent_amount_commitments(extra_block_txs, transparent_amount_commitments);
 
     // Now that we have the PoW verification out of the way, verify all pool supplement txs
     tx_verification_context tvc{};
@@ -2810,7 +2809,7 @@ static bool batch_verify_fcmp_pp_txs(const BlockchainDB *db,
 
   // 1. Collect referenced tree roots
   std::unordered_map<uint64_t, std::pair<crypto::ec_point, uint8_t>> tree_root_by_block_idx;
-  for (const auto &extra_tx : extra_block_txs.txs_by_txid)
+  for (const auto &extra_tx : extra_block_txs)
   {
     const cryptonote::transaction &tx = extra_tx.second.first;
     if (!set_fcmp_tx_tree_root(db, tx, tree_root_by_block_idx))
@@ -4600,7 +4599,7 @@ leave:
   if (!fast_check)
 #endif
   {
-    collect_transparent_amount_commitments(extra_block_txs.txs_by_txid, transparent_amount_commitments);
+    collect_transparent_amount_commitments(extra_block_txs, transparent_amount_commitments);
 
     tx_verification_context tvc{};
     // If fail non-input consensus rule checking...

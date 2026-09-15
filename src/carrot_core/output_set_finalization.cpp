@@ -39,6 +39,7 @@
 //third party headers
 
 //standard headers
+#include <cassert>
 #include <set>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY

@@ -97,6 +97,8 @@ using namespace epee;
 #include "device_trezor/device_trezor.hpp"
 #include "net/socks_connect.h"
 #include "pending_tx_validation.h"
+#include "carrot_core/device_ram_borrowed.h"
+#include "carrot_impl/address_device_ram_borrowed.h"
 #include "carrot_impl/address_utils.h"
 #include "carrot_impl/format_utils.h"
 #include "carrot_impl/key_image_device_composed.h"

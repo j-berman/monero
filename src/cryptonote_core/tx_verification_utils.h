@@ -36,6 +36,8 @@
 
 namespace cryptonote
 {
+struct pool_supplement;
+
 /**
  * @brief Add the tx's output pub keys and commitments to the collection
  *
@@ -63,7 +65,7 @@ std::vector<std::reference_wrapper<const transaction>> collect_transparent_amoun
     std::unordered_map<uint64_t, rct::key> &transparent_amount_commitments_inout);
 
 void collect_transparent_amount_commitments(
-    const std::unordered_map<crypto::hash, std::pair<transaction, blobdata>> &txs_by_txid,
+    const pool_supplement &ps,
     std::unordered_map<uint64_t, rct::key> &transparent_amount_commitments_inout);
 
 /**
@@ -213,7 +215,10 @@ public:
 
 private:
     // The only function which can set nic_verified_hf_version to non-zero value
-    friend bool ver_non_input_consensus(pool_supplement& ps, tx_verification_context& tvc, std::uint8_t hf_version);
+    friend bool ver_non_input_consensus(pool_supplement& ps,
+        const std::unordered_map<uint64_t, rct::key>& transparent_amount_commitments,
+        tx_verification_context& tvc,
+        std::uint8_t hf_version);
 
     // Map of supplemental tx info that we might need to validate a block
     // Maps TXID -> transaction and blob
@@ -261,7 +266,7 @@ bool batch_ver_fcmp_pp_consensus
 bool ver_non_input_consensus(const transaction& tx, tx_verification_context& tvc,
     std::uint8_t hf_version);
 
-bool ver_non_input_consensus(const pool_supplement& ps,
+bool ver_non_input_consensus(pool_supplement& ps,
     const std::unordered_map<uint64_t, rct::key>& transparent_amount_commitments,
     tx_verification_context& tvc,
     std::uint8_t hf_version);

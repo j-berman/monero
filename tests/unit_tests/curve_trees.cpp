@@ -130,8 +130,8 @@ static const Selene::Scalar generate_random_selene_scalar()
 
     crypto::generate_keys(S, s, s, false);
 
-    crypto::ec_coord S_x;
-    CHECK_AND_ASSERT_THROW_MES(fcmp_pp::point_to_wei_x((crypto::ec_point&)S, S_x), "failed to convert to wei x");
+    crypto::ec_coord S_x, S_y;
+    CHECK_AND_ASSERT_THROW_MES(fcmp_pp::point_to_wei_x_y((crypto::ec_point&)S, S_x, S_y), "failed to convert to wei");
     return fcmp_pp::tower_cycle::selene_scalar_from_bytes(S_x);
 }
 //----------------------------------------------------------------------------------------------------------------------

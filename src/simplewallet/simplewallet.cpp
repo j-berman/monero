@@ -47,6 +47,7 @@
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 #include <boost/regex.hpp>
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/filesystem.hpp>

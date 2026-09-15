@@ -1256,7 +1256,7 @@ namespace cryptonote
       "Revisit this section and update for the new tx version.");
     CHECK_AND_ASSERT_THROW_MES(tx.version == 1 || tx.version == 2, "encountered unexpected tx version");
 
-    if (tx.version >= 2 && !tx.is_coinbase(tx))
+    if (tx.version >= 2 && !tx.is_coinbase())
     {
       CHECK_AND_ASSERT_MES(tx.rct_signatures.outPk.size() > o_idx, false, "get_commitment: o_idx must be < tx.rct_signatures.outPk.size()");
       c_out = tx.rct_signatures.outPk.at(o_idx).mask;

@@ -421,7 +421,7 @@ exported_carrot_transfer_details export_cold_carrot_output(const wallet2_basic::
     //etd.flags.m_enote_type_change = ...
     etd.flags.m_carrot_derived_addr = 0; //! @TODO: carrot hierarchy
     etd.flags.m_internal = 0;
-    etd.flags.m_coinbase = cryptonote::is_coinbase(td.m_tx);
+    etd.flags.m_coinbase = td.m_tx.is_coinbase();
     //etd.flags.m_has_pid = ...
     etd.flags.m_frozen = td.m_frozen;
     etd.flags.m_key_image_partial = td.m_key_image_partial;

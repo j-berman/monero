@@ -831,7 +831,7 @@ carrot::OutputOpeningHintVariant make_sal_opening_hint_from_transfer_details(con
         const cryptonote::tx_out &out = td.m_tx.vout.at(td.m_internal_output_index);
         const auto &carrot_out = boost::get<cryptonote::txout_to_carrot_v1>(out.target);
 
-        const bool is_coinbase = cryptonote::is_coinbase(td.m_tx);
+        const bool is_coinbase = td.m_tx.is_coinbase();
         const rct::xmr_amount expected_cleartext_amount = is_coinbase ? td.amount() : 0;
         CHECK_AND_ASSERT_THROW_MES(out.amount == expected_cleartext_amount,
             "output cleartext amount mismatch");

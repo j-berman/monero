@@ -563,7 +563,7 @@ TEST_F(zmq_pub, JsonFullMinerData)
     //std::size_t send_miner_data(uint8_t major_version, uint64_t height, const crypto::hash& prev_id, const crypto::hash& seed_hash, difficulty_type diff, uint64_t median_weight, uint64_t already_generated_coins, const std::vector<tx_block_template_backlog_entry>& tx_backlog);
   
   const auto hash = crypto::rand<crypto::hash>();
-  const uint8_t fcmp_pp_n_tree_layers = crypto::rand_range(1, FCMP_PLUS_PLUS_MAX_LAYERS);
+  const uint8_t fcmp_pp_n_tree_layers = crypto::rand_range(size_t(1), size_t(FCMP_PLUS_PLUS_MAX_LAYERS));
   const crypto::ec_point fcmp_pp_tree_root = crypto::rand<crypto::ec_point>(); // might not be a valid Helios/Selene point
   const auto seed = crypto::rand<crypto::hash>();
   const cryptonote::difficulty_type difficulty = 500;

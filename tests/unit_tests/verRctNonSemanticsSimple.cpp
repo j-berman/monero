@@ -39,12 +39,6 @@
 #include "misc_log_ex.h"
 #include "ringct/rctSigs.h"
 
-namespace cryptonote
-{
-// declaration not provided in cryptonote_format_utils.h, but definition is not static ;)
-bool expand_transaction_1(transaction &tx, bool base_only);
-}
-
 namespace
 {
 /**
