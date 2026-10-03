@@ -245,6 +245,7 @@ namespace cryptonote
         meta.double_spend_seen = have_tx_keyimges_as_spent(tx, id);
         meta.pruned = tx.pruned;
         meta.bf_padding = 0;
+        meta.nic_verified_hf_version = version;
         memset(meta.padding, 0, sizeof(meta.padding));
         try
         {
@@ -321,6 +322,7 @@ namespace cryptonote
           meta.double_spend_seen = false;
           meta.pruned = tx.pruned;
           meta.bf_padding = 0;
+          meta.nic_verified_hf_version = version;
           memset(meta.padding, 0, sizeof(meta.padding));
 
           if (!insert_key_images(tx, id, tx_relay))
@@ -524,16 +526,11 @@ namespace cryptonote
   bool tx_memory_pool::take_tx(const crypto::hash &id,
     transaction &tx,
     cryptonote::blobdata &txblob,
-    size_t& tx_weight,
-    uint64_t& fee,
-    crypto::hash &valid_input_verification_id,
-    bool &relayed,
-    bool &do_not_relay,
-    bool &double_spend_seen,
-    bool &pruned,
+    txpool_tx_meta_t &meta,
     const bool suppress_missing_msgs)
   {
-    valid_input_verification_id = crypto::null_hash;
+    meta = txpool_tx_meta_t{};
+    meta.valid_input_verification_id = crypto::null_hash;
 
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
@@ -542,7 +539,6 @@ namespace cryptonote
     try
     {
       LockedTXN lock(m_blockchain.get_db());
-      txpool_tx_meta_t meta;
       if (!m_blockchain.get_txpool_tx_meta(id, meta))
       {
         if (!suppress_missing_msgs)
@@ -566,18 +562,11 @@ namespace cryptonote
       {
         tx.set_hash(id);
       }
-      tx_weight = meta.weight;
-      fee = meta.fee;
-      relayed = meta.relayed;
-      do_not_relay = meta.do_not_relay;
-      double_spend_seen = meta.double_spend_seen;
-      pruned = meta.pruned;
-      valid_input_verification_id = meta.valid_input_verification_id;
       sensitive = !meta.matches(relay_category::broadcasted);
 
       // remove first, in case this throws, so key images aren't removed
       m_blockchain.remove_txpool_tx(id);
-      reduce_txpool_weight(tx_weight);
+      reduce_txpool_weight(meta.weight);
       remove_transaction_keyimages(tx, id);
       lock.commit();
     }
@@ -1471,6 +1460,9 @@ namespace cryptonote
     if (txd.last_failed_id == top_block_hash)
       return false; // we are already sure that this tx isn't passing for this exact chain
 
+    if (txd.nic_verified_hf_version && txd.nic_verified_hf_version != m_blockchain.get_current_hard_fork_version())
+      return false; // this tx was verified under a different fork version than current, skip it
+
     tx_verification_context tvc{};
     if (!check_tx_inputs([&lazy_tx]()->cryptonote::transaction&{ return lazy_tx(); },
       txid,
@@ -1773,23 +1765,20 @@ namespace cryptonote
     {
       try
       {
-        size_t weight;
-        uint64_t fee;
         cryptonote::transaction tx;
         cryptonote::blobdata blob;
-        bool relayed, do_not_relay, double_spend_seen, pruned;
-        crypto::hash valid_input_verification_id;
-        if (!take_tx(e.txid, tx, blob, weight, fee, valid_input_verification_id, relayed, do_not_relay, double_spend_seen, pruned))
+        txpool_tx_meta_t stored_meta;
+        if (!take_tx(e.txid, tx, blob, stored_meta))
           MERROR("Failed to get tx " << e.txid << " from txpool for re-validation");
 
         cryptonote::tx_verification_context tvc{};
-        relay_method tx_relay = e.meta.get_relay_method();
-        if (!add_tx(tx, e.txid, blob, e.meta.weight, tvc, tx_relay, relayed, version,
-          /*nic_verified_hf_version=*/0, valid_input_verification_id))
+        if (!add_tx(tx, e.txid, blob, e.meta.weight, tvc, stored_meta.get_relay_method(), stored_meta.relayed, version,
+          stored_meta.nic_verified_hf_version, stored_meta.valid_input_verification_id))
         {
           MINFO("Failed to re-validate tx " << e.txid << " for v" << (unsigned)version << ", dropped");
           continue;
         }
+        e.meta.nic_verified_hf_version = version; // It's now guaranteed verified at the provided version
         m_blockchain.update_txpool_tx(e.txid, e.meta);
         ++added;
       }

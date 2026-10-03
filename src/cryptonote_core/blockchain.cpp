@@ -3872,13 +3872,9 @@ bool Blockchain::flush_txes_from_pool(const std::vector<crypto::hash> &txids)
   {
     cryptonote::transaction tx;
     cryptonote::blobdata txblob;
-    size_t tx_weight;
-    uint64_t fee;
-    crypto::hash valid_input_verification_id;
-    bool relayed, do_not_relay, double_spend_seen, pruned;
+    txpool_tx_meta_t meta;
     MINFO("Removing txid " << txid << " from the pool");
-    if (m_tx_pool.have_tx(txid, relay_category::all) && !m_tx_pool.take_tx(txid, tx, txblob,
-      tx_weight, fee, valid_input_verification_id, relayed, do_not_relay, double_spend_seen, pruned))
+    if (m_tx_pool.have_tx(txid, relay_category::all) && !m_tx_pool.take_tx(txid, tx, txblob, meta))
     {
       MERROR("Failed to remove txid " << txid << " from the pool");
       res = false;
@@ -4151,7 +4147,7 @@ leave:
     blobdata &txblob = txs.back().second;
     size_t tx_weight{};
     uint64_t fee{};
-    crypto::hash valid_input_verification_id{};
+    crypto::hash valid_input_verification_id = crypto::null_hash;
     bool pruned{};
 
     /* 
@@ -4160,10 +4156,9 @@ leave:
      * notifications, since if the tx skipped the mempool, then listeners have not yet received a
      * notification for this tx.
      */
-    bool _unused1, _unused2, _unused3;
+    txpool_tx_meta_t meta;
     const bool found_tx_in_pool{
-        m_tx_pool.take_tx(tx_id, tx, txblob, tx_weight, fee, valid_input_verification_id,
-          _unused1, _unused2, _unused3, pruned, /*suppress_missing_msgs=*/true)
+        m_tx_pool.take_tx(tx_id, tx, txblob, meta, /*suppress_missing_msgs=*/true)
       };
     bool find_tx_failure{!found_tx_in_pool};
     if (!found_tx_in_pool) // if not in mempool:
@@ -4179,6 +4174,28 @@ leave:
         extra_block_txs.erase(extra_txs_it);
         txpool_events.emplace_back(txpool_event{tx, tx_id, txblob.size(), tx_weight, true});
         find_tx_failure = false;
+      }
+    }
+    else
+    {
+      tx_weight = meta.weight;
+      fee = meta.fee;
+      pruned = meta.pruned;
+      valid_input_verification_id = meta.valid_input_verification_id;
+
+      if (meta.nic_verified_hf_version != hf_version)
+      {
+        // This tx entered the pool verified under a different nic verified hf version.
+        // We need to re-verify the tx under the current fork version to make sure it's still valid.
+        tx_verification_context tvc{};
+        if (!ver_non_input_consensus(tx, tvc, hf_version))
+        {
+          MERROR_VER("Tx with id: " << tx_id << " failed to pass non-input re-validation");
+          txs.pop_back(); // We push to the back preemptively. On fail, we need txs & txs_meta to match size
+          bvc.m_verifivation_failed = true;
+          return_txs_to_pool();
+          return false;
+        }
       }
     }
 

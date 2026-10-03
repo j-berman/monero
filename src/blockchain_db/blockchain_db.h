@@ -171,8 +171,9 @@ struct txpool_tx_meta_t
   uint8_t dandelionpp_stem : 1;
   uint8_t is_forwarding: 1;
   uint8_t bf_padding: 3;
+  uint8_t nic_verified_hf_version;
 
-  uint8_t padding[44]; // til 160 bytes
+  uint8_t padding[43]; // til 160 bytes
 
   // If non-null, this verification ID is set for this tx only when some mixring passed ver_input_proofs_rings()
   crypto::hash valid_input_verification_id;

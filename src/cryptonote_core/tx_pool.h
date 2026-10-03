@@ -147,27 +147,15 @@ namespace cryptonote
      * @param id the hash of the transaction
      * @param tx return-by-reference the transaction taken
      * @param txblob return-by-reference the transaction as a blob
-     * @param tx_weight return-by-reference the transaction's weight
-     * @param fee the transaction fee
-     * @param[out] valid_input_verification_id return-by-reference was a previously valid verID if non-null
-     * @param[out] relayed return-by-reference was transaction relayed to us by the network?
-     * @param[out] do_not_relay return-by-reference is transaction not to be relayed to the network?
-     * @param[out] double_spend_seen return-by-reference was a double spend seen for that transaction?
-     * @param[out] pruned return-by-reference is the tx pruned
-     * @param[out] suppress_missing_msgs suppress warning msgs when txid is missing (optional, defaults to `false`)
+     * @param[out] meta return-by-reference tx meta
+     * @param suppress_missing_msgs suppress warning msgs when txid is missing (optional, defaults to `false`)
      *
      * @return true unless the transaction cannot be found in the pool
      */
     bool take_tx(const crypto::hash &id,
       transaction &tx,
       cryptonote::blobdata &txblob,
-      size_t& tx_weight,
-      uint64_t& fee,
-      crypto::hash &valid_input_verification_id,
-      bool &relayed,
-      bool &do_not_relay,
-      bool &double_spend_seen,
-      bool &pruned,
+      txpool_tx_meta_t &meta,
       bool suppress_missing_msgs = false);
 
     /**
