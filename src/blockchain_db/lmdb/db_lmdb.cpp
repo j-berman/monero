@@ -2089,6 +2089,295 @@ std::vector<fcmp_pp::UnifiedOutput> BlockchainLMDB::get_unified_output_by_id(
   return unified_outputs;
 }
 
+bool BlockchainLMDB::audit_tree(const uint64_t expected_n_leaf_tuples) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(leaves)
+  RCURSOR(layers)
+
+  const uint64_t actual_n_leaf_tuples = this->get_n_leaf_tuples();
+  CHECK_AND_ASSERT_MES(actual_n_leaf_tuples == expected_n_leaf_tuples, false, "unexpected num leaf tuples");
+
+  MDEBUG("Auditing tree with " << actual_n_leaf_tuples << " leaf tuples");
+
+  if (actual_n_leaf_tuples == 0)
+  {
+    // Make sure layers table is also empty
+    MDB_stat db_stats;
+    int result = mdb_stat(m_txn, m_layers, &db_stats);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to query m_layers: ", result).c_str()));
+    CHECK_AND_ASSERT_MES(db_stats.ms_entries == 0, false, "unexpected num layer entries");
+    return true;
+  }
+
+  CHECK_AND_ASSERT_THROW_MES(m_curve_trees != nullptr, "curve trees must be set");
+
+  // Check chunks of leaves hash into first layer as expected
+  uint64_t layer_idx = 0;
+  uint64_t child_chunk_idx = 0;
+  MDB_cursor_op leaf_op = MDB_FIRST;
+  MDB_cursor_op parent_op = MDB_FIRST;
+
+  MDB_val_copy<uint64_t> k_parent(layer_idx);
+  MDB_val_set(v_parent, child_chunk_idx);
+
+  while (1)
+  {
+    // Get next leaf chunk
+    if (child_chunk_idx && child_chunk_idx % 1000 == 0)
+      MINFO("Auditing layer " << layer_idx << ", child_chunk_idx " << child_chunk_idx);
+
+    // Iterate until chunk is full or we get to the end of all leaves, collecting leaf output ID's
+    std::vector<uint64_t> unified_ids;
+    unified_ids.reserve(m_curve_trees->m_c1_width);
+    MDB_val k_leaf, v_leaf;
+    while (1)
+    {
+      int result = mdb_cursor_get(m_cur_leaves, &k_leaf, &v_leaf, leaf_op);
+      leaf_op = MDB_NEXT;
+      if (result == MDB_NOTFOUND)
+        break;
+      if (result != MDB_SUCCESS)
+        throw0(DB_ERROR(lmdb_error("Failed to add leaf: ", result).c_str()));
+
+      const auto *o = (mdb_leaf *)v_leaf.mv_data;
+      unified_ids.push_back(o->unified_id);
+
+      if (unified_ids.size() == m_curve_trees->m_c1_width)
+        break;
+    }
+
+    // Get leaves from output ID's
+    std::vector<fcmp_pp::curve_trees::CurveTreesV1::LeafTuple> leaf_tuples_chunk;
+    leaf_tuples_chunk.reserve(m_curve_trees->m_c1_width);
+    const auto unified_outputs = this->get_unified_output_by_id(unified_ids);
+    for (const auto &unified_output : unified_outputs)
+    {
+      auto leaf_tuple = m_curve_trees->leaf_tuple(unified_output.output_pair);
+      leaf_tuples_chunk.emplace_back(std::move(leaf_tuple));
+    }
+
+    // Get the actual leaf chunk hash from the db
+    MDEBUG("Getting leaf chunk hash starting at child_chunk_idx " << child_chunk_idx);
+    int result = mdb_cursor_get(m_cur_layers, &k_parent, &v_parent, parent_op);
+    parent_op = MDB_NEXT_DUP;
+
+    // Check end condition: no more leaf tuples in the leaf layer
+    if (leaf_tuples_chunk.empty())
+    {
+      // No more leaves, expect to be done with parent chunks as well
+      if (result != MDB_NOTFOUND)
+        throw0(DB_ERROR(lmdb_error("unexpected leaf chunk parent result found at child_chunk_idx "
+          + std::to_string(child_chunk_idx), result).c_str()));
+
+      break;
+    }
+
+    if (result != MDB_SUCCESS)
+      throw0(DB_ERROR(lmdb_error("Failed to get parent in first layer: ", result).c_str()));
+    if (layer_idx != *(uint64_t*)k_parent.mv_data || child_chunk_idx != ((layer_val *)v_parent.mv_data)->child_chunk_idx)
+      throw0(DB_ERROR("unexpected parent encountered"));
+
+    // Get the expected leaf chunk hash
+    const auto leaves = m_curve_trees->flatten_leaves(std::move(leaf_tuples_chunk));
+    const fcmp_pp::curve_trees::Selene::Chunk chunk{leaves.data(), leaves.size()};
+
+    // Hash the chunk of leaves
+    const auto chunk_hash = fcmp_pp::curve_trees::get_new_parent(m_curve_trees->m_c1, chunk);
+    const auto expected_chunk_hash = m_curve_trees->m_c1->to_string(chunk_hash);
+    MDEBUG("chunk_hash " << expected_chunk_hash << " , hash init point: "
+      << m_curve_trees->m_c1->to_string(m_curve_trees->m_c1->hash_init_point()) << " (" << leaves.size() << " leaves)");
+
+    // Now compare to value from the db
+    const auto *lv = (layer_val *)v_parent.mv_data;
+    const auto actual_chunk_hash = epee::string_tools::pod_to_hex(lv->child_chunk_hash);
+    MDEBUG("Actual leaf chunk hash " << actual_chunk_hash);
+
+    CHECK_AND_ASSERT_MES(expected_chunk_hash == actual_chunk_hash, false, "unexpected leaf chunk hash");
+    CHECK_AND_ASSERT_MES(lv->child_chunk_idx == child_chunk_idx, false, "unexpected child chunk idx");
+
+    ++child_chunk_idx;
+  }
+
+  MDEBUG("Successfully audited leaf layer");
+
+  // Traverse up the tree auditing each layer until we've audited every layer in the tree
+  bool audit_complete = false;
+  while (!audit_complete)
+  {
+    MDEBUG("Auditing layer " << layer_idx);
+
+    // Alternate starting with c2 as parent (we already audited c1 leaf parents), then c1 as parent, then c2, etc.
+    const bool parent_is_c2 = layer_idx % 2 == 0;
+    if (parent_is_c2)
+    {
+      audit_complete = this->audit_layer(
+          /*c_child*/         m_curve_trees->m_c1,
+          /*c_parent*/        m_curve_trees->m_c2,
+          layer_idx,
+          /*chunk_width*/     m_curve_trees->m_c2_width);
+    }
+    else
+    {
+      audit_complete = this->audit_layer(
+          /*c_child*/         m_curve_trees->m_c2,
+          /*c_parent*/        m_curve_trees->m_c1,
+          layer_idx,
+          /*chunk_width*/     m_curve_trees->m_c1_width);
+    }
+
+    ++layer_idx;
+  }
+
+  TXN_POSTFIX_RDONLY();
+
+  return true;
+}
+
+template<typename C_CHILD, typename C_PARENT>
+bool BlockchainLMDB::audit_layer(const std::unique_ptr<C_CHILD> &c_child,
+  const std::unique_ptr<C_PARENT> &c_parent,
+  const uint64_t child_layer_idx,
+  const uint64_t chunk_width) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  TXN_PREFIX_RDONLY();
+
+  // Open two separate cursors for child and parent layer
+  MDB_cursor *child_layer_cursor, *parent_layer_cursor;
+
+  int c_result = mdb_cursor_open(m_txn, m_layers, &child_layer_cursor);
+  if (c_result)
+    throw0(DB_ERROR(lmdb_error("Failed to open child cursor: ", c_result).c_str()));
+  int p_result = mdb_cursor_open(m_txn, m_layers, &parent_layer_cursor);
+  if (p_result)
+    throw0(DB_ERROR(lmdb_error("Failed to open parent cursor: ", p_result).c_str()));
+
+  // Set the cursors to the start of each layer
+  const uint64_t parent_layer_idx = child_layer_idx + 1;
+
+  MDB_val_set(k_child, child_layer_idx);
+  MDB_val_set(k_parent, parent_layer_idx);
+
+  MDB_val v_child, v_parent;
+
+  c_result = mdb_cursor_get(child_layer_cursor, &k_child, &v_child, MDB_SET);
+  p_result = mdb_cursor_get(parent_layer_cursor, &k_parent, &v_parent, MDB_SET);
+
+  if (c_result != MDB_SUCCESS)
+    throw0(DB_ERROR(lmdb_error("Failed to get child: ", c_result).c_str()));
+  if (p_result != MDB_SUCCESS && p_result != MDB_NOTFOUND)
+    throw0(DB_ERROR(lmdb_error("Failed to get parent: ", p_result).c_str()));
+
+  // Begin to audit the layer
+  MDB_cursor_op op_child = MDB_FIRST_DUP;
+  MDB_cursor_op op_parent = MDB_FIRST_DUP;
+  bool audit_complete = false;
+  uint64_t child_chunk_idx = 0;
+  while (1)
+  {
+    if (child_chunk_idx && child_chunk_idx % 1000 == 0)
+      MINFO("Auditing layer " << parent_layer_idx << ", child_chunk_idx " << child_chunk_idx);
+
+    // Get next child chunk
+    std::vector<typename C_CHILD::Point> child_chunk;
+    child_chunk.reserve(chunk_width);
+    while (1)
+    {
+      int result = mdb_cursor_get(child_layer_cursor, &k_child, &v_child, op_child);
+      op_child = MDB_NEXT_DUP;
+      if (result == MDB_NOTFOUND)
+        break;
+      if (result != MDB_SUCCESS)
+        throw0(DB_ERROR(lmdb_error("Failed to get child: ", result).c_str()));
+
+      const auto *lv = (layer_val *)v_child.mv_data;
+      auto child_point = c_child->from_bytes(lv->child_chunk_hash);
+
+      child_chunk.emplace_back(std::move(child_point));
+
+      if (child_chunk.size() == chunk_width)
+        break;
+    }
+
+    // Get the actual chunk hash from the db
+    int result = mdb_cursor_get(parent_layer_cursor, &k_parent, &v_parent, op_parent);
+    op_parent = MDB_NEXT_DUP;
+
+    // Check for end conditions
+    // End condition A (audit_complete=false): finished auditing layer and ready to move up a layer
+    // End condition B (audit_complete=true ): finished auditing the tree, no more layers remaining
+
+    // End condition A: check if finished auditing this layer
+    if (child_chunk.empty())
+    {
+      // No more children, expect to be done auditing layer and ready to move up a layer
+      if (result != MDB_NOTFOUND)
+        throw0(DB_ERROR(lmdb_error("unexpected parent result at parent_layer_idx " + std::to_string(parent_layer_idx)
+          + " , child_chunk_idx " + std::to_string(child_chunk_idx) + " : ", result).c_str()));
+
+      MDEBUG("Finished auditing layer " << child_layer_idx);
+      audit_complete = false;
+      break;
+    }
+
+    // End condition B: check if finished auditing the tree
+    if (child_chunk_idx == 0 && child_chunk.size() == 1)
+    {
+      if (p_result != MDB_NOTFOUND)
+        throw0(DB_ERROR(lmdb_error("unexpected parent of root at parent_layer_idx " + std::to_string(parent_layer_idx)
+          + " , child_chunk_idx " + std::to_string(child_chunk_idx) + " : ", result).c_str()));
+
+      MDEBUG("Encountered root at layer_idx " << child_layer_idx);
+      audit_complete = true;
+      break;
+    }
+
+    if (result != MDB_SUCCESS)
+      throw0(DB_ERROR(lmdb_error("Failed to get parent: ", result).c_str()));
+
+    if (child_layer_idx != *(uint64_t*)k_child.mv_data)
+      throw0(DB_ERROR("unexpected child encountered"));
+    if (parent_layer_idx != *(uint64_t*)k_parent.mv_data)
+      throw0(DB_ERROR("unexpected parent encountered"));
+
+    // Get the expected chunk hash
+    std::vector<typename C_PARENT::Scalar> child_scalars;
+    child_scalars.reserve(child_chunk.size());
+    for (const auto &child : child_chunk)
+      child_scalars.emplace_back(c_child->point_to_cycle_scalar(child));
+    const typename C_PARENT::Chunk chunk{child_scalars.data(), child_scalars.size()};
+
+    for (uint64_t i = 0; i < child_scalars.size(); ++i)
+      MDEBUG("Hashing " << c_parent->to_string(child_scalars[i]));
+
+    const auto chunk_hash = fcmp_pp::curve_trees::get_new_parent(c_parent, chunk);
+    const auto expected_chunk_hash = c_parent->to_string(chunk_hash);
+    MDEBUG("Expected chunk_hash " << expected_chunk_hash << " (" << child_scalars.size() << " children)");
+
+    const auto *lv = (layer_val *)v_parent.mv_data;
+    const auto actual_chunk_hash = epee::string_tools::pod_to_hex(lv->child_chunk_hash);
+    MDEBUG("Actual chunk hash " << actual_chunk_hash);
+
+    if (expected_chunk_hash != actual_chunk_hash)
+      throw0(DB_ERROR(("unexpected hash at child_chunk_idx " + std::to_string(child_chunk_idx)).c_str()));
+    if (lv->child_chunk_idx != child_chunk_idx)
+      throw0(DB_ERROR(("unexpected child_chunk_idx, epxected " + std::to_string(child_chunk_idx)).c_str()));
+
+    ++child_chunk_idx;
+  }
+
+  TXN_POSTFIX_RDONLY();
+
+  return audit_complete;
+}
+
 BlockchainLMDB::~BlockchainLMDB()
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);

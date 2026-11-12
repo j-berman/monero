@@ -599,13 +599,6 @@ private:
   virtual void del_locked_outs_at_block_idx(uint64_t block_idx) = 0;
 
   /**
-   * @brief get the total number of leaf tuples in the tree
-   *
-   * @return the total number of leaf tuples in the tree
-   */
-  virtual uint64_t get_n_leaf_tuples() const = 0;
-
-  /**
    * @brief get the total number of leaf tuples in the tree when the given block idx was tip of the chain
    *
    * @param block_idx assumed tip of the chain
@@ -1980,6 +1973,22 @@ public:
    * @return n tree layers when blk_idx was chain tip
    */
   virtual uint8_t get_tree_root_at_blk_idx(const uint64_t blk_idx, crypto::ec_point &tree_root_out) const = 0;
+
+  /**
+   * @brief get the total number of leaf tuples in the tree
+   *
+   * @return the total number of leaf tuples in the tree
+   */
+  virtual uint64_t get_n_leaf_tuples() const = 0;
+
+  /**
+   * @brief re-hash every single element in the tree and make sure the root is correct
+   *
+   * @param expected_n_leaf_tuples the expected number of leaf tuples in the tree
+   *
+   * @return true if correct
+   */
+  virtual bool audit_tree(const uint64_t expected_n_leaf_tuples) const = 0;
 
   //
   // Hard fork related storage

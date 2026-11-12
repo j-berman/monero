@@ -134,6 +134,7 @@ public:
   virtual std::vector<crypto::ec_point> get_tree_edge(uint64_t block_id) const override { return {}; };
   virtual void save_tree_meta(const uint64_t block_idx, const uint64_t n_leaf_tuples, const std::vector<crypto::ec_point> &tree_edge) override {};
   virtual void del_tree_meta(const uint64_t block_idx) override {};
+  virtual bool audit_tree(const uint64_t expected_n_leaf_tuples) const override { return false; };
 
   virtual bool for_all_key_images(std::function<bool(const crypto::key_image&)>) const override { return true; }
   virtual bool for_blocks_range(const uint64_t&, const uint64_t&, std::function<bool(uint64_t, const crypto::hash&, const cryptonote::block&)>) const override { return true; }

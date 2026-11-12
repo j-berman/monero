@@ -472,6 +472,14 @@ private:
 
   std::vector<fcmp_pp::UnifiedOutput> get_unified_output_by_id(const std::vector<uint64_t> &unified_ids) const;
 
+  bool audit_tree(const uint64_t expected_n_leaf_tuples) const override;
+
+  template<typename C_CHILD, typename C_PARENT>
+  bool audit_layer(const std::unique_ptr<C_CHILD> &c_child,
+    const std::unique_ptr<C_PARENT> &c_parent,
+    const uint64_t child_layer_idx,
+    const uint64_t chunk_width) const;
+
   // Hard fork
   void set_hard_fork_version(uint64_t height, uint8_t version) override;
   uint8_t get_hard_fork_version(uint64_t height) const override;
