@@ -72,7 +72,7 @@ BEGIN_SIMPLE_FUZZER()
   // run tx through verification functions
   cryptonote::block b;
   b.miner_tx = tx;
-  cryptonote::Blockchain::prevalidate_miner_transaction(b, coinbase_height, hf_version);
+  cryptonote::prevalidate_miner_transaction(b, coinbase_height, hf_version);
   cryptonote::tx_verification_context tvc{};
   cryptonote::ver_non_input_consensus(tx, tvc, hf_version);
 END_SIMPLE_FUZZER()

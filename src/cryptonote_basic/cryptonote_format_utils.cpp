@@ -1152,27 +1152,91 @@ namespace cryptonote
       {
         // from v15, require outputs have view tags
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << (tx.pruned ? crypto::null_hash : get_transaction_hash(tx)));
       }
       else if (hf_version < HF_VERSION_VIEW_TAGS)
       {
         // require outputs to be of type txout_to_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_key in transaction id=" << (tx.pruned ? crypto::null_hash : get_transaction_hash(tx)));
       }
       else  //(hf_version == HF_VERSION_VIEW_TAGS)
       {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << (tx.pruned ? crypto::null_hash : get_transaction_hash(tx)));
 
         // require all outputs in a tx be of the same type
         CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
-          << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
+          << "expected matching variant types in transaction id=" << (tx.pruned ? crypto::null_hash : get_transaction_hash(tx)));
       }
     }
+    return true;
+  }
+  //---------------------------------------------------------------
+  // This function does a sanity check on basic things that all miner
+  // transactions have in common, such as:
+  //   one input, of type txin_gen, with height set to the block's height
+  //   correct miner tx unlock time
+  //   a non-overflowing tx amount (dubious necessity on this check)
+  //   valid output types
+  bool prevalidate_miner_transaction(const block& b, uint64_t height, uint8_t hf_version)
+  {
+    CHECK_AND_ASSERT_MES(b.miner_tx.vin.size() == 1, false, "coinbase transaction in the block has no inputs");
+    CHECK_AND_ASSERT_MES(b.miner_tx.vin[0].type() == typeid(txin_gen), false, "coinbase transaction in the block has the wrong type");
+    CHECK_AND_ASSERT_MES(b.miner_tx.version > 1 || hf_version < HF_VERSION_MIN_V2_COINBASE_TX, false, "Invalid coinbase transaction version");
+
+    // for v2 txes (ringct), we only accept empty rct signatures for miner transactions,
+    if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.miner_tx.version >= 2)
+    {
+      CHECK_AND_ASSERT_MES(b.miner_tx.rct_signatures.type == rct::RCTTypeNull, false, "RingCT signatures not allowed in coinbase transactions");
+    }
+
+    if(boost::get<txin_gen>(b.miner_tx.vin[0]).height != height)
+    {
+      MWARNING("The miner transaction in block has invalid height: " << boost::get<txin_gen>(b.miner_tx.vin[0]).height << ", expected: " << height);
+      return false;
+    }
+    MDEBUG("Miner tx hash: " << get_transaction_hash(b.miner_tx));
+    CHECK_AND_ASSERT_MES(b.miner_tx.unlock_time == height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "coinbase transaction has the wrong unlock time=" << b.miner_tx.unlock_time << ", expected " << height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+
+    //check outs overflow
+    if(!check_outs_overflow(b.miner_tx))
+    {
+      MERROR("miner transaction has money overflow in block " << get_block_hash(b));
+      return false;
+    }
+
+    CHECK_AND_ASSERT_MES(check_output_types(b.miner_tx, hf_version), false, "miner transaction has invalid output type(s) in block " << get_block_hash(b));
+
+    return true;
+  }
+  //---------------------------------------------------------------
+  // This function does a sanity check on basic things that all non-miner
+  // transactions have in common, such as:
+  //   valid output types
+  //   valid input types
+  //   same mixin
+  bool prevalidate_nonminer_transaction(const transaction &tx, const uint8_t hf_version)
+  {
+    CHECK_AND_ASSERT_MES(check_output_types(tx, hf_version), false, "non-miner tx has invalid output type(s)");
+    CHECK_AND_ASSERT_MES(check_inputs_types_supported(tx), false, "non-miner tx has invalid input type(s)");
+
+    if (tx.version < 2)
+      return true;
+
+    CHECK_AND_ASSERT_MES(tx.rct_signatures.type != rct::RCTTypeNull, false, "non-miner tx has null RCT type");
+
+    // All v2 txs enforce same size key_offsets
+    for (const auto &tx_vin : tx.vin)
+    {
+      const std::size_t first_key_offsets_size = boost::get<cryptonote::txin_to_key>(tx.vin.at(0)).key_offsets.size();
+      const std::size_t next_key_offsets_size = boost::get<cryptonote::txin_to_key>(tx_vin).key_offsets.size();
+      CHECK_AND_ASSERT_MES(first_key_offsets_size == next_key_offsets_size, false, "non-miner tx has diff mixin");
+    }
+
     return true;
   }
   //---------------------------------------------------------------

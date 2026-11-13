@@ -1317,45 +1317,6 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   return next_difficulty(timestamps, cumulative_difficulties, target);
 }
 //------------------------------------------------------------------
-// This function does a sanity check on basic things that all miner
-// transactions have in common, such as:
-//   one input, of type txin_gen, with height set to the block's height
-//   correct miner tx unlock time
-//   a non-overflowing tx amount (dubious necessity on this check)
-//   valid output types
-bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, uint8_t hf_version)
-{
-  LOG_PRINT_L3("Blockchain::" << __func__);
-  CHECK_AND_ASSERT_MES(b.miner_tx.vin.size() == 1, false, "coinbase transaction in the block has no inputs");
-  CHECK_AND_ASSERT_MES(b.miner_tx.vin[0].type() == typeid(txin_gen), false, "coinbase transaction in the block has the wrong type");
-  CHECK_AND_ASSERT_MES(b.miner_tx.version > 1 || hf_version < HF_VERSION_MIN_V2_COINBASE_TX, false, "Invalid coinbase transaction version");
-
-  // for v2 txes (ringct), we only accept empty rct signatures for miner transactions,
-  if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE && b.miner_tx.version >= 2)
-  {
-    CHECK_AND_ASSERT_MES(b.miner_tx.rct_signatures.type == rct::RCTTypeNull, false, "RingCT signatures not allowed in coinbase transactions");
-  }
-
-  if(boost::get<txin_gen>(b.miner_tx.vin[0]).height != height)
-  {
-    MWARNING("The miner transaction in block has invalid height: " << boost::get<txin_gen>(b.miner_tx.vin[0]).height << ", expected: " << height);
-    return false;
-  }
-  MDEBUG("Miner tx hash: " << get_transaction_hash(b.miner_tx));
-  CHECK_AND_ASSERT_MES(b.miner_tx.unlock_time == height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "coinbase transaction has the wrong unlock time=" << b.miner_tx.unlock_time << ", expected " << height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
-
-  //check outs overflow
-  if(!check_outs_overflow(b.miner_tx))
-  {
-    MERROR("miner transaction has money overflow in block " << get_block_hash(b));
-    return false;
-  }
-
-  CHECK_AND_ASSERT_MES(check_output_types(b.miner_tx, hf_version), false, "miner transaction has invalid output type(s) in block " << get_block_hash(b));
-
-  return true;
-}
-//------------------------------------------------------------------
 // This function validates the miner transaction reward
 bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version)
 {
@@ -4939,6 +4900,8 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
         if (!parse_and_validate_block_from_blob(it->block, block, block_hash))
           return false;
+        if (!prevalidate_miner_transaction(block, get_block_height(block), block.major_version))
+          return false;
 
         // check first block and skip all blocks if its not chained properly
         if (blockidx == 0)
@@ -4963,6 +4926,8 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       crypto::hash block_hash;
 
       if (!parse_and_validate_block_from_blob(it->block, block, block_hash))
+        return false;
+      if (!prevalidate_miner_transaction(block, get_block_height(block), block.major_version))
         return false;
 
       if (!blocks_exist && have_block(block_hash))
@@ -5052,8 +5017,9 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
   // generate sorted tables for all amounts and absolute offsets
   size_t tx_index = 0;
   size_t n_total_offsets = 0;
-  for (const auto &entry : blocks_entry)
+  for (std::size_t i = 0; i < blocks_entry.size(); ++i)
   {
+    const auto &entry = blocks_entry[i];
     if (m_cancel)
       return false;
     if (n_total_offsets >= TARGET_MAX_OFFSETS_FOR_SCAN_TABLE_CACHE)
@@ -5069,6 +5035,11 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
       if (!parse_and_validate_tx_base_from_blob(tx_blob.blob, tx, true))
         SCAN_TABLE_QUIT("Could not parse tx from incoming blocks.");
+
+      // Very cheap checks on tx structure
+      if (!prevalidate_nonminer_transaction(tx, blocks.at(i).major_version))
+        SCAN_TABLE_QUIT("Tx on incoming blocks had incorrect structure.");
+
       cryptonote::get_transaction_prefix_hash(tx, tx_prefix_hash);
 
       auto its = m_scan_table.find(tx_prefix_hash);

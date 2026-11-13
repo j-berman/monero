@@ -1450,20 +1450,6 @@ namespace cryptonote
     difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, block_extended_info& bei) const;
 
     /**
-     * @brief sanity checks a miner transaction before validating an entire block
-     *
-     * This function merely checks basic things like the structure of the miner
-     * transaction, the unlock time, and that the amount doesn't overflow.
-     *
-     * @param b the block containing the miner transaction
-     * @param height the height at which the block will be added
-     * @param hf_version the consensus rules to apply
-     *
-     * @return false if anything is found wrong with the miner transaction, otherwise true
-     */
-    static bool prevalidate_miner_transaction(const block& b, uint64_t height, uint8_t hf_version);
-
-    /**
      * @brief validates a miner (coinbase) transaction
      *
      * This function makes sure that the miner calculated his reward correctly
