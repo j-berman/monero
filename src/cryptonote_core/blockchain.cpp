@@ -5032,7 +5032,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
   std::map<uint64_t, std::vector<uint64_t>> offset_map;
   // [output] stores all output_data_t for each absolute_offset
   std::map<uint64_t, std::vector<output_data_t>> tx_map;
-  std::vector<std::pair<cryptonote::transaction, crypto::hash>> txes(total_txs);
+  std::vector<std::pair<std::vector<cryptonote::txin_to_key>, crypto::hash>> txes(total_txs);
 
   // We want to target max memory usage for offsets here to 100mb. We'll have output_data_t
   // per offset in memory for m_scan_table and tx_map (hence the 2*sizeof(output_data_t)).
@@ -5063,10 +5063,10 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
     {
       if (tx_index >= txes.size())
         SCAN_TABLE_QUIT("tx_index is out of sync");
-      transaction &tx = txes[tx_index].first;
+      std::vector<cryptonote::txin_to_key> &tx_in_to_keys = txes[tx_index].first;
       crypto::hash &tx_prefix_hash = txes[tx_index].second;
       ++tx_index;
-
+      transaction tx;
       if (!parse_and_validate_tx_base_from_blob(tx_blob.blob, tx, true))
         SCAN_TABLE_QUIT("Could not parse tx from incoming blocks.");
       cryptonote::get_transaction_prefix_hash(tx, tx_prefix_hash);
@@ -5083,6 +5083,10 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       for (const auto &txin : tx.vin)
       {
         const txin_to_key &in_to_key = boost::get < txin_to_key > (txin);
+
+        // check for empty key offsets
+        if (in_to_key.key_offsets.empty())
+          SCAN_TABLE_QUIT("Empty key_offsets found from incoming blocks.");
 
         // check for duplicate
         auto it = its->second.find(in_to_key.k_image);
@@ -5104,6 +5108,13 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
           offset_map[in_to_key.amount].push_back(offset);
           ++n_total_offsets;
         }
+      }
+
+      tx_in_to_keys.reserve(tx.vin.size());
+      for (auto &txin : tx.vin)
+      {
+        txin_to_key &in_to_key = boost::get < txin_to_key > (txin);
+        tx_in_to_keys.emplace_back(std::move(in_to_key));
       }
 
       if (n_total_offsets >= TARGET_MAX_OFFSETS_FOR_SCAN_TABLE_CACHE)
@@ -5166,7 +5177,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
     {
       if (tx_index >= txes.size())
         SCAN_TABLE_QUIT("tx_index is out of sync");
-      const transaction &tx = txes[tx_index].first;
+      const std::vector<cryptonote::txin_to_key> &tx_in_to_keys = txes[tx_index].first;
       const crypto::hash &tx_prefix_hash = txes[tx_index].second;
       ++tx_index;
 
@@ -5177,9 +5188,8 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
         break;
       }
 
-      for (const auto &txin : tx.vin)
+      for (const auto &in_to_key : tx_in_to_keys)
       {
-        const txin_to_key &in_to_key = boost::get < txin_to_key > (txin);
         auto needed_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
 
         const auto offset_it = offset_map.find(in_to_key.amount);
