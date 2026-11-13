@@ -42,6 +42,7 @@ namespace cryptonote
 {
   template <class CryptoHashContainer>
   inline bool make_pool_supplement_from_block_entry(
+    const uint8_t hf_version,
     const std::vector<cryptonote::tx_blob_entry>& tx_entries,
     const CryptoHashContainer& blk_tx_hashes,
     const bool allow_pruned,
@@ -84,7 +85,15 @@ namespace cryptonote
           << epee::string_tools::buff_to_hex_nodelimer(tx_entry.blob));
         return false;
       }
-      else if (!blk_tx_hashes.count(tx_hash))
+
+      // Very cheap checks on tx structure
+      if (tx.is_coinbase() || !cryptonote::check_output_types(tx, hf_version))
+      {
+        MCERROR("verify", "transaction " << tx_hash << " has invalid tx structure");
+        return false;
+      }
+
+      if (!blk_tx_hashes.count(tx_hash))
       {
         MCERROR("verify", "transaction " << tx_hash << " not in block");
         return false;
@@ -138,6 +147,10 @@ namespace cryptonote
 
     // We set `allow_pruned` equal to whether this block entry is pruned since the pruned flag
     // should be checked anyways by the time we deserialize transactions
-    return make_pool_supplement_from_block_entry(blk_entry.txs, blk_tx_hashes, blk_entry.pruned, pool_supplement);
+    return make_pool_supplement_from_block_entry(blk.major_version,
+      blk_entry.txs,
+      blk_tx_hashes,
+      blk_entry.pruned,
+      pool_supplement);
   }
 } // namespace cryptonote

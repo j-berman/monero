@@ -638,7 +638,7 @@ namespace cryptonote
     // can skip the mempool for faster block propagation. Later in the function, we will erase all
     // transactions from the relayed block.
     pool_supplement extra_block_txs;
-    if (!make_pool_supplement_from_block_entry(arg.b.txs, blk_txids_set, /*allow_pruned=*/false, extra_block_txs))
+    if (!make_pool_supplement_from_block_entry(new_block.major_version, arg.b.txs, blk_txids_set, /*allow_pruned=*/false, extra_block_txs))
     {
       LOG_ERROR_CCONTEXT
       (
@@ -1136,9 +1136,9 @@ namespace cryptonote
         ++m_sync_bad_spans_downloaded;
         return LEVIN_ERROR_CONNECTION;
       }
-      if (b.miner_tx.vin.size() != 1 || b.miner_tx.vin.front().type() != typeid(txin_gen))
+      if (!b.miner_tx.is_coinbase() || !cryptonote::check_output_types(b.miner_tx, b.major_version))
       {
-        LOG_ERROR_CCONTEXT("sent wrong block: miner tx does not have exactly one txin_gen input: block_hash="
+        LOG_ERROR_CCONTEXT("sent wrong block: miner tx does not have expected structure: block_hash="
           << block_hash << ", blob_size=" << arg.blocks[i].block.size()
           << ", tx_hashes=" << b.tx_hashes.size() << ", tx_blobs=" << arg.blocks[i].txs.size()
           << ", response_index=" << i << ", dropping connection");

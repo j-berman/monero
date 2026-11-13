@@ -4939,6 +4939,8 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
         if (!parse_and_validate_block_from_blob(it->block, block, block_hash))
           return false;
+        if (!block.miner_tx.is_coinbase() || !cryptonote::check_output_types(block.miner_tx, block.major_version))
+          return false;
 
         // check first block and skip all blocks if its not chained properly
         if (blockidx == 0)
@@ -4963,6 +4965,8 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       crypto::hash block_hash;
 
       if (!parse_and_validate_block_from_blob(it->block, block, block_hash))
+        return false;
+      if (!block.miner_tx.is_coinbase() || !cryptonote::check_output_types(block.miner_tx, block.major_version))
         return false;
 
       if (!blocks_exist && have_block(block_hash))
@@ -5052,8 +5056,9 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
   // generate sorted tables for all amounts and absolute offsets
   size_t tx_index = 0;
   size_t n_total_offsets = 0;
-  for (const auto &entry : blocks_entry)
+  for (std::size_t i = 0; i < blocks_entry.size(); ++i)
   {
+    const auto &entry = blocks_entry[i];
     if (m_cancel)
       return false;
     if (n_total_offsets >= TARGET_MAX_OFFSETS_FOR_SCAN_TABLE_CACHE)
@@ -5069,6 +5074,11 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
       if (!parse_and_validate_tx_base_from_blob(tx_blob.blob, tx, true))
         SCAN_TABLE_QUIT("Could not parse tx from incoming blocks.");
+
+      // Very cheap checks on tx structure
+      if (tx.is_coinbase() || !cryptonote::check_output_types(tx, blocks.at(i).major_version))
+        SCAN_TABLE_QUIT("Tx on incoming blocks had incorrect structure.");
+
       cryptonote::get_transaction_prefix_hash(tx, tx_prefix_hash);
 
       auto its = m_scan_table.find(tx_prefix_hash);
